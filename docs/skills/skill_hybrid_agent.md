@@ -1,5 +1,7 @@
 # Skill: Hybrid SAC-DDQN Agent Design
 
+> **Status**: Invokable as the real `/build-hybrid-agent` Claude Code skill (`.claude/skills/build-hybrid-agent/`), which points back at this file as the spec of record.
+
 ## Purpose
 Implement a hybrid Deep Reinforcement Learning agent that combines discrete action selection (DDQN) for RRH on/off decisions with continuous policy optimization (SAC) for transmit power allocation, coordinated through a shared critic.
 
