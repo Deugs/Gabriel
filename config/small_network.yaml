@@ -1,0 +1,15 @@
+# Small Network Configuration
+# For rapid prototyping and debugging
+
+network:
+  n_rrh: 5
+  n_ue: 2
+  n_bbu: 2
+
+algorithm:
+  max_episodes: 1000
+  batch_size: 64
+  hidden_dims: [128, 128]
+
+reward:
+  beta_qos: 5.0  # Lower penalty for small network

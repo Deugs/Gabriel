@@ -1,0 +1,21 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+
+# Experiment artifacts
+data/results/*
+!data/results/.gitkeep
+wandb/
+*.pt
+*.pth
+
+# Office lock files
+~$*.docx
+~$*.pptx
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,16 @@
+# Large Network Configuration
+# For scalability analysis
+
+network:
+  n_rrh: 50
+  n_ue: 50
+  n_bbu: 10
+
+algorithm:
+  max_episodes: 10000
+  batch_size: 512
+  hidden_dims: [512, 512, 256]
+
+hardware:
+  device: "cuda"
+  n_envs: 4  # Parallel training

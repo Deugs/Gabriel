@@ -1,0 +1,33 @@
+# Core DRL dependencies
+# torch/torchvision/torchaudio: install separately with the CUDA index matching your GPU, e.g.:
+#   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+torch
+torchvision
+torchaudio
+gymnasium
+stable-baselines3[extra]
+ray[rllib]
+
+# Scientific computing
+numpy
+scipy
+pandas
+matplotlib
+seaborn
+
+# Optimization baselines
+cvxpy
+
+# Experiment tracking
+tensorboard
+wandb
+
+# Testing and code quality
+pytest
+black
+flake8
+mypy
+
+# Prototyping
+jupyterlab
+ipywidgets
