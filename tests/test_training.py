@@ -1,0 +1,80 @@
+"""Unit tests for Training Infrastructure (training/)."""
+
+from pathlib import Path
+import pytest
+import yaml  # type: ignore[import-untyped]
+
+from training import HyperparameterSearch, run_baseline_benchmarks, train_hybrid_agent
+
+
+@pytest.fixture
+def config_path(tmp_path):
+    orig_path = Path(__file__).parent.parent / "config" / "default.yaml"
+    with open(orig_path, "r") as f:
+        cfg = yaml.safe_load(f)
+
+    cfg_file = tmp_path / "test_config.yaml"
+    with open(cfg_file, "w") as f:
+        yaml.dump(cfg, f)
+
+    return str(cfg_file)
+
+
+def test_train_hybrid_agent_short_run(config_path, tmp_path):
+    save_dir = str(tmp_path / "results")
+    res = train_hybrid_agent(
+        config_path=config_path,
+        seed=42,
+        episodes=5,
+        eval_freq=5,
+        save_dir=save_dir,
+    )
+
+    assert "final_train_reward" in res
+    assert "final_eval_reward" in res
+    assert "history" in res
+    assert len(res["history"]["episode_rewards"]) == 5
+
+    out_folder = Path(save_dir) / "hybrid_sac_dqn_seed42"
+    assert (out_folder / "summary.json").exists()
+    assert (out_folder / "final_model.pt").exists()
+
+
+def test_run_baseline_benchmarks_short_run(config_path, tmp_path):
+    save_dir = str(tmp_path / "results")
+    res = run_baseline_benchmarks(
+        config_path=config_path,
+        seeds=[42],
+        episodes=2,
+        algorithms=["all_on", "greedy"],
+        save_dir=save_dir,
+    )
+
+    assert "all_on" in res and "greedy" in res
+    assert len(res["all_on"]) == 1
+    assert res["all_on"][0]["seed"] == 42
+    assert "mean_reward" in res["all_on"][0]
+
+    assert (Path(save_dir) / "benchmark_all_on" / "summary.json").exists()
+    assert (Path(save_dir) / "benchmark_greedy" / "summary.json").exists()
+
+
+def test_hyperparameter_search(config_path, tmp_path):
+    save_dir = str(tmp_path / "grid_search")
+    searcher = HyperparameterSearch(
+        base_config_path=config_path,
+        save_dir=save_dir,
+    )
+
+    grid = {
+        "lr_actor": [1e-4, 3e-4],
+    }
+
+    results = searcher.run_grid_search(
+        param_grid=grid,
+        episodes_per_trial=2,
+        seeds=[42],
+    )
+
+    assert len(results) == 2
+    assert (Path(save_dir) / "grid_search_results.json").exists()

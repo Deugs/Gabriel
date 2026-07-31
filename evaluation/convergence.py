@@ -1,0 +1,149 @@
+"""Statistical Convergence Analysis Module for Thesis Chapter 4."""
+
+import json
+from pathlib import Path
+from typing import Any, Dict, List, Tuple
+
+import numpy as np
+from scipy import stats
+
+from evaluation.plot_utils import compute_confidence_interval
+
+
+def perform_paired_ttest(
+    proposed_scores: np.ndarray, baseline_scores: np.ndarray
+) -> Tuple[float, float, bool]:
+    """Perform paired t-test between proposed method and baseline scores across seeds.
+
+    Args:
+        proposed_scores (np.ndarray): Scores for proposed method across seeds (n_seeds,).
+        baseline_scores (np.ndarray): Scores for baseline method across seeds (n_seeds,).
+
+    Returns:
+        Tuple[float, float, bool]: t-statistic, p-value, is_significant_at_0.05.
+    """
+    if len(proposed_scores) != len(baseline_scores) or len(proposed_scores) < 2:
+        return 0.0, 1.0, False
+
+    t_stat, p_val = stats.ttest_rel(proposed_scores, baseline_scores)
+    is_significant = float(p_val) < 0.05
+    return float(t_stat), float(p_val), is_significant
+
+
+def analyze_convergence(
+    results_dir: str = "data/results",
+    save_dir: str = "thesis/figures",
+    table_save_dir: str = "thesis/tables",
+) -> Dict[str, Any]:
+    """Aggregate multi-seed benchmark results, compute 95% CIs, run t-tests, and plot."""
+    results_path = Path(results_dir)
+    fig_path = Path(save_dir)
+    table_path = Path(table_save_dir)
+
+    fig_path.mkdir(parents=True, exist_ok=True)
+    table_path.mkdir(parents=True, exist_ok=True)
+
+    summary_files = list(results_path.rglob("summary.json"))
+    print(f"Found {len(summary_files)} result summary files under {results_dir}")
+
+    # Parse and organize algorithm scores
+    algo_scores: Dict[str, List[float]] = {}
+    algo_powers: Dict[str, List[float]] = {}
+    algo_qos: Dict[str, List[float]] = {}
+
+    for s_file in summary_files:
+        try:
+            with open(s_file, "r") as f:
+                data = json.load(f)
+
+            if isinstance(data, dict):
+                algo = str(data.get("algorithm", "unknown"))
+                reward = float(data.get("final_eval_reward", 0.0))
+                power = float(data.get("final_eval_power_w", 0.0))
+                qos = float(data.get("final_qos_rate", 0.0))
+
+                algo_scores.setdefault(algo, []).append(reward)
+                algo_powers.setdefault(algo, []).append(power)
+                algo_qos.setdefault(algo, []).append(qos)
+            elif isinstance(data, list):
+                for item in data:
+                    algo = str(item.get("algorithm", "unknown"))
+                    reward = float(item.get("mean_reward", 0.0))
+                    power = float(item.get("mean_power_w", 0.0))
+                    qos = float(item.get("qos_satisfaction_rate", 0.0))
+
+                    algo_scores.setdefault(algo, []).append(reward)
+                    algo_powers.setdefault(algo, []).append(power)
+                    algo_qos.setdefault(algo, []).append(qos)
+        except Exception as e:
+            print(f"Warning: Failed to parse {s_file}: {e}")
+
+    analysis_report: Dict[str, Any] = {
+        "algorithms": {},
+        "paired_ttests": {},
+    }
+
+    proposed_algo = "Hybrid_SAC_DDQN"
+    proposed_arr = np.array(algo_scores.get(proposed_algo, [0.0]))
+
+    for algo, scores in algo_scores.items():
+        arr = np.array(scores)
+        mean, lower, upper = compute_confidence_interval(arr)
+
+        analysis_report["algorithms"][algo] = {
+            "mean_reward": float(mean),
+            "ci_95_lower": float(lower),
+            "ci_95_upper": float(upper),
+            "mean_power_w": float(np.mean(algo_powers.get(algo, [0.0]))),
+            "mean_qos_rate": float(np.mean(algo_qos.get(algo, [0.0]))),
+        }
+
+        if (
+            algo != proposed_algo
+            and len(proposed_arr) > 1
+            and len(arr) == len(proposed_arr)
+        ):
+            t_stat, p_val, is_sig = perform_paired_ttest(proposed_arr, arr)
+            analysis_report["paired_ttests"][algo] = {
+                "t_statistic": t_stat,
+                "p_value": p_val,
+                "statistically_significant_0_05": is_sig,
+            }
+
+    # Export LaTeX table
+    latex_content = (
+        "\\begin{table}[h]\n"
+        "\\centering\n"
+        "\\caption{Performance Comparison and Statistical Significance Analysis.}\n"
+        "\\begin{tabular}{lcccc}\n"
+        "\\hline\n"
+        "Algorithm & Mean Reward (95\\% CI) & Mean Power (W) & "
+        "QoS Rate (\\%) & $p$-value (vs Proposed) \\\\\n"
+        "\\hline\n"
+    )
+
+    for algo, m in analysis_report["algorithms"].items():
+        ttest_info = analysis_report["paired_ttests"].get(algo, {})
+        p_val_str = (
+            f"{ttest_info.get('p_value', 1.0):.4f}" if ttest_info else "N/A (Proposed)"
+        )
+        qos_pct = m["mean_qos_rate"] * 100
+
+        latex_content += (
+            f"{algo} & {m['mean_reward']:.2f} [{m['ci_95_lower']:.2f}, {m['ci_95_upper']:.2f}] & "
+            f"{m['mean_power_w']:.1f} & {qos_pct:.1f}\\% & {p_val_str} \\\\\n"
+        )
+
+    latex_content += "\\hline\n\\end{tabular}\n\\end{table}\n"
+
+    with open(table_path / "convergence_summary.tex", "w") as f:
+        f.write(latex_content)
+
+    print(
+        f"Exported convergence summary LaTeX table to {table_path / 'convergence_summary.tex'}"
+    )
+    return analysis_report
+
+
+if __name__ == "__main__":
+    analyze_convergence()

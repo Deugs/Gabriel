@@ -4,7 +4,7 @@
 
 | Document | Purpose | When to Read |
 |----------|---------|-------------|
-| [CLAUDE.md](CLAUDE.md) | High-level project context, identity, status | First time; when lost |
+| [AGENTS.md](AGENTS.md) | High-level project context, identity, status | First time; when lost |
 | [docs/dev_guide.md](docs/dev_guide.md) | Detailed development guide, code architecture | When implementing |
 | [docs/thesis_guide.md](docs/thesis_guide.md) | Thesis writing guide, chapter structure | When writing |
 | [docs/skills/skill_environment.md](docs/skills/skill_environment.md) | Environment design specification | When building env |
@@ -48,7 +48,7 @@
 
 ## Immediate Next Steps
 
-1. **Read** claude.md and claude_dev.md completely
+1. **Read** AGENTS.md and docs/dev_guide.md completely
 2. **Set up** development environment (Python, PyTorch, dependencies)
 3. **Initialize** Git repository with branch structure
 4. **Implement** C-RAN environment (Phase 1)
@@ -63,7 +63,7 @@
 ```
 Gabriel/
 ├── README.md (this file)
-├── CLAUDE.md               # Project identity and high-level context
+├── AGENTS.md               # Project identity and high-level context
 ├── QUICK_REFERENCE.md      # One-page quick reference card
 ├── requirements.txt        # Python dependencies
 ├── docs/

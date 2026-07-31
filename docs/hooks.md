@@ -1,12 +1,25 @@
 # Hooks: C-RAN DRL Thesis Development Lifecycle
 
+> **Status**: The pre-commit hook below is live — installed at `.githooks/pre-commit` (tracked in git,
+> not `.git/hooks/`) with `git config core.hooksPath .githooks` pointing at it. It currently runs in
+> lenient mode: each check (black/flake8/mypy/pytest) skips gracefully if there's no code or tests yet,
+> or if the tool isn't installed, so it won't block commits during early scaffolding. As real
+> implementation and tests land in `cran_env/`, `agents/`, etc., it starts enforcing for real — no
+> further action needed. On a fresh clone, run `git config core.hooksPath .githooks` once to activate it
+> (this setting lives in the local `.git/config` and isn't carried automatically by `git clone`).
+>
+> The remaining hooks (pre-experiment, post-episode, post-training, chapter-completion, pre-submission)
+> are Python/bash callbacks meant to be called from inside `training/`, `thesis/hooks/`, and
+> `scripts/` once that code exists — they aren't wired to anything yet because the code they hook into
+> hasn't been written. Wire them in as you implement the corresponding phase.
+
 ## Hook: pre-commit
 **Trigger**: Before every git commit
 **Purpose**: Ensure code quality and consistency
 
 ```bash
 #!/bin/bash
-# .git/hooks/pre-commit
+# .githooks/pre-commit  (lenient variant actually installed — see status note above)
 
 echo "Running pre-commit checks..."
 

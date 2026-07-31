@@ -1,4 +1,4 @@
-# C-RAN Energy Optimization Thesis — Developer Context
+# C-RAN Energy Optimization Thesis — Antigravity Agent Context
 
 ## Project Identity
 **Title**: Optimization of Energy Efficient Cloud Radio Access Network for 5G Using Deep Deterministic Policy Gradient Algorithm  
@@ -79,7 +79,12 @@
 ## Code Architecture
 
 ```
-cran-drl-optimization/
+Gabriel/
+├── .agents/               # Antigravity agent skills, agents & guidelines
+│   ├── AGENTS.md
+│   ├── skills/            # Antigravity skills
+│   └── agents/            # Specialized subagent definitions
+├── AGENTS.md              # Project identity & developer context
 ├── cran_env/              # C-RAN Gymnasium environment
 │   ├── __init__.py
 │   ├── cran_env.py        # Main MDP environment

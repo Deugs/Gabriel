@@ -50,7 +50,7 @@ bash scripts/pre_submission.sh
 
 | Need | File |
 |------|------|
-| Understand the project | `CLAUDE.md` |
+| Understand the project | `AGENTS.md` |
 | Start coding | `docs/dev_guide.md` |
 | Write thesis text | `docs/thesis_guide.md` |
 | Build environment | `docs/skills/skill_environment.md` |

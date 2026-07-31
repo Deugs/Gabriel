@@ -13,17 +13,17 @@ This document maintains traceability between thesis equations and their code imp
 | Thesis Eq. | Description | Code File | Function | Status |
 |------------|-------------|-----------|----------|--------|
 | (3.1) | RB allocation fraction | `cran_env/resource_model.py` | `compute_rb_fraction()` | Pending |
-| (3.2) | SNR model | `cran_env/channel_model.py` | `compute_snr()` | Pending |
-| (3.3) | Shannon capacity | `cran_env/channel_model.py` | `compute_capacity()` | Pending |
+| (3.2) | SNR/SINR model | `cran_env/cran_env.py` | `CRANEnv._compute_sinr()` | Implemented |
+| (3.3) | Shannon capacity | `cran_env/cran_env.py` | `CRANEnv.step()` | Implemented |
 | (3.4) | RRH computing resource load | `cran_env/resource_model.py` | `compute_rrh_load()` | Pending |
-| (3.5) | Total C-RAN power | `cran_env/power_model.py` | `PowerModel.compute_total_power()` | Pending |
-| (3.6) | RRH power consumption | `cran_env/power_model.py` | `PowerModel.compute_rrh_power()` | Pending |
-| (3.7) | Fronthaul power (PON) | `cran_env/power_model.py` | `PowerModel.compute_fronthaul_power()` | Pending |
-| (3.8) | Fronthaul power (detailed) | `cran_env/power_model.py` | `PowerModel.compute_fronthaul_detailed()` | Pending |
-| (3.9) | BBU power consumption | `cran_env/power_model.py` | `PowerModel.compute_bbu_power()` | Pending |
-| (3.10) | BBU dynamic power components | `cran_env/power_model.py` | `PowerModel.compute_bbu_dynamic()` | Pending |
-| (3.11) | BBU total power (substituted) | `cran_env/power_model.py` | `PowerModel.compute_bbu_total()` | Pending |
-| (3.12) | BBU pool processing power | `cran_env/power_model.py` | `PowerModel.compute_bbu_pool_power()` | Pending |
+| (3.5) | Total C-RAN power | `cran_env/power_model.py` | `PowerModel.compute_total_power()` | Implemented |
+| (3.6) | RRH power consumption | `cran_env/power_model.py` | `PowerModel.compute_rrh_power()` | Implemented |
+| (3.7) | Fronthaul power (PON) | `cran_env/power_model.py` | `PowerModel.compute_fronthaul_power()` | Implemented |
+| (3.8) | Fronthaul power (detailed) | `cran_env/power_model.py` | `PowerModel.compute_fronthaul_power()` | Implemented |
+| (3.9) | BBU power consumption | `cran_env/power_model.py` | `PowerModel.compute_bbu_power()` | Implemented |
+| (3.10) | BBU dynamic power components | `cran_env/power_model.py` | `PowerModel.compute_bbu_power()` | Implemented |
+| (3.11) | BBU total power (substituted) | `cran_env/power_model.py` | `PowerModel.compute_bbu_power()` | Implemented |
+| (3.12) | BBU pool processing power | `cran_env/power_model.py` | `PowerModel.compute_bbu_power()` | Implemented |
 
 ---
 
@@ -31,10 +31,10 @@ This document maintains traceability between thesis equations and their code imp
 
 | Thesis Eq. | Description | Code File | Function | Status |
 |------------|-------------|-----------|----------|--------|
-| (3.13) | State space definition | `cran_env/cran_env.py` | `CRANEnv._get_obs()` | Pending |
-| (3.14) | Action space definition | `cran_env/cran_env.py` | `CRANEnv.action_space` | Pending |
-| (3.15) | Reward function | `cran_env/cran_env.py` | `CRANEnv._compute_reward()` | Pending |
-| (3.16) | Transition dynamics | `cran_env/cran_env.py` | `CRANEnv.step()` | Pending |
+| (3.13) | State space definition | `cran_env/cran_env.py` | `CRANEnv._get_obs()` | Implemented |
+| (3.14) | Action space definition | `cran_env/cran_env.py` | `CRANEnv.action_space` | Implemented |
+| (3.15) | Reward function | `cran_env/cran_env.py` | `CRANEnv.step()` | Implemented |
+| (3.16) | Transition dynamics | `cran_env/cran_env.py` | `CRANEnv.step()` | Implemented |
 | (3.17) | Optimization objective | `training/train_hybrid.py` | `train()` | Pending |
 
 ---
@@ -43,14 +43,14 @@ This document maintains traceability between thesis equations and their code imp
 
 | Thesis Eq. | Description | Code File | Function | Status |
 |------------|-------------|-----------|----------|--------|
-| (3.18) | Bellman expectation equation | `agents/hybrid_sac_dqn.py` | `HybridSACDDQN.update()` | Pending |
-| (3.19) | Optimal policy | `agents/hybrid_sac_dqn.py` | `HybridSACDDQN.select_action()` | Pending |
-| (3.20) | Bellman optimality equation | `agents/hybrid_sac_dqn.py` | `HybridSACDDQN.update()` | Pending |
-| (3.21) | Q-function update | `agents/hybrid_sac_dqn.py` | `HybridSACDDQN.update()` | Pending |
-| (3.22) | Critic loss (MSE) | `agents/hybrid_sac_dqn.py` | `HybridSACDDQN.update()` | Pending |
-| (3.23) | Policy gradient (actor) | `agents/hybrid_sac_dqn.py` | `HybridSACDDQN.update()` | Pending |
-| (3.24) | Soft update target networks | `agents/hybrid_sac_dqn.py` | `HybridSACDDQN._soft_update()` | Pending |
-| (3.25) | SAC entropy regularization | `agents/hybrid_sac_dqn.py` | `HybridSACDDQN.update()` | Pending |
+| (3.18) | Bellman expectation equation | `agents/hybrid_sac_dqn.py` | `HybridSACDDQN.update()` | Implemented |
+| (3.19) | Optimal policy | `agents/hybrid_sac_dqn.py` | `HybridSACDDQN.select_action()` | Implemented |
+| (3.20) | Bellman optimality equation | `agents/hybrid_sac_dqn.py` | `HybridSACDDQN.update()` | Implemented |
+| (3.21) | Q-function update | `agents/hybrid_sac_dqn.py` | `HybridSACDDQN.update()` | Implemented |
+| (3.22) | Critic loss (MSE) | `agents/hybrid_sac_dqn.py` | `HybridSACDDQN.update()` | Implemented |
+| (3.23) | Policy gradient (actor) | `agents/hybrid_sac_dqn.py` | `HybridSACDDQN.update()` | Implemented |
+| (3.24) | Soft update target networks | `agents/hybrid_sac_dqn.py` | `HybridSACDDQN._soft_update()` | Implemented |
+| (3.25) | SAC entropy regularization | `agents/hybrid_sac_dqn.py` | `HybridSACDDQN.update()` | Implemented |
 
 ---
 

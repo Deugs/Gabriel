@@ -1,0 +1,61 @@
+#!/bin/bash
+# Tracked pre-commit hook (see docs/hooks.md). Installed via:
+#   git config core.hooksPath .githooks
+#
+# Lenient by design while cran_env/agents/baselines/training/evaluation are
+# still empty scaffolding: each check skips gracefully if there's nothing to
+# check yet, or if the tool isn't installed. Once real code and tests exist,
+# these checks become real gates — do not remove the skip logic silently
+# without confirming the project is ready to enforce them.
+
+set -e
+
+PY_DIRS="cran_env agents baselines training evaluation"
+
+existing_py_dirs=""
+for d in $PY_DIRS; do
+  if [ -d "$d" ] && find "$d" -name "*.py" ! -name "__init__.py" | grep -q .; then
+    existing_py_dirs="$existing_py_dirs $d"
+  fi
+done
+
+if [ -z "$existing_py_dirs" ]; then
+  echo "pre-commit: no implementation code yet under {$PY_DIRS} — skipping lint/type/test checks."
+  exit 0
+fi
+
+echo "pre-commit: checking$existing_py_dirs"
+
+if command -v black >/dev/null 2>&1; then
+  black --check $existing_py_dirs || { echo "pre-commit: not formatted. Run: black$existing_py_dirs"; exit 1; }
+else
+  echo "pre-commit: black not installed — skipping format check"
+fi
+
+if command -v flake8 >/dev/null 2>&1; then
+  flake8 $existing_py_dirs --max-line-length=100 || { echo "pre-commit: linting failed."; exit 1; }
+else
+  echo "pre-commit: flake8 not installed — skipping lint check"
+fi
+
+if command -v mypy >/dev/null 2>&1; then
+  mypy $existing_py_dirs --ignore-missing-imports || { echo "pre-commit: type checking failed."; exit 1; }
+else
+  echo "pre-commit: mypy not installed — skipping type check"
+fi
+
+if [ -d tests ] && find tests -name "test_*.py" | grep -q .; then
+  if command -v pytest >/dev/null 2>&1; then
+    pytest tests/ -x -q || { echo "pre-commit: tests failed."; exit 1; }
+  else
+    echo "pre-commit: pytest not installed — skipping tests"
+  fi
+else
+  echo "pre-commit: no tests yet under tests/ — skipping pytest"
+fi
+
+if [ -f scripts/check_code_text_consistency.py ]; then
+  python scripts/check_code_text_consistency.py || { echo "pre-commit: code-text inconsistency detected. Check docs/equation_code_mapping.md"; exit 1; }
+fi
+
+echo "pre-commit: all checks passed (or skipped where not yet applicable)."

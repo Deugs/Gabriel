@@ -1,5 +1,10 @@
 # Agents: C-RAN DRL Thesis Development Team
 
+> **Status**: All 9 roles below are configured as Antigravity subagent roles in `.agents/agents/`
+> (invokable by name or role responsibility).
+> This file remains the source-of-truth spec — if you change a role's responsibilities here, update
+> the matching `.agents/agents/<slug>.md` to keep them in sync.
+
 ## Agent: Thesis Architect
 **Role**: Oversee thesis structure, ensure logical flow, and maintain consistency across chapters.
 
