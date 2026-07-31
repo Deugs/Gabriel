@@ -43,14 +43,14 @@ This document maintains traceability between thesis equations and their code imp
 
 | Thesis Eq. | Description | Code File | Function | Status |
 |------------|-------------|-----------|----------|--------|
-| (3.18) | Bellman expectation equation | `agents/hybrid_sac_dqn.py` | `HybridSACDDQN.update()` | Pending |
-| (3.19) | Optimal policy | `agents/hybrid_sac_dqn.py` | `HybridSACDDQN.select_action()` | Pending |
-| (3.20) | Bellman optimality equation | `agents/hybrid_sac_dqn.py` | `HybridSACDDQN.update()` | Pending |
-| (3.21) | Q-function update | `agents/hybrid_sac_dqn.py` | `HybridSACDDQN.update()` | Pending |
-| (3.22) | Critic loss (MSE) | `agents/hybrid_sac_dqn.py` | `HybridSACDDQN.update()` | Pending |
-| (3.23) | Policy gradient (actor) | `agents/hybrid_sac_dqn.py` | `HybridSACDDQN.update()` | Pending |
-| (3.24) | Soft update target networks | `agents/hybrid_sac_dqn.py` | `HybridSACDDQN._soft_update()` | Pending |
-| (3.25) | SAC entropy regularization | `agents/hybrid_sac_dqn.py` | `HybridSACDDQN.update()` | Pending |
+| (3.18) | Bellman expectation equation | `agents/hybrid_sac_dqn.py` | `HybridSACDDQN.update()` | Implemented |
+| (3.19) | Optimal policy | `agents/hybrid_sac_dqn.py` | `HybridSACDDQN.select_action()` | Implemented |
+| (3.20) | Bellman optimality equation | `agents/hybrid_sac_dqn.py` | `HybridSACDDQN.update()` | Implemented |
+| (3.21) | Q-function update | `agents/hybrid_sac_dqn.py` | `HybridSACDDQN.update()` | Implemented |
+| (3.22) | Critic loss (MSE) | `agents/hybrid_sac_dqn.py` | `HybridSACDDQN.update()` | Implemented |
+| (3.23) | Policy gradient (actor) | `agents/hybrid_sac_dqn.py` | `HybridSACDDQN.update()` | Implemented |
+| (3.24) | Soft update target networks | `agents/hybrid_sac_dqn.py` | `HybridSACDDQN._soft_update()` | Implemented |
+| (3.25) | SAC entropy regularization | `agents/hybrid_sac_dqn.py` | `HybridSACDDQN.update()` | Implemented |
 
 ---
 
