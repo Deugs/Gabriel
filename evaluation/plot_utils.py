@@ -19,8 +19,8 @@ def setup_matplotlib_style():
             "ytick.labelsize": 10,
             "legend.fontsize": 9,
             "figure.titlesize": 13,
-            "figure.dpi": 300,
-            "savefig.dpi": 300,
+            "figure.dpi": 150,
+            "savefig.dpi": 150,
             "savefig.bbox": "tight",
             "axes.grid": True,
             "grid.alpha": 0.3,
@@ -207,6 +207,5 @@ def plot_ablation_comparison(
         out_file = Path(save_path)
         out_file.parent.mkdir(parents=True, exist_ok=True)
         fig.savefig(out_file)
-        plt.close(fig)
-    else:
-        plt.close(fig)
+    plt.close(fig)
+    plt.close("all")

@@ -410,7 +410,12 @@ class HybridSACDDQN:
 
         # --- 3. Continuous Actor Update ---
         sampled_cont_actions, log_prob = self.continuous_actor.sample(states)
-        current_disc_actions = self.discrete_actor(states).argmax(dim=-1)
+        with torch.no_grad():
+            current_disc_actions = self.discrete_actor(states).argmax(dim=-1)
+
+        # Freeze critic parameters to avoid computing critic gradients during actor step
+        for param in self.critic.parameters():
+            param.requires_grad = False
 
         q1_new, q2_new = self.critic(states, current_disc_actions, sampled_cont_actions)
         q_new_min = torch.min(q1_new, q2_new)
@@ -421,6 +426,10 @@ class HybridSACDDQN:
         actor_loss.backward()
         nn.utils.clip_grad_norm_(self.continuous_actor.parameters(), max_norm=1.0)
         self.cont_opt.step()
+
+        # Unfreeze critic parameters
+        for param in self.critic.parameters():
+            param.requires_grad = True
 
         # --- 4. Entropy Temperature (Alpha) Update ---
         if self.auto_tune_alpha:
@@ -448,7 +457,6 @@ class HybridSACDDQN:
         }
 
     def _soft_update(self, target: nn.Module, source: nn.Module):
-        for target_param, param in zip(target.parameters(), source.parameters()):
-            target_param.data.copy_(
-                self.tau * param.data + (1.0 - self.tau) * target_param.data
-            )
+        with torch.no_grad():
+            for target_param, param in zip(target.parameters(), source.parameters()):
+                target_param.data.mul_(1.0 - self.tau).add_(param.data, alpha=self.tau)
