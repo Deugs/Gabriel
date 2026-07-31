@@ -115,16 +115,16 @@ The candidate requests:
 
 ## 12. References
 
-[1] Y. Shengren, et al., "Benchmarking deep reinforcement learning algorithms for [stability/sample-efficiency comparison of SAC, TD3, and DDPG]," 2022. **Citation incomplete** — full title, venue, and volume/page/DOI not yet verified against a source copy; complete before external distribution.
+[1] H. Shengren, E. M. Salazar Duque, P. P. Vergara, and P. Palensky, "Performance comparison of deep RL algorithms for energy systems optimal scheduling," in *2022 IEEE PES Innovative Smart Grid Technologies Conference Europe (ISGT-Europe)*, IEEE, 2022, pp. 1–6, doi: 10.1109/ISGT-Europe54678.2022.9960642.
 
 [2] A. Iqbal, M.-L. Tham, and Y. C. Chang, "Double Deep Q-Network-Based Energy-Efficient Resource Allocation in Cloud Radio Access Network," *IEEE Access*, vol. 9, pp. 20440–[end page not confirmed], 2021, doi: 10.1109/ACCESS.2021.3054909.
 
 [3] M. Fathy, M. S. Abood, and M. M. Hamdi, "Optimization of Energy-Efficient Cloud Radio Access Networks for 5G using Neural Networks," in *2021 International Conference on Intelligent Technology, System and Service for Internet of Everything (ITSS-IoE)*, 2021, doi: 10.1109/ITSS-IoE53029.2021.9615290.
 
-[4] Al-Zubaedi, "[Full title not yet verified]," 2019. **Citation incomplete** — referenced throughout the project's working documentation as the source for the EARTH-model power parameters and NMBS bin-packing baseline, but no source PDF is on file; the candidate should confirm the exact title, publication type (thesis/paper), and venue before this document or the thesis bibliography is finalized.
+[4] W. H. A. Al-Zubaedi, "Planning a C-RAN Deployment for the Next Generation Cellular Networks," Ph.D. dissertation, Dept. of Electronic and Computer Engineering, Brunel University London, London, U.K., 2019. Supervisors: H. Al-Raweshidy, A. Zobaa. [Online]. Available: <http://bura.brunel.ac.uk/handle/2438/17865>
 
-> References [2] and [3] were verified directly against the source PDFs held in `references/`. References [1] and [4] are cited in the project's working documentation but no source copy is on file — resolve these with the candidate's reference manager before this document is sent to stakeholders.
+> References [2] and [3] were verified directly against the source PDFs held in `references/`. References [1] and [4] were supplied directly by the candidate; no source PDF for either is on file in `references/` — the candidate should confirm both against a source copy before this document or the thesis bibliography is finalized.
 
 ---
 
-*Prepared from the project's working development documentation (`CLAUDE.md`, `docs/workflow.md`, `docs/thesis_guide.md`). For full technical detail — equations, network architectures, and hyperparameters — see the development guide and skill specifications under `docs/`.*
+*Prepared from the project's working development documentation (`AGENTS.md`, `docs/workflow.md`, `docs/thesis_guide.md`). For full technical detail — equations, network architectures, and hyperparameters — see the development guide and skill specifications under `docs/`.*

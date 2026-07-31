@@ -1,6 +1,6 @@
 # Skill: C-RAN Environment Design
 
-> **Status**: Invokable as the real `/build-environment` Claude Code skill (`.claude/skills/build-environment/`), which points back at this file as the spec of record.
+> **Status**: Invokable as the Antigravity `build-environment` skill (`.agents/skills/build-environment/`), which points back at this file as the spec of record.
 
 ## Purpose
 Design, implement, and validate a Gymnasium-compatible C-RAN simulation environment for DRL training.

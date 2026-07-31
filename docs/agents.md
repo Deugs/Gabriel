@@ -1,9 +1,9 @@
 # Agents: C-RAN DRL Thesis Development Team
 
-> **Status**: All 9 roles below are wired up as real Claude Code subagents in `.claude/agents/`
-> (invokable via the Agent tool or by name), with tool access scoped to each role's responsibilities.
+> **Status**: All 9 roles below are configured as Antigravity subagent roles in `.agents/agents/`
+> (invokable by name or role responsibility).
 > This file remains the source-of-truth spec — if you change a role's responsibilities here, update
-> the matching `.claude/agents/<slug>.md` to keep them in sync.
+> the matching `.agents/agents/<slug>.md` to keep them in sync.
 
 ## Agent: Thesis Architect
 **Role**: Oversee thesis structure, ensure logical flow, and maintain consistency across chapters.

@@ -1,6 +1,6 @@
 # Skill: Evaluation and Analysis
 
-> **Status**: Invokable as the real `/run-evaluation` Claude Code skill (`.claude/skills/run-evaluation/`), which points back at this file as the spec of record.
+> **Status**: Invokable as the Antigravity `run-evaluation` skill (`.agents/skills/run-evaluation/`), which points back at this file as the spec of record.
 
 ## Purpose
 Systematically evaluate DRL agents, compare against baselines, perform ablation studies, and generate publication-quality figures and tables for the thesis.
