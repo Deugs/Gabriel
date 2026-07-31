@@ -3,9 +3,12 @@
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy import stats
+
+matplotlib.use("Agg")
 
 
 def setup_matplotlib_style():

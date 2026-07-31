@@ -448,10 +448,17 @@ class HybridSACDDQN:
         # Decay epsilon
         self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
 
+        c_loss = float(critic_loss.item())
+        d_loss = float(disc_loss.item())
+        a_loss = float(actor_loss.item())
+
+        del states, disc_actions, cont_actions, rewards, next_states, dones
+        del q1_curr, q2_curr, y, sampled_cont_actions, log_prob, q1_new, q2_new
+
         return {
-            "critic_loss": float(critic_loss.item()),
-            "disc_loss": float(disc_loss.item()),
-            "actor_loss": float(actor_loss.item()),
+            "critic_loss": c_loss,
+            "disc_loss": d_loss,
+            "actor_loss": a_loss,
             "alpha": self.alpha,
             "epsilon": float(self.epsilon),
         }
