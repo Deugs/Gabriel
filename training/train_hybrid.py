@@ -1,6 +1,7 @@
 """Training pipeline for Proposed Hybrid SAC-DDQN Agent in 5G C-RAN Simulation."""
 
 import argparse
+import gc
 import json
 from pathlib import Path
 import random
@@ -229,6 +230,7 @@ def train_hybrid_agent(
         )
         print(f"Saved results and model checkpoint to {out_path}")
 
+    gc.collect()
     return summary
 
 
