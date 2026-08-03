@@ -1,6 +1,7 @@
 """Unified Baseline Evaluation Benchmark Runner for C-RAN Simulation."""
 
 import argparse
+import gc
 import json
 from pathlib import Path
 import random
@@ -152,6 +153,9 @@ def run_baseline_benchmarks(
                 f"Power: {seed_summary['mean_power_w']:6.1f}W | QoS: {qos_pct:5.1f}%"
             )
 
+            del model, env
+            gc.collect()
+
         results[algo] = algo_results
 
         # Save algorithm benchmark summary
@@ -160,6 +164,7 @@ def run_baseline_benchmarks(
         with open(out_path / "summary.json", "w") as f:
             json.dump(algo_results, f, indent=2)
 
+    gc.collect()
     return results
 
 

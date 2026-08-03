@@ -1,4 +1,4 @@
-"""Training pipeline for Proposed Hybrid SAC-DDQN Agent in 5G C-RAN Simulation."""
+"""Training pipeline for Proposed Branching MP-DQN + TD3 Agent in 5G C-RAN Simulation."""
 
 import argparse
 import gc
@@ -12,7 +12,7 @@ import numpy as np
 import torch
 import yaml  # type: ignore[import-untyped]
 
-from agents import HybridSACDDQN
+from agents import BranchingMPDQN
 from cran_env import CRANEnv
 
 
@@ -38,7 +38,7 @@ def validate_hardware_constants(env: CRANEnv):
 
 
 def evaluate_agent(
-    env: CRANEnv, agent: HybridSACDDQN, eval_episodes: int = 5
+    env: CRANEnv, agent: BranchingMPDQN, eval_episodes: int = 5
 ) -> Dict[str, float]:
     """Evaluate current policy in deterministic mode over N episodes."""
     eval_rewards = []
@@ -85,7 +85,7 @@ def train_hybrid_agent(
     save_dir: Optional[str] = None,
     use_wandb: bool = False,
 ) -> Dict[str, Any]:
-    """Train Hybrid SAC-DDQN agent and log training metrics."""
+    """Train Branching MP-DQN + TD3 agent and log training metrics."""
     set_seed(seed)
 
     # Load configuration
@@ -95,7 +95,7 @@ def train_hybrid_agent(
     env = CRANEnv(cfg)
     validate_hardware_constants(env)
 
-    agent = HybridSACDDQN(
+    agent = BranchingMPDQN(
         state_dim=env.state_dim,
         n_rrh=env.n_rrh,
         p_max_w=env.p_max_w,
@@ -115,7 +115,7 @@ def train_hybrid_agent(
     }
 
     print(
-        f"--- Starting Training Hybrid SAC-DDQN | Seed: {seed} | Episodes: {episodes} ---"
+        f"--- Starting Training Branching MP-DQN + TD3 | Seed: {seed} | Episodes: {episodes} ---"
     )
 
     for ep in range(1, episodes + 1):
@@ -131,11 +131,15 @@ def train_hybrid_agent(
             action = agent.select_action(obs, evaluate=False)
             next_obs, reward, terminated, truncated, info = env.step(action)
 
+            cont_action = action.get(
+                "continuous",
+                np.stack([action["power"] / env.p_max_w, action["bandwidth"]], axis=-1),
+            )
             # Store transition in replay buffer
             agent.memory.push(
                 obs,
                 action["rrh_on"],
-                action["power"] / env.p_max_w,
+                cont_action,
                 reward,
                 next_obs,
                 terminated,
@@ -143,7 +147,7 @@ def train_hybrid_agent(
 
             # Optimization step
             metrics = agent.update(batch_size=batch_size)
-            if metrics["critic_loss"] > 0.0:
+            if metrics.get("critic_loss", 0.0) > 0.0:
                 critic_loss_list.append(metrics["critic_loss"])
 
             ep_reward += reward
@@ -186,11 +190,13 @@ def train_hybrid_agent(
                 f"Active RRHs: {eval_metrics['eval_mean_active_rrhs']:4.1f}/{env.n_rrh}"
             )
 
+        gc.collect()
+
     elapsed_time = time.time() - start_time
 
     # Save summary and model checkpoint if save_dir specified
     summary = {
-        "algorithm": "Hybrid_SAC_DDQN",
+        "algorithm": "Branching_MP_DQN",
         "seed": seed,
         "episodes": episodes,
         "total_training_time_sec": elapsed_time,
@@ -214,7 +220,7 @@ def train_hybrid_agent(
     }
 
     if save_dir is not None:
-        out_path = Path(save_dir) / f"hybrid_sac_dqn_seed{seed}"
+        out_path = Path(save_dir) / f"branching_mp_dqn_seed{seed}"
         out_path.mkdir(parents=True, exist_ok=True)
 
         with open(out_path / "summary.json", "w") as f:
@@ -222,9 +228,9 @@ def train_hybrid_agent(
 
         torch.save(
             {
-                "discrete_actor": agent.discrete_actor.state_dict(),
-                "continuous_actor": agent.continuous_actor.state_dict(),
-                "critic": agent.critic.state_dict(),
+                "encoder": agent.encoder.state_dict(),
+                "param_net": agent.param_net.state_dict(),
+                "twin_critic": agent.twin_critic.state_dict(),
             },
             out_path / "final_model.pt",
         )

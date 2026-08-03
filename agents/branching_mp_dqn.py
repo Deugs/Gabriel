@@ -101,18 +101,18 @@ class SingleBranchCritic(nn.Module):
         # continuous_params: (batch, n_rrh, 2)
         feat = self.encoder(state)
 
-        if branch_mask_idx is not None:
-            # Multi-Pass evaluation (MP-DQN): mask out parameters from all other RRHs
-            masked_params = torch.zeros_like(continuous_params)
-            masked_params[:, branch_mask_idx, :] = continuous_params[
-                :, branch_mask_idx, :
-            ]
-            param_feat = F.relu(
-                self.param_encoder(masked_params[:, branch_mask_idx, :])
-            )
+        # Ensure continuous_params is 3D (batch, n_rrh, 2)
+        if continuous_params.dim() == 2:
+            params_3d = continuous_params.view(-1, self.n_rrh, 2)
         else:
-            # Mean parameter feature across branches
-            param_feat = F.relu(self.param_encoder(continuous_params.mean(dim=1)))
+            params_3d = continuous_params
+
+        if branch_mask_idx is not None:
+            # Multi-Pass evaluation (MP-DQN): parameter for branch_mask_idx
+            param_feat = F.relu(self.param_encoder(params_3d[:, branch_mask_idx, :]))
+        else:
+            # Mean parameter feature across branches (batch, 2)
+            param_feat = F.relu(self.param_encoder(params_3d.mean(dim=1)))
 
         fused = F.relu(self.fusion(torch.cat([feat, param_feat], dim=-1)))
         q_vals = self.discrete_heads(fused)  # (batch, n_rrh, 2)
@@ -274,9 +274,14 @@ class BranchingMPDQN:
             p_np = p_ratio[0].cpu().numpy() * self.p_max_w
             bw_np = bw_share[0].cpu().numpy()
 
-            p_np[rrh_on == 0] = 0.0
+            cont_np = np.stack([p_ratio[0].cpu().numpy(), bw_np], axis=-1)  # (n_rrh, 2)
 
-        return {"rrh_on": rrh_on, "power": p_np, "bandwidth": bw_np}
+        return {
+            "rrh_on": rrh_on,
+            "power": p_np,
+            "bandwidth": bw_np,
+            "continuous": cont_np,
+        }
 
     def update(self, batch_size: int = 256) -> Dict[str, float]:
         """Execute one Multi-Pass Branching MP-DQN + TD3 step."""

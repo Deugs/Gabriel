@@ -175,12 +175,11 @@ class DDQNAgent:
         self.optimizer.step()
 
         # Soft update target network
-        for target_param, param in zip(
-            self.target_q_net.parameters(), self.q_net.parameters()
-        ):
-            target_param.data.copy_(
-                self.tau * param.data + (1.0 - self.tau) * target_param.data
-            )
+        with torch.no_grad():
+            for target_param, param in zip(
+                self.target_q_net.parameters(), self.q_net.parameters()
+            ):
+                target_param.data.mul_(1.0 - self.tau).add_(param.data, alpha=self.tau)
 
         # Decay epsilon
         self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)

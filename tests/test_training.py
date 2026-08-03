@@ -35,7 +35,7 @@ def test_train_hybrid_agent_short_run(config_path, tmp_path):
     assert "history" in res
     assert len(res["history"]["episode_rewards"]) == 5
 
-    out_folder = Path(save_dir) / "hybrid_sac_dqn_seed42"
+    out_folder = Path(save_dir) / "branching_mp_dqn_seed42"
     assert (out_folder / "summary.json").exists()
     assert (out_folder / "final_model.pt").exists()
 
