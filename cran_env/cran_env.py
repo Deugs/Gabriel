@@ -117,6 +117,9 @@ class CRANEnv(gym.Env):
                 "power": spaces.Box(
                     low=0.0, high=self.p_max_w, shape=(self.n_rrh,), dtype=np.float32
                 ),
+                "bandwidth": spaces.Box(
+                    low=0.0, high=1.0, shape=(self.n_rrh,), dtype=np.float32
+                ),
             }
         )
 
@@ -214,7 +217,10 @@ class CRANEnv(gym.Env):
 
         # Compute SINR and achievable capacity
         sinr = self._compute_sinr(rrh_on, power)
+
+        # Achievable capacity per user across channel bandwidth B
         achievable_capacity_bps = self.channel.bandwidth * np.log2(1.0 + sinr)
+        total_throughput_mbps = np.sum(achievable_capacity_bps) / 1e6
 
         # Traffic demands
         demands_bps = self.traffic.get_demands(self.hour, self.rng)
@@ -232,12 +238,18 @@ class CRANEnv(gym.Env):
         p_total = power_dict["total"]
         p_switching = power_dict["switching"]
 
+        # Exact discrete switching count (Concept Note v2.0 Section 10.2)
+        exact_switching_count = np.sum(rrh_on != self.active_mask)
+
+        # Energy Efficiency EE(t) in Mbit / Joule
+        ee_mbit_per_joule = total_throughput_mbps / (p_total + 1e-6)
+
         # Scalar Reward Calculation (Energy + QoS Penalty + Switching Cost)
         energy_penalty = self.alpha_energy * (p_total / 1000.0)  # Power in kW
         qos_penalty = self.beta_qos * (
             np.sum(qos_violations_bps) / 1e6
         )  # QoS shortfall in Mbps
-        switch_penalty = self.gamma_switch * (p_switching / 10.0)
+        switch_penalty = self.gamma_switch * exact_switching_count
 
         reward = -(energy_penalty + qos_penalty + switch_penalty)
 
@@ -263,6 +275,8 @@ class CRANEnv(gym.Env):
             "bbu_power_w": power_dict["bbu"],
             "fronthaul_power_w": power_dict["fronthaul"],
             "switching_power_w": p_switching,
+            "switching_events": int(exact_switching_count),
+            "ee_mbit_per_joule": float(ee_mbit_per_joule),
             "qos_violations_count": int(np.sum(qos_violations_bps > 0.0)),
             "qos_shortfall_mbps": float(np.sum(qos_violations_bps) / 1e6),
             "mean_sinr_db": float(10.0 * np.log10(np.mean(sinr) + 1e-12)),

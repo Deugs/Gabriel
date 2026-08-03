@@ -93,29 +93,33 @@ Gabriel/
 │   ├── traffic_model.py   # Tidal traffic patterns
 │   └── power_model.py     # EARTH-validated power consumption
 ├── agents/                # DRL algorithms
-│   ├── hybrid_sac_dqn.py  # Proposed: discrete+continuous hybrid
+│   ├── branching_mp_dqn.py# Proposed: Branching MP-DQN + TD3 (Concept Note v2.0)
+│   ├── hybrid_sac_dqn.py  # Alternative hybrid
 │   ├── sac_agent.py       # Baseline: pure SAC
 │   ├── td3_agent.py       # Baseline: TD3
-│   ├── ddpg_agent.py      # Baseline: DDPG (original plan)
+│   ├── ddpg_agent.py      # Baseline: Pure DDPG continuous relaxation (RQ3 ablation)
 │   └── ddqn_agent.py      # Baseline: discrete only
-├── baselines/             # Non-DRL baselines
-│   ├── all_on_uniform.py
-│   ├── greedy_heuristic.py
-│   ├── nmbs_binpack.py    # Al-Zubaedi's NMBS
-│   └── convex_power.py    # CVXPY power allocation
+├── baselines/             # 7-Baseline comparison suite
+│   ├── all_on_uniform.py  # Baseline 1: All-ON uniform power
+│   ├── greedy_heuristic.py# Baseline 2: Greedy heuristic
+│   ├── nmbs_binpack.py    # Baseline 3: Al-Zubaedi's NMBS bin-packing
+│   ├── convex_power.py    # Baseline 4: CVXPY SOCP power allocation
+│   ├── ddqn_socp.py       # Baseline 5: Two-stage DDQN + SOCP (Iqbal et al., 2021)
+│   └── ann_gsbf.py        # Baseline 6: Supervised ANN + GSBF (Fathy et al., 2021)
 ├── training/              # Training loops
 │   ├── train_hybrid.py
 │   ├── train_baselines.py
+│   ├── run_extended_sweeps.py
 │   └── hyperparam_search.py
 ├── evaluation/            # Analysis and plotting
 │   ├── convergence.py
-│   ├── ablation.py
-│   ├── scalability.py
+│   ├── ablation.py        # RQ3 discrete vs continuous relaxation ablation
+│   ├── scalability.py     # 5-to-50 RRH scalability sweep
 │   └── plot_utils.py
 ├── config/                # Experiment configurations
 │   ├── default.yaml
-│   ├── small_network.yaml
-│   └── large_network.yaml
+│   ├── small_network.yaml # 5 RRH scenario
+│   └── large_network.yaml # 50 RRH scalability scenario
 ├── data/                  # Traffic traces, results
 │   ├── traces/
 │   └── results/

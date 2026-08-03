@@ -161,4 +161,6 @@ def test_sinr_interference_physics(default_config):
         if interf > 0:
             active_interference = True
             break
-    assert active_interference, "Interference physics calculation must be active for multi-RRH transmissions"
+    assert (
+        active_interference
+    ), "Interference physics calculation must be active for multi-RRH transmissions"

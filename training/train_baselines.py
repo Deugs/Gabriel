@@ -12,7 +12,9 @@ import yaml  # type: ignore[import-untyped]
 from agents import DDQNAgent
 from baselines import (
     AllOnUniformBaseline,
+    ANNGSBFBaseline,
     ConvexPowerBaseline,
+    DDQNSOCPBaseline,
     GreedyHeuristicBaseline,
     NMBSBinPackingBaseline,
 )
@@ -37,7 +39,15 @@ def run_baseline_benchmarks(
         seeds = [42, 123, 456, 789, 1011]
 
     if algorithms is None:
-        algorithms = ["all_on", "greedy", "nmbs", "convex", "ddqn"]
+        algorithms = [
+            "all_on",
+            "greedy",
+            "nmbs",
+            "convex",
+            "ddqn",
+            "ann_gsbf",
+            "ddqn_socp",
+        ]
 
     with open(config_path, "r") as f:
         cfg = yaml.safe_load(f)
@@ -65,6 +75,16 @@ def run_baseline_benchmarks(
                 model = ConvexPowerBaseline(env.n_rrh, env.n_ue, env.p_max_w)
             elif algo == "ddqn":
                 model = DDQNAgent(env.state_dim, env.n_rrh)
+            elif algo == "ann_gsbf":
+                model = ANNGSBFBaseline(env.n_rrh, env.n_ue, env.p_max_w)
+            elif algo == "ddqn_socp":
+                model = DDQNSOCPBaseline(
+                    state_dim=env.state_dim,
+                    n_rrh=env.n_rrh,
+                    n_ue=env.n_ue,
+                    p_max_w=env.p_max_w,
+                    config=cfg,
+                )
             else:
                 raise ValueError(f"Unknown algorithm: {algo}")
 

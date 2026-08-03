@@ -1,15 +1,33 @@
-# Small Network Configuration
-# For rapid prototyping and debugging
+# Small Network Configuration (5 RRHs, 4 UEs)
+# For fast benchmarking and scalability sweeps (Concept Note v2.0 Section 11.2)
 
 network:
   n_rrh: 5
-  n_ue: 2
+  n_ue: 4
   n_bbu: 2
+  area_size_m: 500
+  carrier_freq_ghz: 2.1
+  bandwidth_mhz: 10
+  noise_power_dbm: -102
+
+power:
+  rrh:
+    p_active_w: 6.8
+    p_sleep_w: 4.3
+    p_switch_w: 3.0
+    pa_efficiency: 0.25
+    p_max_dbm: 30
+
+  bbu:
+    p_stat_w: 175.0
+    p_dyn_w: 250.0
+    delta_p: 0.44
 
 algorithm:
-  max_episodes: 1000
+  name: "branching_mp_dqn"
+  max_episodes: 500
+  max_steps_per_episode: 100
+  buffer_size: 100000
   batch_size: 64
-  hidden_dims: [128, 128]
-
-reward:
-  beta_qos: 5.0  # Lower penalty for small network
+  lr_discrete: 1.0e-3
+  lr_actor: 1.0e-4
