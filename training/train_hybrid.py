@@ -58,8 +58,8 @@ def evaluate_agent(
             action = agent.select_action(obs, evaluate=True)
             obs, reward, terminated, truncated, info = env.step(action)
             ep_reward += reward
-            ep_power.append(info.get("power_metrics", {}).get("p_total_w", 0.0))
-            ep_qos.append(1.0 if info.get("qos_satisfied", False) else 0.0)
+            ep_power.append(info.get("total_power_w", 0.0))
+            ep_qos.append(1.0 if info.get("qos_violations_count", 0) == 0 else 0.0)
             ep_active.append(info.get("active_rrhs", 0))
             done = terminated or truncated
 
@@ -147,8 +147,8 @@ def train_hybrid_agent(
                 critic_loss_list.append(metrics["critic_loss"])
 
             ep_reward += reward
-            ep_powers.append(info.get("power_metrics", {}).get("p_total_w", 0.0))
-            ep_qos.append(1.0 if info.get("qos_satisfied", False) else 0.0)
+            ep_powers.append(info.get("total_power_w", 0.0))
+            ep_qos.append(1.0 if info.get("qos_violations_count", 0) == 0 else 0.0)
             ep_active.append(info.get("active_rrhs", 0))
 
             obs = next_obs

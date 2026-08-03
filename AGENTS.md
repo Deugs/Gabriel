@@ -67,12 +67,13 @@
 
 **Original Plan**: Vanilla DDPG for joint discrete-continuous control  
 **Revised Plan**: Hybrid SAC-DDQN with:
-- Discrete actor (DDQN) → RRH activation vector `v ∈ {0,1}^R`
-- Continuous actor (SAC) → Power allocation `p ∈ [0, P_max]^R`
-- Shared critic evaluating joint policy
-- Fronthaul power (PON model) integrated into reward
+- Discrete actor (DDQN) → RRH activation vector `v ∈ {0,1}^R` trained via MSE loss against Bellman Q-targets derived from the shared twin critic and discrete target network (`discrete_actor_target`).
+- Continuous actor (SAC) → Power allocation `p ∈ [0, P_max]^R` using `tanh` squashed Gaussian policy with exact Jacobian log-probability correction.
+- Shared twin critic evaluating joint discrete-continuous policy $Q(s, v, p)$.
+- Environment interference model → Multi-cell downlink user association where each UE is served by its strongest active RRH and uncoordinated active RRHs induce co-channel interference $I_u = \sum_{r \neq r^*(u)} P_r |h_{r,u}|^2$.
+- Fronthaul power (TWDM-PON model) & switching costs integrated into reward.
 
-**Justification**: DDPG alone cannot naturally handle binary decisions without thresholding (destroys gradients). SAC provides superior stability and sample efficiency. Hybrid architecture is novel and builds meaningfully on all three foundational references.
+**Justification**: DDPG alone cannot naturally handle binary decisions without thresholding (destroys gradients). SAC provides superior stability and sample efficiency for continuous variables, while Double-DQN with explicit Bellman targets prevents Q-value divergence on factorized discrete heads.
 
 ---
 

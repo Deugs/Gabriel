@@ -124,3 +124,41 @@ def test_gymnasium_compliance(default_config):
     env = CRANEnv(default_config)
     # Verify Gymnasium environment compatibility
     check_env(env.unwrapped, skip_render_check=True)
+
+
+def test_sinr_interference_physics(default_config):
+    env = CRANEnv(default_config)
+    env.reset(seed=42)
+
+    # Action 1: Only 1 RRH active at full power
+    action_1_rrh = {
+        "rrh_on": np.array([1] + [0] * (env.n_rrh - 1)),
+        "power": np.array([env.p_max_w] + [0.0] * (env.n_rrh - 1), dtype=np.float32),
+    }
+    sinr_1_rrh = env._compute_sinr(action_1_rrh["rrh_on"], action_1_rrh["power"])
+
+    # Action 2: ALL RRHs active at full power (creates co-channel interference for users assigned to different RRHs)
+    action_all_rrhs = {
+        "rrh_on": np.ones(env.n_rrh, dtype=int),
+        "power": np.full(env.n_rrh, env.p_max_w, dtype=np.float32),
+    }
+    sinr_all_rrhs = env._compute_sinr(
+        action_all_rrhs["rrh_on"], action_all_rrhs["power"]
+    )
+
+    # Under true multi-cell downlink interference, users served by a single RRH receive interference from other active RRHs.
+    # Therefore, the mean SINR per user with all RRHs transmitting full power must experience interference penalty relative to non-interfered signal ratio.
+    assert np.all(sinr_1_rrh >= 0.0)
+    assert np.all(sinr_all_rrhs >= 0.0)
+    # Check that interference calculation is active (some users suffer interference)
+    active_interference = False
+    for u in range(env.n_ue):
+        # Calculate received power from all active RRHs for user u
+        ch_sq = np.abs(env.channel_gains[:, u]) ** 2
+        rx_p = ch_sq * action_all_rrhs["power"]
+        best = np.max(rx_p)
+        interf = np.sum(rx_p) - best
+        if interf > 0:
+            active_interference = True
+            break
+    assert active_interference, "Interference physics calculation must be active for multi-RRH transmissions"

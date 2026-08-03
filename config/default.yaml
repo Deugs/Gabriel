@@ -45,10 +45,10 @@ power:
     p_max_dbm: 30          # Max transmit power per RRH
 
   bbu:
-    p_stat_w: 175.0        # EARTH model - DO NOT CHANGE
-    p_dyn_w: 250.0         # EARTH model - DO NOT CHANGE
-    delta_p: 0.44          # Load-power slope
-    max_capacity_gops: 100   # Per BBU
+    p_stat_w: 175.0        # Static power per active BBU (EARTH model: Al-Zubaedi 2019 Table 3.1 / Auer et al. 2011)
+    p_dyn_w: 250.0         # Dynamic processing power range (EARTH model: Al-Zubaedi 2019)
+    delta_p: 0.44          # Load-dependent power slope parameter (EARTH model)
+    max_capacity_gops: 100   # Max processing capacity per BBU (GOPS)
 
   fronthaul:
     pon_type: "twdm"       # twdm, epon, aon

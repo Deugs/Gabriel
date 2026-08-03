@@ -58,9 +58,9 @@ class DiscreteActor(nn.Module):
 
 
 class ContinuousActor(nn.Module):
-    """Continuous Actor (SAC Gaussian Policy) for transmit power allocation.
+    """Continuous Actor (SAC Squashed Gaussian Policy) for transmit power allocation.
 
-    Outputs normalized power ratios p_r in [0, 1] for each RRH.
+    Outputs normalized power ratios p_r in [0, 1] for each RRH using tanh squashing.
     """
 
     def __init__(
@@ -91,7 +91,7 @@ class ContinuousActor(nn.Module):
 
     def forward(self, state: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         features = self.backbone(state)
-        mean = torch.sigmoid(self.mean_head(features))  # Bound mean to [0, 1]
+        mean = self.mean_head(features)
         log_std = torch.clamp(
             self.log_std_head(features), self.log_std_min, self.log_std_max
         )
@@ -101,13 +101,14 @@ class ContinuousActor(nn.Module):
         mean, log_std = self.forward(state)
         std = log_std.exp()
 
-        # Reparameterization trick
-        noise = torch.randn_like(mean)
-        action = mean + std * noise
-        action = torch.clamp(action, 0.0, 1.0)  # Bound to valid power ratio [0, 1]
+        normal = torch.distributions.Normal(mean, std)
+        x_t = normal.rsample()  # Reparameterization trick (mean + std * noise)
+        y_t = torch.tanh(x_t)
+        action = (y_t + 1.0) / 2.0  # Scale tanh output from [-1, 1] to [0, 1]
 
-        # Log probability density
-        log_prob = -0.5 * (((noise**2) + 2.0 * log_std + np.log(2.0 * np.pi)))
+        # Log probability density with Jacobian correction for tanh squashing and [0,1] scaling
+        log_prob = normal.log_prob(x_t)
+        log_prob -= torch.log(1.0 - y_t.pow(2) + 1e-6) + np.log(0.5)
         log_prob = log_prob.sum(dim=-1, keepdim=True)
 
         return action, log_prob
@@ -117,7 +118,7 @@ class ContinuousActor(nn.Module):
     ) -> torch.Tensor:
         mean, _ = self.forward(state)
         if deterministic:
-            return mean
+            return (torch.tanh(mean) + 1.0) / 2.0
         action, _ = self.sample(state)
         return action
 
@@ -302,6 +303,7 @@ class HybridSACDDQN:
         self.continuous_actor_target = copy.deepcopy(self.continuous_actor).to(
             self.device
         )
+        self.discrete_actor_target = copy.deepcopy(self.discrete_actor).to(self.device)
 
         # Optimizers
         self.disc_opt = optim.Adam(self.discrete_actor.parameters(), lr=lr_disc)
@@ -373,9 +375,10 @@ class HybridSACDDQN:
 
         # --- 1. Critic Update ---
         with torch.no_grad():
-            # Next discrete action (target discrete actor)
-            next_q_disc = self.discrete_actor(next_states)
-            next_disc_actions = next_q_disc.argmax(dim=-1)
+            # Next discrete action using Double DQN selection
+            # (online network selects, target network evaluates)
+            next_q_disc_online = self.discrete_actor(next_states)
+            next_disc_actions = next_q_disc_online.argmax(dim=-1)
 
             # Next continuous action (target continuous actor sample)
             next_cont_actions, next_log_prob = self.continuous_actor_target.sample(
@@ -398,10 +401,15 @@ class HybridSACDDQN:
         nn.utils.clip_grad_norm_(self.critic.parameters(), max_norm=1.0)
         self.critic_opt.step()
 
-        # --- 2. Discrete Actor Update ---
+        # --- 2. Discrete Actor Update (DDQN loss against Bellman target y) ---
         q_disc_vals = self.discrete_actor(states)  # (batch, n_rrh, 2)
-        disc_selected = q_disc_vals.gather(-1, disc_actions.unsqueeze(-1)).squeeze(-1)
-        disc_loss = -(disc_selected.mean())
+        disc_selected = q_disc_vals.gather(-1, disc_actions.unsqueeze(-1)).squeeze(
+            -1
+        )  # (batch, n_rrh)
+
+        # Target Q-value for discrete action evaluation (expanded across RRHs)
+        y_disc_target = y.expand(-1, self.n_rrh)
+        disc_loss = F.mse_loss(disc_selected, y_disc_target.detach())
 
         self.disc_opt.zero_grad()
         disc_loss.backward()
@@ -444,6 +452,7 @@ class HybridSACDDQN:
         # --- 5. Soft Update Target Networks ---
         self._soft_update(self.critic_target, self.critic)
         self._soft_update(self.continuous_actor_target, self.continuous_actor)
+        self._soft_update(self.discrete_actor_target, self.discrete_actor)
 
         # Decay epsilon
         self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)

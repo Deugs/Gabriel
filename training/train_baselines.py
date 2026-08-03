@@ -100,8 +100,10 @@ def run_baseline_benchmarks(
                         model.update()
 
                     total_reward += reward
-                    powers.append(info.get("power_metrics", {}).get("p_total_w", 0.0))
-                    qos_flags.append(1.0 if info.get("qos_satisfied", False) else 0.0)
+                    powers.append(info.get("total_power_w", 0.0))
+                    qos_flags.append(
+                        1.0 if info.get("qos_violations_count", 0) == 0 else 0.0
+                    )
                     actives.append(info.get("active_rrhs", 0))
 
                     obs = next_obs

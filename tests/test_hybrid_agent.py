@@ -44,7 +44,10 @@ def test_continuous_actor():
     mean, log_std = actor(state_t)
     assert mean.shape == (4, n_rrh)
     assert log_std.shape == (4, n_rrh)
-    assert torch.all(mean >= 0.0) and torch.all(mean <= 1.0)
+
+    det_action = actor.get_action(state_t, deterministic=True)
+    assert det_action.shape == (4, n_rrh)
+    assert torch.all(det_action >= 0.0) and torch.all(det_action <= 1.0)
 
     action, log_prob = actor.sample(state_t)
     assert action.shape == (4, n_rrh)
@@ -149,3 +152,38 @@ def test_hybrid_agent_in_cran_env(default_config):
 
     assert len(rewards) == 20
     assert not np.isnan(rewards).any()
+
+
+def test_discrete_q_loss_bounded_bellman(default_config):
+    env = CRANEnv(default_config)
+    obs, _ = env.reset(seed=42)
+
+    agent = HybridSACDDQN(
+        state_dim=env.state_dim,
+        n_rrh=env.n_rrh,
+        p_max_w=env.p_max_w,
+        config=default_config,
+    )
+
+    # Populate replay buffer with transitions
+    for _ in range(50):
+        action = agent.select_action(obs, evaluate=False)
+        next_obs, reward, terminated, truncated, _ = env.step(action)
+        agent.memory.push(
+            obs,
+            action["rrh_on"],
+            action["power"] / env.p_max_w,
+            reward,
+            next_obs,
+            terminated,
+        )
+        obs = next_obs
+
+    # Run 10 optimization steps and verify discrete Q loss is finite and non-negative (MSE loss >= 0)
+    disc_losses = []
+    for _ in range(10):
+        metrics = agent.update(batch_size=16)
+        disc_losses.append(metrics["disc_loss"])
+
+    assert all(not np.isnan(l) and not np.isinf(l) for l in disc_losses)
+    assert all(l >= 0.0 for l in disc_losses), "MSE discrete loss must be non-negative"

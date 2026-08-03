@@ -274,7 +274,11 @@ class CRANEnv(gym.Env):
     def _compute_sinr(self, active_mask: np.ndarray, power: np.ndarray) -> np.ndarray:
         """Compute Signal-to-Interference-plus-Noise Ratio (SINR) for each user.
 
-        SINR_u = sum_{r in active} (|h_{r,u}|^2 * p_r) / (noise_power)
+        User u is assigned to the best active serving RRH:
+            r*(u) = argmax_{r in active} (p_r * |h_{r,u}|^2)
+        Desired Signal: S_u = p_{r*(u)} * |h_{r*(u),u}|^2
+        Interference: I_u = sum_{r in active, r != r*(u)} (p_r * |h_{r,u}|^2)
+        SINR_u = S_u / (I_u + noise_power)
         """
         sinr = np.zeros(self.n_ue, dtype=np.float32)
         active_indices = np.where(active_mask)[0]
@@ -283,9 +287,17 @@ class CRANEnv(gym.Env):
             return sinr  # All RRHs OFF -> zero signal
 
         for u in range(self.n_ue):
-            # Useful signal power received from active RRHs
+            # Calculate received power from each active RRH to user u
             channel_mag_sq = np.abs(self.channel_gains[active_indices, u]) ** 2
-            rx_signal_power = np.sum(channel_mag_sq * power[active_indices])
-            sinr[u] = rx_signal_power / self.noise_power_w
+            rx_powers = channel_mag_sq * power[active_indices]
+
+            best_idx = np.argmax(rx_powers)
+            signal_power = rx_powers[best_idx]
+            interference_power = np.sum(rx_powers) - signal_power
+
+            if signal_power <= 0.0:
+                sinr[u] = 0.0
+            else:
+                sinr[u] = signal_power / (interference_power + self.noise_power_w)
 
         return sinr
