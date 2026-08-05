@@ -1,0 +1,21 @@
+services:
+  train:
+    build: .
+    image: gabriel-cran-drl:latest
+    environment:
+      - PYTHONUNBUFFERED=1
+      - WANDB_API_KEY=${WANDB_API_KEY:-}
+    volumes:
+      - ./data/results:/app/data/results
+      - ./config:/app/config:ro
+    # GPU reservation (Compose v2 / `docker compose`, requires nvidia-container-toolkit
+    # on the host). On legacy standalone docker-compose v1, replace this `deploy` block
+    # with a top-level `runtime: nvidia` key instead.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    command: ["hybrid", "--config", "config/default.yaml", "--seed", "42"]

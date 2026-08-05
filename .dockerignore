@@ -1,0 +1,28 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+
+# Experiment artifacts
+data/results/*
+!data/results/.gitkeep
+wandb/
+*.pt
+*.pth
+
+# Version control / docker
+.git/
+.dockerignore
+Dockerfile
+docker-compose.yml
+
+# Thesis materials not needed at training runtime
+manuscript/
+thesis/
+*.docx
+
+# OS
+.DS_Store
+Thumbs.db
