@@ -43,8 +43,8 @@
 
 ---
 
-### Phase 2: Baselines (Week 3)
-**Duration**: 1 week
+### Phase 2: Baselines (Week 2-7)
+**Duration**: 5 weeks (revised from 1 week — 8 baselines, including two published reproductions and two parameterized-action-space methods, is not a one-week task; per supervisor review, Concept Note v3.0 §15/B4)
 **Owner**: Baseline Implementer
 **Deliverables**:
 - [ ] `baselines/all_on_uniform.py` — All RRHs ON, uniform power
@@ -52,11 +52,15 @@
 - [ ] `baselines/nmbs_binpack.py` — Al-Zubaedi's NMBS
 - [ ] `baselines/convex_power.py` — CVXPY power allocation
 - [ ] `agents/ddqn_agent.py` — Iqbal's DDQN reproduction
+- [ ] `baselines/ann_gsbf.py` — Fathy's ANN + Bi-Section GSBF reproduction
+- [ ] `agents/ddpg_agent.py` — pure-DDPG continuous relaxation (RQ3 baseline)
+- [ ] `agents/pdqn_agent.py`, `agents/mpdqn_agent.py` — P-DQN and MP-DQN, **new per supervisor review S2** (Concept Note v3.0 §12.1); validated only at R=5 and R=12 (untractable at R≥35, see §10.3.1/B3)
 - [ ] `tests/test_baselines.py` — Validation tests
 
 **Key Decisions**:
 - CVXPY for convex sub-problems (matches Fathy/Iqbal)
 - DDQN from Stable-Baselines3 (proven implementation)
+- P-DQN/MP-DQN capped at R≤12 by design, not by bug — the resulting scaling failure is itself evidence for the branching architecture (Concept Note v3.0 §12.1)
 - Identical environment for all baselines
 
 **Validation**:
@@ -69,11 +73,11 @@
 
 ---
 
-### Phase 3: Proposed Method (Week 4-6)
-**Duration**: 3 weeks
+### Phase 3: Proposed Method (Week 5-11)
+**Duration**: 7 weeks (revised from 3 weeks; branching + multi-pass + twin-critic is more involved to stabilize than a single off-the-shelf agent, per Concept Note v3.0 §15/B4)
 **Owner**: Methodology Validator + Code Reviewer
 **Deliverables**:
-- [ ] `agents/hybrid_sac_dqn.py` — Hybrid SAC-DDQN implementation
+- [ ] `agents/branching_mp_dqn.py` — Branching, multi-pass, twin-critic parameterized DQN (the architecture specified in Concept Note v3.0 §10.3; `agents/hybrid_sac_dqn.py` remains only as the earlier, superseded alternative)
 - [ ] `training/train_hybrid.py` — Training loop
 - [ ] `config/default.yaml` — Default hyperparameters
 - [ ] `config/small_network.yaml` — Small scenario
@@ -81,81 +85,85 @@
 - [ ] `tests/test_hybrid_agent.py` — Agent unit tests
 
 **Key Decisions**:
-- Factorized discrete actions (per-RRH binary)
-- Twin critics for reduced overestimation
+- Factorized, branching discrete actions (per-RRH binary head; 2R outputs, not 2^R — Concept Note v3.0 §10.3.1)
+- Multi-pass masking (MP-DQN) between the continuous parameter net and each branch — not optional (Concept Note v3.0 §10.3)
+- Twin critics for reduced overestimation (TD3-style)
 - LayerNorm for training stability
-- Auto-tuned SAC temperature (optional)
 
 **Validation**:
 - Agent runs 100 episodes without crash
 - Critic loss decreases
 - Reward improves over random policy
-- Action space valid for environment
+- Action space valid for environment; validated at R=3–5 before scaling up
 
 **Entry Criteria**: Phase 2 complete
 **Exit Criteria**: Training converges; hyperparameters stable
 
 ---
 
-### Phase 4: Experiments (Week 6-9)
-**Duration**: 4 weeks
+### Phase 4: Experiments (Week 13-19)
+**Duration**: 7 weeks (revised from 4 weeks — 10 seeds instead of 5, plus the new CSI-robustness and cross-profile generalization evaluations, per supervisor review S3/S4; Concept Note v3.0 §15/B4)
 **Owner**: Experiment Runner + Figure Designer
 **Deliverables**:
-- [ ] Convergence curves (all algorithms, 5 seeds)
+- [ ] Convergence curves (all algorithms, **10 seeds**)
 - [ ] Energy efficiency comparison (24-hour average)
 - [ ] QoS performance analysis (SINR CDF)
-- [ ] Ablation study (4 variants)
-- [ ] Scalability analysis (4 network sizes)
-- [ ] Statistical significance tests
+- [ ] Ablation study: RQ3 (hybrid vs pure-DDPG) and RQ4 (hybrid vs P-DQN/MP-DQN)
+- [ ] Scalability analysis (5 network sizes; R=50 is a stretch goal, not committed)
+- [ ] **CSI-robustness curve** (σ ∈ {0, 0.01, 0.05, 0.1}, evaluation-only, no retraining — Concept Note v3.0 §12.5)
+- [ ] **Cross-profile generalization result** (weekday/urban-trained policy evaluated on weekend/suburban profile — Concept Note v3.0 §12.3)
+- [ ] Inference-latency benchmark at R=5,12,20,35,50
+- [ ] Statistical significance tests **and effect sizes (Cohen's d)** for every baseline comparison
 
 **Experiment Matrix**:
 
-| Algorithm | R=5, U=2 | R=12, U=10 | R=20, U=20 | R=50, U=50 |
-|-----------|----------|------------|------------|------------|
-| All ON | 5 seeds | 5 seeds | 5 seeds | — |
-| Greedy | 5 seeds | 5 seeds | 5 seeds | — |
-| NMBS | 5 seeds | 5 seeds | — | — |
-| Convex | 5 seeds | 5 seeds | — | — |
-| DDQN | 5 seeds | 5 seeds | 5 seeds | — |
-| DDPG | 5 seeds | 5 seeds | — | — |
-| SAC | 5 seeds | 5 seeds | 5 seeds | — |
-| TD3 | 5 seeds | 5 seeds | — | — |
-| Hybrid (proposed) | 5 seeds | 5 seeds | 5 seeds | 5 seeds |
+| Algorithm | R=5, U=2 | R=12, U=10 | R=20, U=20 | R=35 | R=50 (stretch) |
+|-----------|----------|------------|------------|------|----------------|
+| All ON | 10 seeds | 10 seeds | 10 seeds | 10 seeds | — |
+| Greedy | 10 seeds | 10 seeds | 10 seeds | 10 seeds | — |
+| NMBS | 10 seeds | 10 seeds | — | — | — |
+| Convex | 10 seeds | 10 seeds | — | — | — |
+| DDQN | 10 seeds | 10 seeds | 10 seeds | 10 seeds | — |
+| ANN+GSBF | 10 seeds | 10 seeds | — | — | — |
+| DDPG (pure) | 10 seeds | 10 seeds | — | — | — |
+| P-DQN | 10 seeds | 10 seeds | — | — | — |
+| MP-DQN | 10 seeds | 10 seeds | — | — | — |
+| Hybrid (proposed) | 10 seeds | 10 seeds | 10 seeds | 10 seeds | 10 seeds (stretch) |
 
-**Total Runs**: ~225 training jobs
+**Total Runs**: ~440 training jobs (up from ~225 — reflects the two new baselines and the 5→10 seed increase; the P-DQN/MP-DQN rows are deliberately capped at R≤12 per §10.3.1/B3)
 
 **Validation**:
 - All results reproducible from config files
 - Confidence intervals computed
-- Statistical tests significant (p < 0.05)
+- Statistical tests significant (p < 0.05), with Cohen's d reported alongside every test
 
 **Entry Criteria**: Phase 3 complete
 **Exit Criteria**: All figures and tables generated
 
 ---
 
-### Phase 5: Thesis Writing (Week 8-12)
-**Duration**: 5 weeks (parallel with Phase 4)
+### Phase 5: Thesis Writing (Week 9-24, parallel)
+**Duration**: 16 weeks, parallel with Phases 3-4 (revised from 5 weeks to match the extended timeline in Concept Note v3.0 §15/B4)
 **Owner**: Thesis Writer + Thesis Architect
 **Deliverables**:
-- [ ] Chapter 1: Introduction (revised)
-- [ ] Chapter 2: Literature Review (expanded)
-- [ ] Chapter 3: System Model & Problem Formulation (restructured)
-- [ ] Chapter 4: Simulation Results (written)
+- [ ] Chapter 1: Introduction (revised — mention the O-RAN positioning, Concept Note v3.0 §11)
+- [ ] Chapter 2: Literature Review (expanded to ~23 references per supervisor review B1; add the O-RAN and parameterized-action-space-lineage subsections, Concept Note v3.0 §4.2-4.4)
+- [ ] Chapter 3: System Model & Problem Formulation (restructured; incorporate the critic-architecture diagram and the B3 combinatorial-action-space subsection, Concept Note v3.0 §10.3-10.3.1)
+- [ ] Chapter 4: Simulation Results (written; include RQ4 ablation, CSI-robustness curve, generalization result, inference latency)
 - [ ] Chapter 5: Conclusion & Future Work (written)
 - [ ] Abstract
 - [ ] List of Figures/Tables
-- [ ] References (complete BibTeX)
+- [ ] References (complete BibTeX; confirm the HySoft entry's authorship before finalizing, Concept Note v3.0 §4.2)
 
 **Writing Schedule**:
 
 | Week | Focus | Target Words |
 |------|-------|-------------|
-| 8 | Ch. 1 revision + Ch. 2 expansion | +1,500 |
-| 9 | Ch. 3 restructuring (MDP, hybrid algorithm) | +3,000 |
-| 10 | Ch. 4 draft (using preliminary results) | +3,000 |
-| 11 | Ch. 5 + Abstract + integration | +2,000 |
-| 12 | Full draft review + supervisor feedback | Revision |
+| 9-10 | Ch. 1 revision + Ch. 2 expansion (new lit.) | +2,000 |
+| 11-14 | Ch. 3 restructuring (MDP, hybrid algorithm, diagram, B3 subsection) | +3,500 |
+| 15-19 | Ch. 4 draft (using preliminary + main experiment results) | +3,500 |
+| 20-22 | Ch. 5 + Abstract + integration | +2,000 |
+| 23-24 | Full draft review + supervisor feedback | Revision |
 
 **Validation**:
 - Each chapter passes quality gates
@@ -168,8 +176,8 @@
 
 ---
 
-### Phase 6: Revision & Submission (Week 13-14)
-**Duration**: 2 weeks
+### Phase 6: Revision & Submission (Week 25-27)
+**Duration**: 3 weeks (revised from 2 weeks)
 **Owner**: All agents
 **Deliverables**:
 - [ ] Supervisor feedback incorporated
@@ -178,6 +186,7 @@
 - [ ] Formatting compliance verified
 - [ ] PDF generated successfully
 - [ ] Code repository tagged (thesis-v1.0-final)
+- [ ] Reproducibility artifacts released (code, checkpoints, configs — Concept Note v3.0 §12.10/A4)
 
 **Validation**:
 - Pre-submission hook passes
@@ -193,22 +202,19 @@
 
 ## Milestone Timeline
 
+Revised to ~27 weeks (from 14) per the supervisor review (Concept Note v3.0 §15/B4): two new baseline methods (P-DQN, MP-DQN), a 5→10 seed increase, and the CSI-robustness/generalization evaluations all needed time the original 14-week plan didn't have; R=50 is a stretch goal, not a committed deliverable, so the core plan does not depend on it landing. See Concept Note v3.0 §15 for the week-by-week Gantt chart; the summary below tracks phase-level milestones only.
+
 ```
-Week 0:  [====] Setup
-Week 1:  [========] Environment
-Week 2:  [========] Environment (cont.)
-Week 3:  [====] Baselines
-Week 4:  [========] Hybrid Agent (core)
-Week 5:  [========] Hybrid Agent (training)
-Week 6:  [====] Agent stabilization + Experiments start
-Week 7:  [========] Experiments (convergence)
-Week 8:  [========] Experiments (ablation) + Ch. 1-2 writing
-Week 9:  [========] Experiments (scalability) + Ch. 3 writing
-Week 10: [========] Ch. 4 writing
-Week 11: [========] Ch. 5 + integration
-Week 12: [========] Full draft + supervisor review
-Week 13: [========] Revision round 1
-Week 14: [====] Final revision + submission
+Week 0:     [==] Setup
+Week 1-2:   [====] Environment & power model
+Week 2-7:   [========] Baselines (incl. P-DQN, MP-DQN — new)
+Week 5-11:  [========] Hybrid agent (branching/multi-pass/twin-critic; build then scale)
+Week 11-13: [====] CSI-robustness + reward-weight sensitivity harness (new)
+Week 13-16: [========] Main experiments (10 seeds, RQ3/RQ4 ablations)
+Week 16-19: [========] Extended experiments (scalability, CSI robustness, generalization, latency)
+Week 9-24:  [================] Thesis writing (parallel, starts once early baselines land)
+Week 25-26: [====] Full draft + supervisor review
+Week 27:    [==] Final revision + submission
 ```
 
 ---

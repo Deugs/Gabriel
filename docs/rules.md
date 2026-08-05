@@ -31,7 +31,7 @@ Test: tests/test_power_model.py::test_total_power_matches_equation
 **Enforcement**:
 - Single evaluation script: `evaluation/compare_all.py`
 - Shared config file for all experiments
-- Fixed random seed list: [42, 123, 456, 789, 1011]
+- Fixed random seed list (10 seeds, revised from 5 per supervisor review, Concept Note v3.0 §12.4): [42, 123, 456, 789, 1011, 1337, 2024, 2718, 3141, 4242]
 
 **Forbidden**: Training proposed method with different hyperparameters than baselines; using different traffic traces; evaluating on different network sizes.
 
