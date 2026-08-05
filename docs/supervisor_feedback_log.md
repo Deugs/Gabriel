@@ -2,6 +2,14 @@
 
 > Filled instances of `docs/supervisor_feedback_template.md`. Newest entry first.
 
+## Verification follow-up: 2026-08-05 — HySoft authorship
+
+Requested: independently verify HySoft's authorship (the last open flag from the reference-verification pass below). Same standard applied as the OREO check: require a located identifier or independent corroborating signal, not just a repeated search snippet.
+
+**Result — corroborated, not primary-source-confirmed.** Authors: Lu, J., Jia, Y., & Görges, D. (2025), *IFAC-PapersOnLine*, ICONS 2025 (Padova, Italy). Unlike the retracted OREO citation, this PII (S2405896325027430) consistently resolves to the same title/venue/benchmarks across independently-phrased searches, and Daniel Görges has his own separately-verifiable ScienceDirect author profile (ID 23569037600) and academic identity (RPTU Kaiserslautern-Landau, control systems/ML) that surfaces specifically tied to this article — an independent corroborating signal the OREO case never had. However, every direct fetch attempt against the primary source (ScienceDirect article page, Görges' DBLP page, his Google Scholar page) returned HTTP 403 in this environment, so this remains corroboration from secondary signals, not a confirmed primary-source read. Concept Note v4.0 §4.2/§17 updated accordingly; a final institutional-access check is still recommended before citing definitively.
+
+---
+
 ## Review: 2026-08-05 — Detailed review (Overall Assessment, Methodology Assessment, G1-G14, Scientific Relevance)
 
 ### Agenda
@@ -87,6 +95,6 @@
 - [x] Draft Concept Note v3.0 resolving B1-B4, S1-S6, A1-A6
 - [x] Sync `docs/rules.md` (seed list) and `docs/workflow.md` (phases, experiment matrix, milestone timeline) to v3.0
 - [x] Sync `AGENTS.md` / `README.md` status tables and key-decisions log to v3.0
-- [ ] Independently verify the HySoft (2025) reference's author list/venue before it enters the thesis bibliography (Concept Note v3.0 §4.2)
+- [x] Independently verify the HySoft (2025) reference's author list/venue (Concept Note v4.0 §4.2) — corroborated (Lu, Jia & Görges; IFAC-PapersOnLine, ICONS 2025) via an independent evidence chain (Görges' separately-verifiable ScienceDirect author profile and academic identity), but every direct fetch against ScienceDirect/DBLP/Google Scholar returned HTTP 403 in this environment, so this is not a confirmed primary-source read. **Final action carried forward**: candidate to do one institutional/library-access check on the ScienceDirect page before citing definitively.
 - [ ] Supervisor sign-off on Concept Note v3.0
 - [ ] Begin Phase 1 (environment & power model) per the revised `docs/workflow.md` timeline
