@@ -4,7 +4,12 @@ from pathlib import Path
 import pytest
 import yaml  # type: ignore[import-untyped]
 
-from training import HyperparameterSearch, run_baseline_benchmarks, train_hybrid_agent
+from training import (
+    HyperparameterSearch,
+    run_baseline_benchmarks,
+    run_proxy_sensitivity_sweep,
+    train_hybrid_agent,
+)
 
 
 @pytest.fixture
@@ -78,3 +83,33 @@ def test_hyperparameter_search(config_path, tmp_path):
 
     assert len(results) == 2
     assert (Path(save_dir) / "grid_search_results.json").exists()
+
+
+def test_proxy_sensitivity_sweep_short_run(config_path, tmp_path):
+    """Concept Note v4.0 Section 12.11's lightweight lr-pair/tau sensitivity sweep."""
+    save_dir = str(tmp_path / "proxy_sweep")
+
+    summary = run_proxy_sensitivity_sweep(
+        base_config_path=config_path,
+        episodes=2,
+        seeds=[42],
+        save_dir=save_dir,
+    )
+
+    assert summary["scenario"]["n_rrh"] == 5
+    assert summary["scenario"]["n_ue"] == 2
+
+    expected_variants = {
+        "lr_pair_down",
+        "lr_pair_default",
+        "lr_pair_up",
+        "tau_down",
+        "tau_default",
+        "tau_up",
+    }
+    assert set(summary["results"].keys()) == expected_variants
+    assert set(summary["decisions"].keys()) == {"lr_pair", "tau"}
+    for decision in summary["decisions"].values():
+        assert "default_kept" in decision and "reason" in decision
+
+    assert (Path(save_dir) / "proxy_sweep_summary.json").exists()

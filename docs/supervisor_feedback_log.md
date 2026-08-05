@@ -2,6 +2,25 @@
 
 > Filled instances of `docs/supervisor_feedback_template.md`. Newest entry first.
 
+## Follow-up audit: 2026-08-05 — post-merge recheck + §12.11 proxy sweep implementation
+
+**Requested**: independently re-verify (not just re-summarize) that the consolidated-letter fixes below actually match the Concept Note v4.0 spec and introduced no regressions, after merging them into `main` (PR #4).
+
+**Result — all five implementations verified correct** by reading the actual masking/gradient/noise-isolation logic directly (not the prior session's own docstrings): P-DQN's single unmasked pass vs. MP-DQN's genuine per-action parameter masking, both single-critic; DDPG's continuous activation gradient flowing through the un-thresholded value; CSI noise touching only a copy of the observation, never the environment's true channel state; the `weekend_suburban` profile genuinely flatter/later/lower than `weekday_urban`; the latency benchmark's exact R=5/12/20/35/50 sweep. Full suite: 44/44 passed, no stale-reference regressions found repo-wide.
+
+**One real gap found and closed in this follow-up**: Concept Note §12.11 specifies an exact hyperparameter-tuning proxy sweep (R=5, U=2, 100 episodes, 2 seeds, varying the branch/continuous-net learning-rate pair and τ by ~half an order of magnitude) that had no matching code — `training/hyperparam_search.py` only had a generic grid-search utility sweeping different parameters at the wrong network size. **Added** `run_proxy_sensitivity_sweep()` implementing the exact documented protocol (6 variants: lr-pair down/default/up, τ down/default/up), reporting a per-variant crash/stability check and a keep-vs-change decision per dimension, with the decision left for a human to log in `docs/daily_log_template.md` per item 3 rather than auto-writing to it. Also added a `docs/workflow.md` Phase 4 line item for this — the previous session's status trackers had no line for it at all, so it could have been silently lost.
+
+**One disclosed-but-still-open item, not a regression**: `evaluation/scalability.py`'s training-time sweep still uses a different RRH-size set (6/12/24) than §12.2's table (5/12/20/35/50) and than the new `latency_benchmark.py`; this was already explicitly disclosed as the reason a separate latency module was added rather than fixing `scalability.py` itself, and remains open for whoever picks up Phase 4.
+
+### Action Items
+- [x] Independently re-verify the five consolidated-letter fixes against actual code (not summaries)
+- [x] Implement `training/hyperparam_search.py::run_proxy_sensitivity_sweep` (§12.11/G9) with a short-run test
+- [x] Add a `docs/workflow.md` Phase 4 tracking line for the §12.11 sweep
+- [ ] Run the §12.11 sweep at full scale (100 episodes, 2 seeds) and log its keep/change decision in `docs/daily_log_template.md`
+- [ ] Reconcile `evaluation/scalability.py`'s RRH-size set with §12.2's table (5/12/20/35/50), or explicitly document why it intentionally differs
+
+---
+
 ## Review: 2026-08-05 — Consolidated letter (Overall/Methodology Assessment, Critical Gaps G1-G14, Scientific Relevance, Recommendations B1-B4/S1-S6/A1-A6)
 
 ### Agenda
