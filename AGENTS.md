@@ -57,16 +57,27 @@
 | Fathy et al. (2021) | Primary | ANN pre-processing + Bi-Section GSBF convex optimization |
 | Iqbal et al. (2021) | Primary | DDQN for RRH on/off + convex power allocation; 22% power savings |
 | Al-Zubaedi (2019) | Primary | Comprehensive C-RAN power model; NMBS bin-packing; TWDM-PON |
-| Bordin et al. (2025) | Recent | DRL for Open RAN energy saving |
+| Bordin et al. (2025) | Recent | DRL (PPO/DQN) for Open RAN RF-frontend energy saving, via `ns-O-RAN`; arXiv:2410.14021 |
 | Shengren et al. (2022) | Methodology | DRL benchmark: SAC > TD3 > DDPG in stability |
 | Frontiers (2026) | Validation | Hybrid DDPG+DDQL for ABS-assisted B5G networks |
+| Xiong et al. (2018) / Bester et al. (2019) | Core architecture | P-DQN / MP-DQN — parameterized discrete-continuous action coupling, corrected for cross-talk |
+| Tavakoli et al. (2018) | Core architecture | Branching (BDQ) — 2R not 2^R discrete output growth |
+| Li et al. (2022) | Considered, not adopted | HyAR — VAE-based hybrid action representation; arXiv:2109.05490 |
+| HySoft (2025) | Considered, not adopted | Max-entropy P-DQN/MP-DQN extension; **authorship unverified**, see Concept Note v4.0 §4.2 |
+| Lu, Yan & Zeng (2026) | Closest related work | EExApp — dual-actor-dual-critic PPO+GAT, RU sleep + DU slicing, real O-RAN testbed; arXiv:2602.09206. Explicitly differentiated (single coupled network vs. two actor-critic pairs), see Concept Note v4.0 §4.4 |
+| Liang et al. (2026) | Recent (O-RAN) | Federated TD3, rApp aggregator + xApp agents; arXiv:2604.00201. Cited as the justification for this thesis's single-agent scope (§7.1) |
+| Sthankiya et al. (2024) | Recent (O-RAN) | Survey: AI-driven energy optimization in NG-RAN; arXiv:2411.02164 |
+| Sohaib et al. (2024) | Recent (O-RAN) | DRL transfer learning for cloud-native O-RAN, eMBB+URLLC; arXiv:2407.11563 |
+| Chuang et al. (2025) | Recent (adjacent) | Hybrid A3C + Dueling DQN in a 5G C-RAN — different problem (industrial IoT scheduling), engaged per supervisor review B1 |
 
 ---
 
 ## Methodological Pivot (Post-Critique)
 
+> **Superseded**: the SAC-DDQN design below was the first hybrid revision. It was itself superseded by the branching/multi-pass (MP-DQN)/twin-critic architecture in `manuscript/MPhil_Thesis_Concept_Note_v2.md` §10, which `manuscript/MPhil_Thesis_Concept_Note_v3.md` §10 keeps and further specifies (critic diagram, combinatorial-action-space handling) in response to supervisor review. This section is kept for history; `agents/hybrid_sac_dqn.py` is the "Alternative hybrid" per the Code Architecture list below, not the proposed method.
+
 **Original Plan**: Vanilla DDPG for joint discrete-continuous control  
-**Revised Plan**: Hybrid SAC-DDQN with:
+**Revised Plan (superseded, see note above)**: Hybrid SAC-DDQN with:
 - Discrete actor (DDQN) → RRH activation vector `v ∈ {0,1}^R` trained via MSE loss against Bellman Q-targets derived from the shared twin critic and discrete target network (`discrete_actor_target`).
 - Continuous actor (SAC) → Power allocation `p ∈ [0, P_max]^R` using `tanh` squashed Gaussian policy with exact Jacobian log-probability correction.
 - Shared twin critic evaluating joint discrete-continuous policy $Q(s, v, p)$.
