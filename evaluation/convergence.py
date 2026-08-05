@@ -30,6 +30,31 @@ def perform_paired_ttest(
     return float(t_stat), float(p_val), is_significant
 
 
+def compute_cohens_d(proposed_scores: np.ndarray, baseline_scores: np.ndarray) -> float:
+    """Cohen's d effect size for a paired comparison (Concept Note v3.0/v4.0 Section 12.4, S4/G11).
+
+    Reported alongside the t-test/p-value so a statistically significant but
+    practically small difference is visible as such, given the modest 5%
+    target margin over the DDQN baseline.
+
+    Args:
+        proposed_scores (np.ndarray): Scores for proposed method across seeds (n_seeds,).
+        baseline_scores (np.ndarray): Scores for baseline method across seeds (n_seeds,).
+
+    Returns:
+        float: Cohen's d computed on the paired differences (mean diff / std diff); 0.0
+            if fewer than 2 paired samples or the differences have zero variance.
+    """
+    if len(proposed_scores) != len(baseline_scores) or len(proposed_scores) < 2:
+        return 0.0
+
+    diffs = np.asarray(proposed_scores) - np.asarray(baseline_scores)
+    diff_std = float(np.std(diffs, ddof=1))
+    if diff_std == 0.0:
+        return 0.0
+    return float(np.mean(diffs) / diff_std)
+
+
 def analyze_convergence(
     results_dir: str = "data/results",
     save_dir: str = "thesis/figures",
@@ -83,7 +108,7 @@ def analyze_convergence(
         "paired_ttests": {},
     }
 
-    proposed_algo = "Hybrid_SAC_DDQN"
+    proposed_algo = "Branching_MP_DQN"
     proposed_arr = np.array(algo_scores.get(proposed_algo, [0.0]))
 
     for algo, scores in algo_scores.items():
@@ -104,10 +129,12 @@ def analyze_convergence(
             and len(arr) == len(proposed_arr)
         ):
             t_stat, p_val, is_sig = perform_paired_ttest(proposed_arr, arr)
+            cohens_d = compute_cohens_d(proposed_arr, arr)
             analysis_report["paired_ttests"][algo] = {
                 "t_statistic": t_stat,
                 "p_value": p_val,
                 "statistically_significant_0_05": is_sig,
+                "cohens_d": cohens_d,
             }
 
     # Export LaTeX table
@@ -115,10 +142,10 @@ def analyze_convergence(
         "\\begin{table}[h]\n"
         "\\centering\n"
         "\\caption{Performance Comparison and Statistical Significance Analysis.}\n"
-        "\\begin{tabular}{lcccc}\n"
+        "\\begin{tabular}{lccccc}\n"
         "\\hline\n"
         "Algorithm & Mean Reward (95\\% CI) & Mean Power (W) & "
-        "QoS Rate (\\%) & $p$-value (vs Proposed) \\\\\n"
+        "QoS Rate (\\%) & $p$-value (vs Proposed) & Cohen's $d$ \\\\\n"
         "\\hline\n"
     )
 
@@ -127,11 +154,14 @@ def analyze_convergence(
         p_val_str = (
             f"{ttest_info.get('p_value', 1.0):.4f}" if ttest_info else "N/A (Proposed)"
         )
+        d_val_str = (
+            f"{ttest_info.get('cohens_d', 0.0):.3f}" if ttest_info else "N/A (Proposed)"
+        )
         qos_pct = m["mean_qos_rate"] * 100
 
         latex_content += (
             f"{algo} & {m['mean_reward']:.2f} [{m['ci_95_lower']:.2f}, {m['ci_95_upper']:.2f}] & "
-            f"{m['mean_power_w']:.1f} & {qos_pct:.1f}\\% & {p_val_str} \\\\\n"
+            f"{m['mean_power_w']:.1f} & {qos_pct:.1f}\\% & {p_val_str} & {d_val_str} \\\\\n"
         )
 
     latex_content += "\\hline\n\\end{tabular}\n\\end{table}\n"

@@ -15,6 +15,10 @@ class TrafficModel:
         base_rate_bps (float): Base traffic rate in bits per second (default: 50 Mbps).
         peak_multiplier (float): Peak traffic multiplier (default: 3.0).
         burstiness_sigma (float): Log-normal burstiness standard deviation (default: 0.2).
+        profile (str): Traffic profile — "weekday_urban" (default, business peak at
+            11:00 + residential peak at 20:00) or "weekend_suburban" (Concept Note
+            v4.0 Section 12.8's cross-profile generalization variant: flatter
+            daytime demand, later and lower residential peak, no business peak).
     """
 
     def __init__(
@@ -23,11 +27,18 @@ class TrafficModel:
         base_rate_mbps: float = 50.0,
         peak_multiplier: float = 3.0,
         burstiness_sigma: float = 0.2,
+        profile: str = "weekday_urban",
     ):
         self.n_ue = n_ue
         self.base_rate_bps = base_rate_mbps * 1e6
         self.peak_multiplier = peak_multiplier
         self.burstiness_sigma = burstiness_sigma
+        if profile not in ("weekday_urban", "weekend_suburban"):
+            raise ValueError(
+                f"Unknown traffic profile '{profile}'; expected 'weekday_urban' or "
+                "'weekend_suburban' (Concept Note v4.0 Section 12.8)."
+            )
+        self.profile = profile
 
     def get_demands(self, hour: int, rng: np.random.Generator) -> np.ndarray:
         """Compute user data rate demands in bps for a given hour of the day (0-23).
@@ -41,12 +52,19 @@ class TrafficModel:
         """
         t = float(int(hour) % 24)
 
-        # Dual Gaussian peaks: Business peak at 11:00, Residential peak at 20:00
-        business_peak = np.exp(-((t - 11.0) ** 2) / 18.0)
-        residential_peak = np.exp(-((t - 20.0) ** 2) / 18.0)
+        if self.profile == "weekend_suburban":
+            # Flatter daytime profile (no distinct business peak), later and
+            # lower residential peak (23:00 instead of 20:00, half the weight).
+            business_peak = 0.0
+            residential_peak = np.exp(-((t - 23.0) ** 2) / 30.0)
+            diurnal_factor = 0.25 + 0.45 * residential_peak
+        else:
+            # Dual Gaussian peaks: Business peak at 11:00, Residential peak at 20:00
+            business_peak = np.exp(-((t - 11.0) ** 2) / 18.0)
+            residential_peak = np.exp(-((t - 20.0) ** 2) / 18.0)
 
-        # Diurnal factor normalized to [0.15, 1.0]
-        diurnal_factor = 0.15 + 0.85 * (0.6 * business_peak + 0.4 * residential_peak)
+            # Diurnal factor normalized to [0.15, 1.0]
+            diurnal_factor = 0.15 + 0.85 * (0.6 * business_peak + 0.4 * residential_peak)
 
         # Base rate scaled by diurnal profile and peak multiplier
         effective_base = (

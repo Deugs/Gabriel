@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import yaml  # type: ignore[import-untyped]
 
-from agents import DDQNAgent
+from agents import DDPGAgent, DDQNAgent, MPDQNAgent, PDQNAgent
 from baselines import (
     AllOnUniformBaseline,
     ANNGSBFBaseline,
@@ -48,7 +48,12 @@ def run_baseline_benchmarks(
             "ddqn",
             "ann_gsbf",
             "ddqn_socp",
+            "ddpg",
+            "pdqn",
+            "mpdqn",
         ]
+
+    drl_trained_algorithms = {"ddqn", "ddpg", "pdqn", "mpdqn"}
 
     with open(config_path, "r") as f:
         cfg = yaml.safe_load(f)
@@ -86,6 +91,18 @@ def run_baseline_benchmarks(
                     p_max_w=env.p_max_w,
                     config=cfg,
                 )
+            elif algo == "ddpg":
+                model = DDPGAgent(
+                    state_dim=env.state_dim, n_rrh=env.n_rrh, p_max_w=env.p_max_w, config=cfg
+                )
+            elif algo == "pdqn":
+                model = PDQNAgent(
+                    state_dim=env.state_dim, n_rrh=env.n_rrh, p_max_w=env.p_max_w, config=cfg
+                )
+            elif algo == "mpdqn":
+                model = MPDQNAgent(
+                    state_dim=env.state_dim, n_rrh=env.n_rrh, p_max_w=env.p_max_w, config=cfg
+                )
             else:
                 raise ValueError(f"Unknown algorithm: {algo}")
 
@@ -103,7 +120,7 @@ def run_baseline_benchmarks(
 
                 done = False
                 while not done:
-                    if algo == "ddqn":
+                    if algo in drl_trained_algorithms:
                         action = model.select_action(obs, evaluate=True)
                     else:
                         action = model.select_action(obs)
@@ -112,8 +129,19 @@ def run_baseline_benchmarks(
 
                     if algo == "ddqn":
                         model.memory.push(
+                            obs, action["rrh_on"], reward, next_obs, terminated
+                        )
+                        model.update()
+                    elif algo == "ddpg":
+                        model.memory.push(
+                            obs, action["continuous_action"], reward, next_obs, terminated
+                        )
+                        model.update()
+                    elif algo in ("pdqn", "mpdqn"):
+                        model.memory.push(
                             obs,
-                            action["rrh_on"],
+                            action["action_idx"],
+                            action["continuous"],
                             reward,
                             next_obs,
                             terminated,

@@ -27,7 +27,7 @@
 1. **Algorithm**: Vanilla DDPG -> Hybrid SAC-DDQN -> **branching, multi-pass (MP-DQN), twin-critic parameterized DQN** (`agents/branching_mp_dqn.py`; `hybrid_sac_dqn.py` is now the superseded alternative) — see `manuscript/MPhil_Thesis_Concept_Note_v4.md` §10
 2. **Chapter 3**: Add formal MDP formulation (currently missing) — Concept Note v3.0 §10.2, plus the new critic-architecture diagram and combinatorial-action-space subsection (§10.3-10.3.1)
 3. **Power Model**: Fix parameters to match EARTH model (P_stat=175W, not 100W)
-4. **Chapter 4**: Write entirely (currently missing); now also needs the P-DQN/MP-DQN baselines, CSI-robustness curve, and cross-profile generalization result (Concept Note v3.0 §12)
+4. **Chapter 4**: Write entirely (currently missing); the P-DQN/MP-DQN/pure-DDPG baselines and the CSI-robustness/generalization/inference-latency evaluation code now exist and are tested (`agents/pdqn_agent.py`, `agents/mpdqn_agent.py`, `agents/ddpg_agent.py`, `evaluation/csi_robustness.py`, `evaluation/generalization.py`, `evaluation/latency_benchmark.py`), but no full-scale (10-seed, thesis-scale) results have been generated yet — Chapter 4 still needs those runs (Concept Note v3.0 §12)
 5. **Chapter 5**: Write entirely (currently missing)
 
 **Estimated Timeline**: ~27 weeks (revised from 14; see `docs/workflow.md` and `manuscript/MPhil_Thesis_Concept_Note_v4.md` §15 for the week-by-week Gantt)

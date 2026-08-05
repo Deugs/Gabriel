@@ -56,7 +56,7 @@ def analyze_scalability(
         step_time_ms = (t_elapsed / (episodes * 24)) * 1000.0  # 24 steps per episode
 
         scalability_results[scale_name] = {
-            "Hybrid_SAC_DDQN": {
+            "Branching_MP_DQN": {
                 "power": float(res["final_eval_power_w"]),
                 "time": float(step_time_ms),
             }

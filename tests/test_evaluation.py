@@ -55,24 +55,32 @@ def test_plot_utils(tmp_path):
 
 
 def test_analyze_convergence_with_mock_results(tmp_path):
+    """Also guards against the proposed-method name drifting out of sync with
+    training/train_hybrid.py's actual saved `algorithm` field (it was previously
+    hardcoded to the superseded "Hybrid_SAC_DDQN", silently breaking every
+    paired t-test/Cohen's-d comparison against the real proposed method)."""
     res_dir = tmp_path / "results"
     fig_dir = tmp_path / "figures"
     table_dir = tmp_path / "tables"
 
-    algo_dir = res_dir / "hybrid_sac_dqn_seed42"
-    algo_dir.mkdir(parents=True, exist_ok=True)
-
-    summary = {
-        "algorithm": "Hybrid_SAC_DDQN",
-        "final_eval_reward": 150.5,
-        "final_eval_power_w": 420.0,
-        "final_qos_rate": 0.98,
-    }
-
     import json
 
-    with open(algo_dir / "summary.json", "w") as f:
-        json.dump(summary, f)
+    for algo, seed, reward in [
+        ("Branching_MP_DQN", 42, 150.5),
+        ("Branching_MP_DQN", 123, 148.0),
+        ("DDQN", 42, 120.0),
+        ("DDQN", 123, 118.5),
+    ]:
+        algo_dir = res_dir / f"{algo.lower()}_seed{seed}"
+        algo_dir.mkdir(parents=True, exist_ok=True)
+        summary = {
+            "algorithm": algo,
+            "final_eval_reward": reward,
+            "final_eval_power_w": 420.0,
+            "final_qos_rate": 0.98,
+        }
+        with open(algo_dir / "summary.json", "w") as f:
+            json.dump(summary, f)
 
     report = analyze_convergence(
         results_dir=str(res_dir),
@@ -80,7 +88,9 @@ def test_analyze_convergence_with_mock_results(tmp_path):
         table_save_dir=str(table_dir),
     )
 
-    assert "Hybrid_SAC_DDQN" in report["algorithms"]
+    assert "Branching_MP_DQN" in report["algorithms"]
+    assert "DDQN" in report["paired_ttests"]
+    assert "cohens_d" in report["paired_ttests"]["DDQN"]
     assert (table_dir / "convergence_summary.tex").exists()
 
 
