@@ -18,9 +18,9 @@ def run_ablation_study(
         seeds = [42]
 
     variants = {
-        "1. Full Proposed (Hybrid SAC-DDQN)": {},
-        "2. No Continuous SAC Tuning (Fixed Power)": {"lr_actor": 0.0},
-        "3. No Discrete DDQN Selection (All-ON)": {
+        "1. Full Proposed (Branching MP-DQN + TD3)": {},
+        "2. No Continuous Parameter Tuning (Fixed Power)": {"lr_actor": 0.0},
+        "3. No Discrete Branch Selection (All-ON)": {
             "epsilon_start": 0.0,
             "epsilon_end": 0.0,
         },

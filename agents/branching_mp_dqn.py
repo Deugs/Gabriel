@@ -1,6 +1,7 @@
 """Branching Multi-Pass Parameterized Deep Q-Network with Twin Critics (Branching MP-DQN + TD3).
 
-Conforms strictly to MPhil Thesis Concept Note v2.0 (Section 10):
+Conforms strictly to MPhil Thesis Concept Note v2.0 Section 10
+(architecture unchanged through v3.0/v4.0, the current reference document):
 - P-DQN (Xiong et al., 2018): Action coupling discrete RRH activation k_r with x_r = (p_r, beta_r).
 - MP-DQN (Bester et al., 2019): Multi-pass masking to prevent parameter cross-talk.
 - Branching DRL (Tavakoli et al., 2018): Factorized decision heads scaling linearly (2R).

@@ -37,7 +37,7 @@ def run_baseline_benchmarks(
 ) -> Dict[str, Any]:
     """Run baseline benchmark algorithms over specified random seeds."""
     if seeds is None:
-        seeds = [42, 123, 456, 789, 1011]
+        seeds = [42, 123, 456, 789, 1011, 1337, 2024, 2718, 3141, 4242]
 
     if algorithms is None:
         algorithms = [

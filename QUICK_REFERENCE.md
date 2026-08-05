@@ -4,7 +4,7 @@
 
 | Question | Answer |
 |----------|--------|
-| What algorithm? | **Hybrid SAC-DDQN** (not vanilla DDPG) |
+| What algorithm? | **Branching, multi-pass, twin-critic parameterized DQN (Branching MP-DQN + TD3)** — not vanilla DDPG, and not the superseded Hybrid SAC-DDQN (`agents/hybrid_sac_dqn.py`, kept only as the earlier alternative) |
 | Why not DDPG? | Cannot handle discrete actions; unstable training |
 | Discrete actions? | Per-RRH binary on/off (factorized) |
 | Continuous actions? | Per-RRH transmit power [0, P_max] |
@@ -13,8 +13,8 @@
 | BBU dynamic power? | **250 W** total |
 | Switching cost? | **3 W** per transition; include in reward |
 | Fronthaul in reward? | **Yes** — TWDM-PON model |
-| Baselines required? | All ON, Greedy, NMBS, Convex, DDQN, DDPG, SAC, TD3 |
-| Random seeds? | [42, 123, 456, 789, 1011] |
+| Baselines required? | 9 methods (Concept Note v3.0/v4.0 §12.1): All-ON/FA, Greedy, NMBS, Convex, DDQN, ANN+GSBF, pure-DDPG, P-DQN, MP-DQN, plus the proposed hybrid agent. Pure-SAC/TD3 are optional stretch comparisons, not core baselines |
+| Random seeds? | 10 seeds: [42, 123, 456, 789, 1011, 1337, 2024, 2718, 3141, 4242] |
 | Convergence target? | <= 3000 episodes |
 | Energy savings target? | >= 25% vs. All ON; >= 5% vs. Iqbal DDQN |
 | QoS violation target? | <= 5% |

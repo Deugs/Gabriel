@@ -242,7 +242,7 @@ def train_hybrid_agent(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Train Hybrid SAC-DDQN Agent for C-RAN"
+        description="Train Branching MP-DQN + TD3 Agent for C-RAN"
     )
     parser.add_argument(
         "--config", type=str, default="config/default.yaml", help="Config file path"
