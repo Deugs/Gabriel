@@ -16,7 +16,7 @@
 - [x] Independently re-verify the five consolidated-letter fixes against actual code (not summaries)
 - [x] Implement `training/hyperparam_search.py::run_proxy_sensitivity_sweep` (§12.11/G9) with a short-run test
 - [x] Add a `docs/workflow.md` Phase 4 tracking line for the §12.11 sweep
-- [ ] Run the §12.11 sweep at full scale (100 episodes, 2 seeds) and log its keep/change decision in `docs/daily_log_template.md`
+- [x] Run the §12.11 sweep at full scale (100 episodes, 2 seeds) and log its keep/change decision — done 2026-08-05, both the lr-pair and τ defaults kept unchanged (no variant crashed; the defaults outperformed both swept alternatives in each dimension); full results in `data/results/proxy_sweep/` and `docs/daily_log.md`
 - [ ] Reconcile `evaluation/scalability.py`'s RRH-size set with §12.2's table (5/12/20/35/50), or explicitly document why it intentionally differs
 
 ---
