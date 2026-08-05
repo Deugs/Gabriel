@@ -14,6 +14,7 @@
 | [docs/agents.md](docs/agents.md) | Agent role definitions | When delegating tasks |
 | [docs/hooks.md](docs/hooks.md) | Lifecycle automation hooks | When setting up CI/CD |
 | [docs/workflow.md](docs/workflow.md) | Development phases and milestones | When planning |
+| [docs/deployment.md](docs/deployment.md) | Docker image, `experiments/*.yaml`, cloud run workflow | When running an experiment |
 
 ---
 

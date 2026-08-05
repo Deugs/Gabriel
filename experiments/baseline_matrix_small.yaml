@@ -1,0 +1,21 @@
+# Same 9 baselines at R=5 — the other size Concept Note v4.0 Section 12.1
+# explicitly validates P-DQN/MP-DQN at ("run only at R=5 and R=12").
+#   python run_experiment.py --config experiments/baseline_matrix_small.yaml --seed 42
+name: baseline_matrix_small
+description: Run all 9 baseline methods on the R=5 small network.
+type: baseline_matrix
+config: config/small_network.yaml
+episodes: 1000
+algorithms:
+  - all_on
+  - greedy
+  - nmbs
+  - convex
+  - ddqn
+  - ann_gsbf
+  - ddqn_socp
+  - ddpg
+  - pdqn
+  - mpdqn
+seeds: [42, 123, 456, 789, 1011, 1337, 2024, 2718, 3141, 4242]
+save_dir: data/results

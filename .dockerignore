@@ -1,0 +1,21 @@
+.git
+.githooks
+.agents
+.pytest_cache
+__pycache__
+*.pyc
+*.pyo
+
+# Large/unneeded for running or reproducing experiments
+thesis/
+references/
+manuscript/*.docx
+data/results/
+data/traces/
+
+# Local environment / editor cruft
+.venv
+venv
+*.egg-info
+.mypy_cache
+.DS_Store

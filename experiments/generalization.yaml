@@ -1,0 +1,13 @@
+# Cross-profile generalization (Concept Note v4.0 Section 12.3, A5): train
+# on the default weekday/urban traffic profile, evaluate zero-shot on both
+# the matched profile and the weekend/suburban variant.
+#   python run_experiment.py --config experiments/generalization.yaml --seed 42
+name: generalization
+description: Zero-shot weekday_urban -> weekend_suburban generalization for the proposed agent.
+type: generalization
+config: config/default.yaml
+methods: [branching_mp_dqn]
+episodes: 1000
+eval_episodes: 10
+seed: 42
+save_dir: thesis/figures

@@ -140,10 +140,20 @@ Gabriel/
 │   ├── traces/
 │   └── results/
 ├── tests/                 # Unit tests
-└── thesis/                # LaTeX source
-    ├── chapters/
-    ├── figures/
-    └── main.tex
+├── thesis/                # LaTeX source (main.tex not yet written — see README.md)
+│   ├── chapters/
+│   ├── figures/
+│   └── tables/
+├── experiments/           # Named experiment definitions (docs/rules.md Rule 4)
+│   ├── hybrid_small.yaml / hybrid_medium.yaml / hybrid_large.yaml
+│   ├── baseline_matrix_small.yaml / baseline_matrix_medium.yaml
+│   ├── csi_robustness.yaml / generalization.yaml / latency_benchmark.yaml
+│   └── proxy_sweep.yaml
+├── run_experiment.py      # Single-command experiment runner (docs/deployment.md)
+├── Dockerfile             # Pinned experiment-runtime image
+├── docker-compose.yml     # Convenience wrapper (volumes, GPU passthrough notes)
+├── requirements-runtime.txt # Lean, pinned subset actually imported by the codebase
+└── requirements.txt       # Full local dev environment (notebooks, lint, etc.)
 ```
 
 ---

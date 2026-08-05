@@ -1,0 +1,35 @@
+# Convenience wrapper around `docker run` for local use or a cloud host
+# with Docker Compose available. Mounts data/ so results/traces survive
+# past the container's lifetime, and config/ + experiments/ so YAML edits
+# on the host are picked up without rebuilding the image.
+#
+# Run the default example experiment:
+#   docker compose run --rm experiment
+#
+# Run a specific one, overriding the command:
+#   docker compose run --rm experiment python run_experiment.py \
+#       --config experiments/csi_robustness.yaml
+#
+# Run the test suite instead of an experiment:
+#   docker compose run --rm experiment python -m pytest tests/ -q
+
+services:
+  experiment:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: cran-drl:latest
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+      - ./experiments:/app/experiments
+    command: ["run_experiment.py", "--config", "experiments/hybrid_medium.yaml", "--seed", "42"]
+    # Uncomment on a host with the NVIDIA Container Toolkit installed, and
+    # build the image with --build-arg TORCH_INDEX_URL=... for a CUDA wheel.
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]

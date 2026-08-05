@@ -22,7 +22,7 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import yaml  # type: ignore[import-untyped]
 
-from agents import BranchingMPDQN, DDQNAgent, MPDQNAgent, PDQNAgent
+from agents import BranchingMPDQN, DDPGAgent, DDQNAgent, MPDQNAgent, PDQNAgent
 from cran_env import CRANEnv
 from evaluation.plot_utils import plot_degradation_curve
 
@@ -33,6 +33,9 @@ _AGENT_FACTORIES = {
         state_dim=env.state_dim, n_rrh=env.n_rrh, p_max_w=env.p_max_w, config=cfg
     ),
     "ddqn": lambda env, cfg: DDQNAgent(state_dim=env.state_dim, n_rrh=env.n_rrh, p_max_w=env.p_max_w),
+    "ddpg": lambda env, cfg: DDPGAgent(
+        state_dim=env.state_dim, n_rrh=env.n_rrh, p_max_w=env.p_max_w, config=cfg
+    ),
     "pdqn": lambda env, cfg: PDQNAgent(
         state_dim=env.state_dim, n_rrh=env.n_rrh, p_max_w=env.p_max_w, config=cfg
     ),
@@ -64,7 +67,7 @@ def run_latency_benchmark(
 ) -> Dict[str, Dict[int, Optional[float]]]:
     """Measure per-decision forward-pass latency (ms) for each method at each R."""
     if methods is None:
-        methods = ["branching_mp_dqn", "ddqn", "pdqn", "mpdqn"]
+        methods = ["branching_mp_dqn", "ddqn", "ddpg", "pdqn", "mpdqn"]
     if n_rrh_values is None:
         n_rrh_values = list(SCALABILITY_SWEEP_N_RRH)
 

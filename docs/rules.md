@@ -50,6 +50,8 @@ Test: tests/test_power_model.py::test_total_power_matches_equation
 python run_experiment.py --config experiments/hybrid_medium.yaml --seed 42
 ```
 
+> **Status (2026-08-05)**: implemented. `experiments/*.yaml` defines each experiment (train_hybrid, baseline_matrix, csi_robustness, generalization, latency_benchmark, proxy_sweep); `run_experiment.py` is the single command above; a pinned Docker container (`Dockerfile`, `requirements-runtime.txt`) satisfies the containerization requirement; every run writes a `run_manifest.json` with a SHA-256 hash of both the experiment YAML and the config/*.yaml it references, satisfying "results saved with full config hash." See `docs/deployment.md` for the cloud build/run workflow.
+
 ## 5. Novelty Defense Rule
 **Rule**: Every claim of novelty must be accompanied by a specific comparison showing how prior work differs.
 

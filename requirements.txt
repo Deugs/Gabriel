@@ -1,33 +1,42 @@
-# Core DRL dependencies
-# torch/torchvision/torchaudio: install separately with the CUDA index matching your GPU, e.g.:
-#   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-torch
-torchvision
-torchaudio
-gymnasium
-stable-baselines3[extra]
-ray[rllib]
+# Full local development environment. Only a subset of this is actually
+# imported by agents/, baselines/, cran_env/, evaluation/, training/ — see
+# requirements-runtime.txt (installed into the Docker image, Dockerfile)
+# for exactly that subset, exact-pinned and verified against the full test
+# suite (45/45 passing, 2026-08-05).
+#
+# The packages below that ARE in requirements-runtime.txt use the same
+# exact, verified pins. Everything else here (notebooks, lint, experiment
+# tracking, stable-baselines3, ray) is NOT imported anywhere in the actual
+# codebase and was not exercised by any test in this session — pinned to
+# real, currently-published versions (checked against PyPI) so the install
+# doesn't fail outright, but their mutual compatibility with each other or
+# with the exact torch build above is unverified. Treat this half of the
+# file as a starting point to re-pin after your own install, not as a
+# tested combination.
+#
+# torch: CPU wheel by default. For the CUDA index matching your GPU:
+#   pip install torch==2.13.0 --index-url https://download.pytorch.org/whl/cu121
+torch==2.13.0
+gymnasium==1.3.0
+numpy==2.4.6
+scipy==1.17.1
+matplotlib==3.11.1
+PyYAML==6.0.1
+cvxpy==1.5.3
+pytest==9.1.1
 
-# Scientific computing
-numpy
-scipy
-pandas
-matplotlib
-seaborn
-
-# Optimization baselines
-cvxpy
-
-# Experiment tracking
-tensorboard
-wandb
-
-# Testing and code quality
-pytest
-black
-flake8
-mypy
-
-# Prototyping
-jupyterlab
-ipywidgets
+# --- Below this line: present for local development, unused by any
+# --- import in the codebase, and unverified as a mutually-compatible set.
+torchvision==0.20.0
+torchaudio==2.13.0
+stable-baselines3[extra]==2.4.0
+ray[rllib]==2.40.0
+pandas==3.0.5
+seaborn==0.13.2
+tensorboard==2.18.0
+wandb==0.19.1
+black==24.10.0
+flake8==7.1.1
+mypy==1.13.0
+jupyterlab==4.3.3
+ipywidgets==8.1.5

@@ -1,0 +1,14 @@
+# Proposed Branching MP-DQN + TD3 agent, medium (R=12, default) network.
+# Reproduce (docs/rules.md Rule 4):
+#   python run_experiment.py --config experiments/hybrid_medium.yaml --seed 42
+name: hybrid_medium
+description: >
+  Train the proposed agent (agents/branching_mp_dqn.py) on the default R=12
+  network, per Concept Note v4.0 Section 12.2's 1000-episode standard.
+type: train_hybrid
+config: config/default.yaml
+episodes: 1000
+eval_freq: 50
+# 10-seed list, docs/rules.md Rule 3 / Concept Note v4.0 Section 12.4 (S4).
+seeds: [42, 123, 456, 789, 1011, 1337, 2024, 2718, 3141, 4242]
+save_dir: data/results

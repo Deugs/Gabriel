@@ -1,0 +1,12 @@
+# Quick smoke test: same proposed agent, tiny R=5 network, few episodes.
+# Use this to verify a freshly built Docker image actually runs end to end
+# before committing to the long hybrid_medium.yaml / hybrid_large.yaml runs.
+#   python run_experiment.py --config experiments/hybrid_small.yaml --seed 42
+name: hybrid_small
+description: Fast smoke test of the proposed agent on the R=5 small network.
+type: train_hybrid
+config: config/small_network.yaml
+episodes: 20
+eval_freq: 10
+seeds: [42]
+save_dir: data/results

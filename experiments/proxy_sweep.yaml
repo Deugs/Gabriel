@@ -1,0 +1,11 @@
+# Section 12.11 hyperparameter proxy sweep. Reproduces the exact run logged
+# in docs/daily_log.md (2026-08-05): R=5/U=2 is forced internally by
+# run_proxy_sensitivity_sweep() regardless of which config is passed.
+#   python run_experiment.py --config experiments/proxy_sweep.yaml
+name: proxy_sweep
+description: Concept Note v4.0 Section 12.11 lr-pair/tau sensitivity sweep.
+type: proxy_sweep
+config: config/small_network.yaml
+episodes: 100
+seeds: [42, 123]
+save_dir: data/results/proxy_sweep

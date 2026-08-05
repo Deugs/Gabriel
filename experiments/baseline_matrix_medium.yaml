@@ -1,0 +1,22 @@
+# All 9 non-proposed baselines (Concept Note v4.0 Section 12.1), medium
+# (R=12) network. The proposed method itself is experiments/hybrid_medium.yaml,
+# run separately via training/train_hybrid.py rather than train_baselines.py.
+#   python run_experiment.py --config experiments/baseline_matrix_medium.yaml --seed 42
+name: baseline_matrix_medium
+description: Run all 9 baseline methods on the default R=12 network.
+type: baseline_matrix
+config: config/default.yaml
+episodes: 1000
+algorithms:
+  - all_on
+  - greedy
+  - nmbs
+  - convex
+  - ddqn
+  - ann_gsbf
+  - ddqn_socp
+  - ddpg
+  - pdqn
+  - mpdqn
+seeds: [42, 123, 456, 789, 1011, 1337, 2024, 2718, 3141, 4242]
+save_dir: data/results

@@ -1,0 +1,13 @@
+# Proposed agent at the R=50 scalability stretch goal (Concept Note v4.0
+# Section 15: "R=50 is a stretch goal, not a committed deliverable" — expect
+# a materially longer run than hybrid_medium.yaml; profile before committing
+# a full 10-seed batch to it).
+#   python run_experiment.py --config experiments/hybrid_large.yaml --seed 42
+name: hybrid_large
+description: Train the proposed agent on the R=50 large-network stretch goal.
+type: train_hybrid
+config: config/large_network.yaml
+episodes: 1000
+eval_freq: 50
+seeds: [42, 123, 456, 789, 1011, 1337, 2024, 2718, 3141, 4242]
+save_dir: data/results

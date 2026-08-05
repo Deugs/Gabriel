@@ -1,0 +1,12 @@
+# Inference-time forward-pass latency at R=5,12,20,35,50 (Concept Note v4.0
+# Section 12.3, A3/G14). P-DQN/MP-DQN are skipped automatically above their
+# tractable range (R>20) rather than crashing.
+#   python run_experiment.py --config experiments/latency_benchmark.yaml
+name: latency_benchmark
+description: Forward-pass latency sweep across all five scalability sizes.
+type: latency_benchmark
+config: config/default.yaml
+methods: [branching_mp_dqn, ddqn, ddpg, pdqn, mpdqn]
+n_rrh_values: [5, 12, 20, 35, 50]
+n_repeats: 50
+save_dir: thesis/figures

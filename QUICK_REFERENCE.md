@@ -22,29 +22,40 @@
 ## Critical Commands
 
 ```bash
-# Setup
+# Setup (local dev — full environment incl. notebooks/lint; not all of it
+# is actually imported by the codebase, see requirements-runtime.txt)
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-pre-commit install
 
 # Test environment
 pytest tests/test_env.py -v
 
-# Train proposed method
+# Run the full test suite (45 tests) — the closest thing to a
+# pre-submission check that currently exists; no scripts/pre_submission.sh
+pytest tests/ -q
+
+# Train proposed method directly
 python training/train_hybrid.py --config config/default.yaml --seed 42
 
-# Run all baselines
+# Run all baselines directly
 python training/train_baselines.py --config config/default.yaml
 
-# Generate figures
-python evaluation/generate_figures.py --results-dir data/results/
-
-# Build thesis
-cd thesis && pdflatex main.tex && bibtex main && pdflatex main.tex
-
-# Pre-submission check
-bash scripts/pre_submission.sh
+# Or run ANY experiment (training or evaluation) via the single reproducible
+# entry point (docs/rules.md Rule 4) — see docs/deployment.md
+python run_experiment.py --config experiments/hybrid_medium.yaml --seed 42
 ```
+
+```bash
+# Docker (see docs/deployment.md for the full cloud workflow)
+docker build -t cran-drl:latest .
+docker run --rm -v "$(pwd)/data:/app/data" cran-drl:latest \
+    python run_experiment.py --config experiments/hybrid_small.yaml --seed 42
+```
+
+Not yet available: a `thesis/main.tex` to build (Chapters 3-5 aren't written
+yet — see `README.md`), and `evaluation/generate_figures.py` as a single
+all-figures script (each evaluation module under `evaluation/` saves its own
+figures when run instead).
 
 ## File Quick Access
 
