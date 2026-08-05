@@ -38,7 +38,7 @@
 ### Action Items
 - [x] Draft Concept Note v4.0 resolving the detailed review's G1-G14 and relevance discussion
 - [x] Sync `AGENTS.md`/`README.md` pointers to v4.0
-- [ ] Independently verify the OREO, TS-MP-DQN, and CP-DQN-journal references before they enter the thesis bibliography (Concept Note v4.0 §4.2-§4.3, §17)
+- [x] Independently verify the OREO, TS-MP-DQN, and CP-DQN-journal references (Concept Note v4.0 §4.2-§4.3, §17) — TS-MP-DQN and CP-DQN's journal are now fully confirmed; OREO's authors are confirmed but its venue/year/DOI could not be verified against a primary source and remains flagged
 - [ ] Supervisor sign-off on Concept Note v4.0
 - [ ] Begin Phase 1 (environment & power model) per `docs/workflow.md`
 
