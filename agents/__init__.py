@@ -9,6 +9,7 @@ from agents.hybrid_sac_dqn import (
     HybridReplayBuffer,
     HybridSACDDQN,
 )
+from agents.pdqn_mpdqn import MAX_SAFE_N_RRH, MPDQNAgent, PDQNAgent
 
 __all__ = [
     "BranchingMPDQN",
@@ -18,4 +19,7 @@ __all__ = [
     "ContinuousActor",
     "HybridCritic",
     "HybridReplayBuffer",
+    "PDQNAgent",
+    "MPDQNAgent",
+    "MAX_SAFE_N_RRH",
 ]

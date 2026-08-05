@@ -1,28 +1,58 @@
-from copy import deepcopy
+"""Scalability sweep across the five RRH counts Concept Note v4.0 mandates
+(Section 12.2/15): R = {5, 12, 20, 35, 50}. R=50 is a stretch goal per the
+concept note's revised timeline, but is still included here since this
+function's caller controls episode budget via `episodes`.
+
+Each size has its own committed, independently-runnable config file
+(config/small_network.yaml, config/default.yaml, config/rrh20_network.yaml,
+config/rrh35_network.yaml, config/large_network.yaml) rather than a
+tempfile+deepcopy override -- R is a small, fixed, concept-note-mandated set,
+not an open-ended exploratory sweep, so each point deserves the same
+first-class, git-committed status as the two sizes that already had files.
+
+For each size: train, save a checkpoint, reload it via
+training.checkpoint_utils.load_checkpoint, and benchmark pure inference
+latency on the *loaded* (not in-memory) agent -- this both answers the
+concept note's latency requirement and exercises the checkpoint round-trip as
+a regression check on every scalability run.
+"""
+
 from pathlib import Path
-import time
 from typing import Dict
 
 import yaml  # type: ignore[import-untyped]
 
+from agents import BranchingMPDQN
+from evaluation.inference_latency import benchmark_inference_latency
 from evaluation.plot_utils import plot_scalability_analysis
+from training.checkpoint_utils import load_checkpoint
 from training.train_hybrid import train_hybrid_agent
+
+# Matches the "algorithm" label training.train_hybrid.train_hybrid_agent
+# actually writes for the proposed method (BranchingMPDQN).
+_PROPOSED_ALGO_LABEL = "Branching_MP_DQN"
+
+SCALABILITY_CONFIGS = {
+    "R5": "config/small_network.yaml",
+    "R12": "config/default.yaml",
+    "R20": "config/rrh20_network.yaml",
+    "R35": "config/rrh35_network.yaml",
+    "R50": "config/large_network.yaml",
+}
 
 
 def analyze_scalability(
-    config_path: str = "config/default.yaml",
     episodes: int = 20,
     save_dir: str = "thesis/figures",
+    configs: Dict[str, str] = None,
 ) -> Dict[str, Dict[str, Dict[str, float]]]:
-    """Evaluate network performance and execution time across network topology scales."""
-    with open(config_path, "r") as f:
-        base_cfg = yaml.safe_load(f)
+    """Train + benchmark BranchingMPDQN across the scalability-sweep sizes.
 
-    scales = {
-        "Small (6x5)": {"n_rrh": 6, "n_ue": 5},
-        "Medium (12x10)": {"n_rrh": 12, "n_ue": 10},
-        "Large (24x20)": {"n_rrh": 24, "n_ue": 20},
-    }
+    `configs` defaults to SCALABILITY_CONFIGS (all five R={5,12,20,35,50}
+    points); pass a subset for a faster smoke test.
+    """
+    if configs is None:
+        configs = SCALABILITY_CONFIGS
 
     scalability_results: Dict[str, Dict[str, Dict[str, float]]] = {}
     save_path = Path(save_dir)
@@ -30,42 +60,34 @@ def analyze_scalability(
 
     print("--- Starting Scalability Analysis ---")
 
-    for scale_name, params in scales.items():
-        print(f"\nEvaluating Scale: {scale_name}")
-        trial_cfg = deepcopy(base_cfg)
+    for scale_name, cfg_path in configs.items():
+        print(f"\nEvaluating Scale: {scale_name} ({cfg_path})")
+        with open(cfg_path, "r") as f:
+            cfg = yaml.safe_load(f)
 
-        if "network" not in trial_cfg:
-            trial_cfg["network"] = {}
-
-        trial_cfg["network"]["n_rrh"] = params["n_rrh"]
-        trial_cfg["network"]["n_ue"] = params["n_ue"]
-
-        temp_cfg = save_path / f"temp_{params['n_rrh']}x{params['n_ue']}.yaml"
-        with open(temp_cfg, "w") as f:
-            yaml.dump(trial_cfg, f)
-
-        t_start = time.time()
+        ckpt_dir = save_path / "checkpoints" / scale_name
         res = train_hybrid_agent(
-            config_path=str(temp_cfg),
+            config_path=cfg_path,
             seed=42,
             episodes=episodes,
             eval_freq=episodes,
-            save_dir=None,
+            save_dir=str(ckpt_dir),
         )
-        t_elapsed = time.time() - t_start
-        step_time_ms = (t_elapsed / (episodes * 24)) * 1000.0  # 24 steps per episode
+
+        n_rrh = int(cfg.get("network", {}).get("n_rrh", 0))
+        checkpoint_path = ckpt_dir / "branching_mp_dqn_seed42" / "final_model.pt"
+        agent = load_checkpoint(BranchingMPDQN, checkpoint_path)
+        latency = benchmark_inference_latency(agent, cfg, n_trials=200)
 
         scalability_results[scale_name] = {
-            "Hybrid_SAC_DDQN": {
+            _PROPOSED_ALGO_LABEL: {
                 "power": float(res["final_eval_power_w"]),
-                "time": float(step_time_ms),
+                "time": float(latency["mean_latency_ms"]),
+                "n_rrh": n_rrh,
+                "p95_latency_ms": float(latency["p95_latency_ms"]),
             }
         }
 
-        if temp_cfg.exists():
-            temp_cfg.unlink()
-
-    # Plot scalability chart
     plot_scalability_analysis(
         scalability_results, save_path=str(save_path / "scalability_analysis.pdf")
     )

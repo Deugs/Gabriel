@@ -30,6 +30,32 @@ def perform_paired_ttest(
     return float(t_stat), float(p_val), is_significant
 
 
+def compute_cohens_d(a: np.ndarray, b: np.ndarray) -> float:
+    """Cohen's d effect size between two paired/independent samples, using the
+    pooled standard deviation. Reported alongside every p-value (Concept Note
+    v4.0 Section 12.4 / S4) so a statistically significant but practically
+    small difference is visible as such -- the modest ~5% DDQN margin this
+    thesis targets is exactly the kind of effect a p-value alone can hide or
+    overstate depending on seed count.
+
+    Returns 0.0 if there is no variance to pool against (e.g. constant or
+    single-element samples), rather than dividing by zero.
+    """
+    a = np.asarray(a, dtype=np.float64)
+    b = np.asarray(b, dtype=np.float64)
+    if len(a) < 2 or len(b) < 2:
+        return 0.0
+
+    n_a, n_b = len(a), len(b)
+    var_a, var_b = np.var(a, ddof=1), np.var(b, ddof=1)
+    pooled_std = np.sqrt(
+        ((n_a - 1) * var_a + (n_b - 1) * var_b) / (n_a + n_b - 2)
+    )
+    if pooled_std == 0.0:
+        return 0.0
+    return float((np.mean(a) - np.mean(b)) / pooled_std)
+
+
 def analyze_convergence(
     results_dir: str = "data/results",
     save_dir: str = "thesis/figures",
@@ -83,7 +109,12 @@ def analyze_convergence(
         "paired_ttests": {},
     }
 
-    proposed_algo = "Hybrid_SAC_DDQN"
+    # Matches the "algorithm" label training.train_hybrid.train_hybrid_agent
+    # actually writes for the proposed method (BranchingMPDQN). This was
+    # previously "Hybrid_SAC_DDQN" -- a stale label from the now-superseded
+    # alternative architecture that never matched any real summary.json, so
+    # the significance/effect-size comparison below silently never fired.
+    proposed_algo = "Branching_MP_DQN"
     proposed_arr = np.array(algo_scores.get(proposed_algo, [0.0]))
 
     for algo, scores in algo_scores.items():
@@ -104,10 +135,12 @@ def analyze_convergence(
             and len(arr) == len(proposed_arr)
         ):
             t_stat, p_val, is_sig = perform_paired_ttest(proposed_arr, arr)
+            cohens_d = compute_cohens_d(proposed_arr, arr)
             analysis_report["paired_ttests"][algo] = {
                 "t_statistic": t_stat,
                 "p_value": p_val,
                 "statistically_significant_0_05": is_sig,
+                "cohens_d": cohens_d,
             }
 
     # Export LaTeX table
@@ -115,10 +148,10 @@ def analyze_convergence(
         "\\begin{table}[h]\n"
         "\\centering\n"
         "\\caption{Performance Comparison and Statistical Significance Analysis.}\n"
-        "\\begin{tabular}{lcccc}\n"
+        "\\begin{tabular}{lccccc}\n"
         "\\hline\n"
         "Algorithm & Mean Reward (95\\% CI) & Mean Power (W) & "
-        "QoS Rate (\\%) & $p$-value (vs Proposed) \\\\\n"
+        "QoS Rate (\\%) & $p$-value (vs Proposed) & Cohen's $d$ \\\\\n"
         "\\hline\n"
     )
 
@@ -127,11 +160,12 @@ def analyze_convergence(
         p_val_str = (
             f"{ttest_info.get('p_value', 1.0):.4f}" if ttest_info else "N/A (Proposed)"
         )
+        d_val_str = f"{ttest_info.get('cohens_d', 0.0):.3f}" if ttest_info else "--"
         qos_pct = m["mean_qos_rate"] * 100
 
         latex_content += (
             f"{algo} & {m['mean_reward']:.2f} [{m['ci_95_lower']:.2f}, {m['ci_95_upper']:.2f}] & "
-            f"{m['mean_power_w']:.1f} & {qos_pct:.1f}\\% & {p_val_str} \\\\\n"
+            f"{m['mean_power_w']:.1f} & {qos_pct:.1f}\\% & {p_val_str} & {d_val_str} \\\\\n"
         )
 
     latex_content += "\\hline\n\\end{tabular}\n\\end{table}\n"

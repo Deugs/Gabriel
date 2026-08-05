@@ -10,7 +10,8 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import yaml  # type: ignore[import-untyped]
 
-from agents import DDQNAgent
+from agents import DDQNAgent, MPDQNAgent, PDQNAgent
+from agents.pdqn_mpdqn import MAX_SAFE_N_RRH
 from baselines import (
     AllOnUniformBaseline,
     ANNGSBFBaseline,
@@ -20,6 +21,11 @@ from baselines import (
     NMBSBinPackingBaseline,
 )
 from cran_env import CRANEnv
+
+# Revised from 5 to 10 seeds per docs/rules.md's Baseline Fairness Rule
+# (Concept Note v4.0 Section 12.4 / S4: statistical power at the modest 5%
+# DDQN-margin target was a genuine concern at n=5).
+DEFAULT_SEEDS = [42, 123, 456, 789, 1011, 1337, 2024, 2718, 3141, 4242]
 
 
 def set_seed(seed: int):
@@ -37,7 +43,7 @@ def run_baseline_benchmarks(
 ) -> Dict[str, Any]:
     """Run baseline benchmark algorithms over specified random seeds."""
     if seeds is None:
-        seeds = [42, 123, 456, 789, 1011]
+        seeds = DEFAULT_SEEDS
 
     if algorithms is None:
         algorithms = [
@@ -48,15 +54,36 @@ def run_baseline_benchmarks(
             "ddqn",
             "ann_gsbf",
             "ddqn_socp",
+            "pdqn",
+            "mpdqn",
         ]
 
     with open(config_path, "r") as f:
         cfg = yaml.safe_load(f)
 
+    n_rrh_cfg = int(cfg.get("network", {}).get("n_rrh", 0))
     results: Dict[str, Any] = {}
 
     for algo in algorithms:
         print(f"\n================ Running Benchmark: {algo.upper()} ================")
+
+        # Soft guard: P-DQN/MP-DQN enumerate 2**n_rrh joint discrete actions and
+        # are only defined at R<=12 (Concept Note v4.0 Section 12.1/10.3.1); skip
+        # them at larger scalability-sweep sizes instead of crashing, so a single
+        # unified `algorithms` list stays valid across every config file. The
+        # hard guard (raising ValueError) lives in agents.pdqn_mpdqn.JointActionSpace
+        # and protects any *other* caller that doesn't check n_rrh first.
+        if algo in ("pdqn", "mpdqn") and n_rrh_cfg > MAX_SAFE_N_RRH:
+            print(
+                f"Skipping {algo.upper()}: n_rrh={n_rrh_cfg} > MAX_SAFE_N_RRH="
+                f"{MAX_SAFE_N_RRH}. P-DQN/MP-DQN enumerate 2**n_rrh joint discrete "
+                "actions and are only defined at R<=12 per Concept Note v4.0 "
+                "Section 12.1 -- this is itself evidence for why branching "
+                "(BranchingMPDQN) is necessary at scale, per Section 10.3.1."
+            )
+            results[algo] = []
+            continue
+
         algo_results = []
 
         for seed in seeds:
@@ -86,6 +113,10 @@ def run_baseline_benchmarks(
                     p_max_w=env.p_max_w,
                     config=cfg,
                 )
+            elif algo == "pdqn":
+                model = PDQNAgent(env.state_dim, env.n_rrh, env.p_max_w, config=cfg)
+            elif algo == "mpdqn":
+                model = MPDQNAgent(env.state_dim, env.n_rrh, env.p_max_w, config=cfg)
             else:
                 raise ValueError(f"Unknown algorithm: {algo}")
 
@@ -103,7 +134,7 @@ def run_baseline_benchmarks(
 
                 done = False
                 while not done:
-                    if algo == "ddqn":
+                    if algo in ("ddqn", "pdqn", "mpdqn"):
                         action = model.select_action(obs, evaluate=True)
                     else:
                         action = model.select_action(obs)
@@ -114,6 +145,20 @@ def run_baseline_benchmarks(
                         model.memory.push(
                             obs,
                             action["rrh_on"],
+                            reward,
+                            next_obs,
+                            terminated,
+                        )
+                        model.update()
+                    elif algo in ("pdqn", "mpdqn"):
+                        cont_params = np.stack(
+                            [action["power"] / env.p_max_w, action["bandwidth"]],
+                            axis=-1,
+                        )
+                        model.memory.push(
+                            obs,
+                            action["config_idx"],
+                            cont_params,
                             reward,
                             next_obs,
                             terminated,

@@ -103,34 +103,43 @@ Gabriel/
 │   ├── channel_model.py   # Rayleigh fading, path loss
 │   ├── traffic_model.py   # Tidal traffic patterns
 │   └── power_model.py     # EARTH-validated power consumption
-├── agents/                # DRL algorithms
+├── agents/                # DRL algorithms (agents/sac_agent.py, td3_agent.py,
+│   │                      #   ddpg_agent.py from earlier plans were never
+│   │                      #   implemented as standalone files -- do not assume
+│   │                      #   they exist)
 │   ├── branching_mp_dqn.py# Proposed: Branching MP-DQN + TD3 (Concept Note v2.0)
-│   ├── hybrid_sac_dqn.py  # Alternative hybrid
-│   ├── sac_agent.py       # Baseline: pure SAC
-│   ├── td3_agent.py       # Baseline: TD3
-│   ├── ddpg_agent.py      # Baseline: Pure DDPG continuous relaxation (RQ3 ablation)
-│   └── ddqn_agent.py      # Baseline: discrete only
-├── baselines/             # 7-Baseline comparison suite
-│   ├── all_on_uniform.py  # Baseline 1: All-ON uniform power
-│   ├── greedy_heuristic.py# Baseline 2: Greedy heuristic
-│   ├── nmbs_binpack.py    # Baseline 3: Al-Zubaedi's NMBS bin-packing
-│   ├── convex_power.py    # Baseline 4: CVXPY SOCP power allocation
-│   ├── ddqn_socp.py       # Baseline 5: Two-stage DDQN + SOCP (Iqbal et al., 2021)
-│   └── ann_gsbf.py        # Baseline 6: Supervised ANN + GSBF (Fathy et al., 2021)
-├── training/              # Training loops
+│   ├── hybrid_sac_dqn.py  # Superseded alternative hybrid, kept for history
+│   ├── ddqn_agent.py      # Baseline: discrete only
+│   └── pdqn_mpdqn.py      # Baselines: P-DQN & MP-DQN, non-branching, R<=12
+│                          #   only (Concept Note v4.0 SS12.1/10.3.1)
+├── baselines/             # Non-DRL and heuristic baselines
+│   ├── all_on_uniform.py  # All-ON uniform power
+│   ├── greedy_heuristic.py# Greedy heuristic
+│   ├── nmbs_binpack.py    # Al-Zubaedi's NMBS bin-packing
+│   ├── convex_power.py    # CVXPY SOCP power allocation
+│   ├── ddqn_socp.py       # Two-stage DDQN + SOCP (Iqbal et al., 2021)
+│   └── ann_gsbf.py        # Supervised ANN + GSBF (Fathy et al., 2021)
+├── training/              # Training loops, checkpointing, evaluation helpers
 │   ├── train_hybrid.py
-│   ├── train_baselines.py
+│   ├── train_baselines.py # Dispatches all baselines incl. pdqn/mpdqn (R<=12 guard)
 │   ├── run_extended_sweeps.py
-│   └── hyperparam_search.py
+│   ├── hyperparam_search.py # Grid search + G9 lightweight sensitivity check
+│   ├── checkpoint_utils.py# save_checkpoint/load_checkpoint (any agent class)
+│   └── eval_utils.py      # Shared deterministic eval loop (run_eval_episodes)
 ├── evaluation/            # Analysis and plotting
-│   ├── convergence.py
+│   ├── convergence.py     # Significance tests + Cohen's d effect size
 │   ├── ablation.py        # RQ3 discrete vs continuous relaxation ablation
-│   ├── scalability.py     # 5-to-50 RRH scalability sweep
+│   ├── scalability.py     # R={5,12,20,35,50} scalability sweep + latency
+│   ├── csi_robustness.py  # Sec 12.5: eval-only CSI-noise robustness sweep
+│   ├── generalization.py  # Sec 12.3/A5: cross-traffic-profile generalization
+│   ├── inference_latency.py # Sec 12.3/A3: pure forward-pass latency benchmark
 │   └── plot_utils.py
 ├── config/                # Experiment configurations
-│   ├── default.yaml
+│   ├── default.yaml       # 12 RRH scenario
 │   ├── small_network.yaml # 5 RRH scenario
-│   └── large_network.yaml # 50 RRH scalability scenario
+│   ├── rrh20_network.yaml # 20 RRH scalability-sweep point
+│   ├── rrh35_network.yaml # 35 RRH scalability-sweep point
+│   └── large_network.yaml # 50 RRH scalability scenario (stretch goal)
 ├── data/                  # Traffic traces, results
 │   ├── traces/
 │   └── results/

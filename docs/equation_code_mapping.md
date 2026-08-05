@@ -54,6 +54,18 @@ This document maintains traceability between thesis equations and their code imp
 
 ---
 
+## Concept Note v4.0 Additions
+
+| Thesis Eq./Section | Description | Code File | Function | Status |
+|------------|-------------|-----------|----------|--------|
+| Sec 10.3.1 | Joint discrete-action encode/decode (0..2^R-1 <-> R-length on/off vector), underpinning the "no 2^N head" argument and the P-DQN/MP-DQN baselines' R<=12 cap | `agents/pdqn_mpdqn.py` | `JointActionSpace.encode()` / `.decode()` | Implemented |
+| Sec 10.3.1 | MP-DQN per-configuration continuous-parameter masking (zero power/bandwidth for RRHs OFF under a given configuration) | `agents/pdqn_mpdqn.py` | `JointQNetwork.forward()` (mode="multi_pass") | Implemented |
+| Sec 12.5 | CSI-robustness observation model: ĝ_{r,u}(t) = g_{r,u}(t) + n, n~N(0,σ²), reward/SINR unaffected | `cran_env/cran_env.py` | `CRANEnv._get_obs()` (`observation_noise_std`) | Implemented (flagged: literal absolute-σ scale vs. typical \|H\| magnitude needs reconciling before the real sweep, per the docstring note) |
+| Sec 12.3/A5 | Cross-traffic-profile generalization (weekday_urban vs. weekend_suburban) | `cran_env/traffic_model.py` | `TrafficModel.get_demands()` (`profile`) | Implemented |
+| Sec 12.11/G9 | Hyperparameter-sensitivity protocol (lr_discrete/lr_actor/tau swept ~half an order of magnitude around defaults, R=5) | `training/hyperparam_search.py` | `HyperparameterSearch.run_sensitivity_check()` | Implemented |
+
+---
+
 ## Validation Tests
 
 Each mapping must have a corresponding test:

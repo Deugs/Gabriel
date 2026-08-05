@@ -6,7 +6,7 @@ Implements discrete Double Q-Learning (Iqbal et al. 2021) for RRH activation dec
 from collections import deque
 import copy
 import random
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import torch
 import torch.nn as nn
@@ -185,3 +185,19 @@ class DDQNAgent:
         self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
 
         return {"loss": float(loss.item()), "epsilon": float(self.epsilon)}
+
+    def state_dict(self) -> Dict[str, Any]:
+        """Serialize all learnable state for checkpointing (training/checkpoint_utils.py)."""
+        return {
+            "q_net": self.q_net.state_dict(),
+            "target_q_net": self.target_q_net.state_dict(),
+            "optimizer": self.optimizer.state_dict(),
+            "epsilon": self.epsilon,
+        }
+
+    def load_state_dict(self, state: Dict[str, Any]) -> None:
+        """Restore state previously produced by `state_dict()`."""
+        self.q_net.load_state_dict(state["q_net"])
+        self.target_q_net.load_state_dict(state["target_q_net"])
+        self.optimizer.load_state_dict(state["optimizer"])
+        self.epsilon = state.get("epsilon", self.epsilon)

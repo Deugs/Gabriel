@@ -383,3 +383,31 @@ class BranchingMPDQN:
         with torch.no_grad():
             for target_param, param in zip(target.parameters(), source.parameters()):
                 target_param.data.mul_(1.0 - self.tau).add_(param.data, alpha=self.tau)
+
+    def state_dict(self) -> Dict[str, Any]:
+        """Serialize all learnable state for checkpointing (training/checkpoint_utils.py)."""
+        return {
+            "encoder": self.encoder.state_dict(),
+            "param_net": self.param_net.state_dict(),
+            "twin_critic": self.twin_critic.state_dict(),
+            "encoder_target": self.encoder_target.state_dict(),
+            "param_net_target": self.param_net_target.state_dict(),
+            "twin_critic_target": self.twin_critic_target.state_dict(),
+            "critic_opt": self.critic_opt.state_dict(),
+            "param_opt": self.param_opt.state_dict(),
+            "epsilon": self.epsilon,
+            "update_counter": self.update_counter,
+        }
+
+    def load_state_dict(self, state: Dict[str, Any]) -> None:
+        """Restore state previously produced by `state_dict()`."""
+        self.encoder.load_state_dict(state["encoder"])
+        self.param_net.load_state_dict(state["param_net"])
+        self.twin_critic.load_state_dict(state["twin_critic"])
+        self.encoder_target.load_state_dict(state["encoder_target"])
+        self.param_net_target.load_state_dict(state["param_net_target"])
+        self.twin_critic_target.load_state_dict(state["twin_critic_target"])
+        self.critic_opt.load_state_dict(state["critic_opt"])
+        self.param_opt.load_state_dict(state["param_opt"])
+        self.epsilon = state.get("epsilon", self.epsilon)
+        self.update_counter = state.get("update_counter", self.update_counter)

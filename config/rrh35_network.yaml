@@ -1,0 +1,37 @@
+# RRH=35 Network Configuration (35 RRHs, 25 UEs)
+# Scalability-sweep point (Concept Note v4.0 Section 12.2/15): fills the gap
+# between default.yaml (R=12) and large_network.yaml (R=50) in the
+# R={5,12,20,35,50} sweep. n_ue/n_bbu/noise_power_dbm/area_size_m interpolated
+# to keep the same U/R (~0.6-0.8) and BBU/R (~0.2-0.25) ratios already implicit
+# in small_network.yaml and large_network.yaml.
+
+network:
+  n_rrh: 35
+  n_ue: 25
+  n_bbu: 8
+  area_size_m: 1600
+  carrier_freq_ghz: 2.1
+  bandwidth_mhz: 20
+  noise_power_dbm: -105
+
+power:
+  rrh:
+    p_active_w: 6.8
+    p_sleep_w: 4.3
+    p_switch_w: 3.0
+    pa_efficiency: 0.25
+    p_max_dbm: 30
+
+  bbu:
+    p_stat_w: 175.0
+    p_dyn_w: 250.0
+    delta_p: 0.44
+
+algorithm:
+  name: "branching_mp_dqn"
+  max_episodes: 1000
+  max_steps_per_episode: 100
+  buffer_size: 180000
+  batch_size: 112
+  lr_discrete: 1.0e-3
+  lr_actor: 1.0e-4

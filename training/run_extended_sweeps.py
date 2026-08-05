@@ -4,6 +4,7 @@ import argparse
 import time
 
 from evaluation.convergence import analyze_convergence
+from training.train_baselines import DEFAULT_SEEDS
 from training.train_baselines import run_baseline_benchmarks
 from training.train_hybrid import train_hybrid_agent
 
@@ -11,10 +12,13 @@ from training.train_hybrid import train_hybrid_agent
 def run_extended_sweeps(
     config_path: str = "config/default.yaml",
     episodes: int = 150,
-    seeds: list = [42, 123, 456, 789, 1011],
+    seeds: list = None,
     results_dir: str = "data/results",
 ):
     """Execute extended training sweeps across all evaluation seeds."""
+    if seeds is None:
+        seeds = DEFAULT_SEEDS
+
     print("==================================================")
     print(
         f"Starting Extended Multi-Seed Sweeps ({len(seeds)} seeds, {episodes} episodes)"
@@ -27,8 +31,8 @@ def run_extended_sweeps(
     print("\n>>> Step 1/3: Running Baseline Algorithms Across Seeds...")
     run_baseline_benchmarks(config_path, seeds=seeds, save_dir=results_dir)
 
-    # 2. Run Proposed Hybrid SAC-DDQN Agent Across Seeds
-    print("\n>>> Step 2/3: Training Proposed Hybrid SAC-DDQN Agent Across Seeds...")
+    # 2. Run Proposed Branching MP-DQN + TD3 Agent Across Seeds
+    print("\n>>> Step 2/3: Training Proposed Branching MP-DQN + TD3 Agent Across Seeds...")
     for s in seeds:
         print(f"\n--- Training Seed {s} ({episodes} Episodes) ---")
         train_hybrid_agent(

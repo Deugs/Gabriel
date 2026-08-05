@@ -476,3 +476,42 @@ class HybridSACDDQN:
         with torch.no_grad():
             for target_param, param in zip(target.parameters(), source.parameters()):
                 target_param.data.mul_(1.0 - self.tau).add_(param.data, alpha=self.tau)
+
+    def state_dict(self) -> Dict[str, Any]:
+        """Serialize all learnable state for checkpointing (training/checkpoint_utils.py)."""
+        state: Dict[str, Any] = {
+            "discrete_actor": self.discrete_actor.state_dict(),
+            "continuous_actor": self.continuous_actor.state_dict(),
+            "critic": self.critic.state_dict(),
+            "critic_target": self.critic_target.state_dict(),
+            "continuous_actor_target": self.continuous_actor_target.state_dict(),
+            "discrete_actor_target": self.discrete_actor_target.state_dict(),
+            "disc_opt": self.disc_opt.state_dict(),
+            "cont_opt": self.cont_opt.state_dict(),
+            "critic_opt": self.critic_opt.state_dict(),
+            "epsilon": self.epsilon,
+            "alpha": self.alpha,
+        }
+        if self.auto_tune_alpha:
+            state["log_alpha"] = self.log_alpha.detach().clone()
+            state["alpha_opt"] = self.alpha_opt.state_dict()
+        return state
+
+    def load_state_dict(self, state: Dict[str, Any]) -> None:
+        """Restore state previously produced by `state_dict()`."""
+        self.discrete_actor.load_state_dict(state["discrete_actor"])
+        self.continuous_actor.load_state_dict(state["continuous_actor"])
+        self.critic.load_state_dict(state["critic"])
+        self.critic_target.load_state_dict(state["critic_target"])
+        self.continuous_actor_target.load_state_dict(state["continuous_actor_target"])
+        self.discrete_actor_target.load_state_dict(state["discrete_actor_target"])
+        self.disc_opt.load_state_dict(state["disc_opt"])
+        self.cont_opt.load_state_dict(state["cont_opt"])
+        self.critic_opt.load_state_dict(state["critic_opt"])
+        self.epsilon = state.get("epsilon", self.epsilon)
+        self.alpha = state.get("alpha", self.alpha)
+        if self.auto_tune_alpha and "log_alpha" in state:
+            with torch.no_grad():
+                self.log_alpha.copy_(state["log_alpha"])
+            if "alpha_opt" in state:
+                self.alpha_opt.load_state_dict(state["alpha_opt"])

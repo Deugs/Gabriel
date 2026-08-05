@@ -45,8 +45,28 @@ class CRANEnv(gym.Env):
 
     metadata = {"render_modes": ["human"]}
 
-    def __init__(self, config: Union[dict, Any]):
+    # Arbitrary large odd offset used to seed the observation-noise RNG from
+    # the episode seed, decorrelated from `self.rng` (positions/fading/
+    # traffic). This keeps a CSI-robustness sweep's sigma=0 run bit-identical
+    # to the plain (non-robustness) evaluation, and every sigma>0 run's
+    # trajectory (positions, true channel, traffic) identical to sigma=0 --
+    # only the policy's *perceived* channel differs across sigma.
+    _OBS_NOISE_SEED_OFFSET = 999_983
+
+    def __init__(
+        self, config: Union[dict, Any], observation_noise_std: float = 0.0
+    ):
         super().__init__()
+
+        # Evaluation-only CSI-robustness knob (Concept Note v4.0 Section 12.5):
+        # perturbs only the channel magnitude *returned* in the observation
+        # (see _get_obs below); the environment's own reward/SINR computation
+        # in _compute_sinr always reads the true self.channel_gains, untouched
+        # by this parameter. Deliberately a constructor kwarg, not a
+        # config/YAML key -- so a trained checkpoint's "trained under perfect
+        # CSI" provenance stays unambiguous (Section 8's Scope Boundary Rule).
+        self.observation_noise_std = float(observation_noise_std)
+        self._obs_noise_rng: np.random.Generator = np.random.default_rng(0)
 
         # Handle dictionary or object config
         if isinstance(config, dict):
@@ -92,11 +112,18 @@ class CRANEnv(gym.Env):
         )
 
         traffic_cfg = getattr(cfg, "traffic", cfg)
+        # NOTE: `traffic.profile` (weekday_urban/weekend_suburban shape variant,
+        # new in v4.0) is a distinct key from the pre-existing, still-unused
+        # `traffic.model` (which would name the model *class*, e.g. tidal vs.
+        # some future non-diurnal model, a different axis) -- deliberately not
+        # repurposing `traffic.model` to avoid recreating the same confusing
+        # dead-key situation. `traffic.model` remains dead/out of scope here.
         self.traffic = TrafficModel(
             n_ue=self.n_ue,
             base_rate_mbps=float(getattr(traffic_cfg, "base_rate_mbps", 50.0)),
             peak_multiplier=float(getattr(traffic_cfg, "peak_multiplier", 3.0)),
             burstiness_sigma=float(getattr(traffic_cfg, "burstiness", 0.2)),
+            profile=str(getattr(traffic_cfg, "profile", "weekday_urban")),
         )
 
         self.power = PowerModel(
@@ -152,6 +179,8 @@ class CRANEnv(gym.Env):
         """
         super().reset(seed=seed)
         self.rng = np.random.default_rng(seed)
+        obs_noise_seed = None if seed is None else int(seed) + self._OBS_NOISE_SEED_OFFSET
+        self._obs_noise_rng = np.random.default_rng(obs_noise_seed)
 
         self.hour = int(self.rng.integers(0, 24))
         self.step_count = 0
@@ -179,8 +208,15 @@ class CRANEnv(gym.Env):
         demands_bps = self.traffic.get_demands(self.hour, self.rng)
         demands_mbps = demands_bps / 1e6
 
-        # Channel magnitude |H|
+        # Channel magnitude |H| -- this is the policy's *perceived* channel;
+        # _compute_sinr() (reward/SINR) always uses the true self.channel_gains
+        # directly and is never affected by observation_noise_std.
         gains_mag = np.abs(self.channel_gains).flatten()
+        if self.observation_noise_std > 0.0:
+            noise = self._obs_noise_rng.normal(
+                0.0, self.observation_noise_std, size=gains_mag.shape
+            )
+            gains_mag = np.maximum(gains_mag + noise, 0.0)
 
         obs = np.concatenate(
             [

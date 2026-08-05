@@ -14,6 +14,8 @@ import yaml  # type: ignore[import-untyped]
 
 from agents import BranchingMPDQN
 from cran_env import CRANEnv
+from training.checkpoint_utils import save_checkpoint
+from training.eval_utils import run_eval_episodes
 
 
 def set_seed(seed: int):
@@ -40,41 +42,14 @@ def validate_hardware_constants(env: CRANEnv):
 def evaluate_agent(
     env: CRANEnv, agent: BranchingMPDQN, eval_episodes: int = 5
 ) -> Dict[str, float]:
-    """Evaluate current policy in deterministic mode over N episodes."""
-    eval_rewards = []
-    eval_powers = []
-    eval_qos_rates = []
-    eval_active_rrhs = []
+    """Evaluate current policy in deterministic mode over N episodes.
 
-    for ep in range(eval_episodes):
-        obs, _ = env.reset(seed=1000 + ep)
-        ep_reward = 0.0
-        ep_power = []
-        ep_qos = []
-        ep_active = []
-
-        done = False
-        while not done:
-            action = agent.select_action(obs, evaluate=True)
-            obs, reward, terminated, truncated, info = env.step(action)
-            ep_reward += reward
-            ep_power.append(info.get("total_power_w", 0.0))
-            ep_qos.append(1.0 if info.get("qos_violations_count", 0) == 0 else 0.0)
-            ep_active.append(info.get("active_rrhs", 0))
-            done = terminated or truncated
-
-        eval_rewards.append(ep_reward)
-        eval_powers.append(float(np.mean(ep_power)))
-        eval_qos_rates.append(float(np.mean(ep_qos)))
-        eval_active_rrhs.append(float(np.mean(ep_active)))
-
-    return {
-        "eval_mean_reward": float(np.mean(eval_rewards)),
-        "eval_std_reward": float(np.std(eval_rewards)),
-        "eval_mean_power_w": float(np.mean(eval_powers)),
-        "eval_qos_satisfaction_rate": float(np.mean(eval_qos_rates)),
-        "eval_mean_active_rrhs": float(np.mean(eval_active_rrhs)),
-    }
+    Thin wrapper around training.eval_utils.run_eval_episodes (same base seed
+    1000 as before this refactor, so behavior is unchanged) -- kept so the
+    CSI-robustness/generalization/scalability harnesses share exactly one
+    evaluation loop instead of each duplicating it.
+    """
+    return run_eval_episodes(env, agent, episodes=eval_episodes, seed=1000)
 
 
 def train_hybrid_agent(
@@ -226,13 +201,15 @@ def train_hybrid_agent(
         with open(out_path / "summary.json", "w") as f:
             json.dump(summary, f, indent=2)
 
-        torch.save(
-            {
-                "encoder": agent.encoder.state_dict(),
-                "param_net": agent.param_net.state_dict(),
-                "twin_critic": agent.twin_critic.state_dict(),
-            },
+        save_checkpoint(
+            agent,
             out_path / "final_model.pt",
+            meta={
+                "config": cfg,
+                "ctor_kwargs": {"config": cfg},
+                "seed": seed,
+                "episode": episodes,
+            },
         )
         print(f"Saved results and model checkpoint to {out_path}")
 

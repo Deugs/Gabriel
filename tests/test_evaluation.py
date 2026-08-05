@@ -100,14 +100,13 @@ def test_ablation_short_run(tmp_path):
 
 
 def test_scalability_short_run(tmp_path):
-    orig_path = Path(__file__).parent.parent / "config" / "default.yaml"
     fig_dir = str(tmp_path / "figures")
 
     res = analyze_scalability(
-        config_path=str(orig_path),
         episodes=2,
         save_dir=fig_dir,
     )
 
-    assert len(res) == 3
+    # Concept Note v4.0's five mandated scalability points: R={5,12,20,35,50}.
+    assert len(res) == 5
     assert (Path(fig_dir) / "scalability_analysis.pdf").exists()

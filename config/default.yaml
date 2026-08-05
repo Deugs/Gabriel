@@ -62,7 +62,7 @@ power:
 # DRL Algorithm
 # ============================================================
 algorithm:
-  name: "hybrid_sac_dqn"
+  name: "branching_mp_dqn"
   max_episodes: 5000
   max_steps_per_episode: 100
 
@@ -114,7 +114,7 @@ reward:
 evaluation:
   eval_freq: 100            # Evaluate every N episodes
   n_eval_episodes: 10
-  n_random_seeds: 5
+  n_random_seeds: 10  # Revised from 5 per docs/rules.md's Baseline Fairness Rule
   save_checkpoints: true
   checkpoint_freq: 500
 
