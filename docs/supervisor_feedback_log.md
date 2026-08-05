@@ -2,6 +2,46 @@
 
 > Filled instances of `docs/supervisor_feedback_template.md`. Newest entry first.
 
+## Review: 2026-08-05 — Consolidated letter (Overall/Methodology Assessment, Critical Gaps G1-G14, Scientific Relevance, Recommendations B1-B4/S1-S6/A1-A6)
+
+### Agenda
+1. A single consolidated review letter combining, verbatim, the same items already logged separately below as "Review of Concept Note v2.0" (B1-B4, S1-S6, A1-A6) and "Detailed review" (G1-G14) — cross-checked item-by-item to confirm nothing was missed, rather than re-answered from scratch.
+2. Distinguishing what is genuinely *documented* (in the Concept Note v3.0/v4.0 lineage) from what is *implemented in code* — the two had drifted apart.
+
+### Feedback Received
+
+Every individual B/S/A/G item in this letter maps to a row already marked "Done" in the two entries below (v3.0 or v4.0 section references there). Re-verifying against the actual codebase (not just the docs) surfaced five places where the documentation's "Done" was accurate for the *concept note* but not yet true of the *code*:
+
+| Section | Feedback | Priority | Action | Deadline |
+|---|---|---|---|---|
+| S2 | Add P-DQN and/or MP-DQN as baselines | Strongly recommended | `docs/workflow.md` and Concept Note §12.1 already claimed these as implemented, but `agents/pdqn_agent.py`/`agents/mpdqn_agent.py` did not exist. **Now implemented**: flat (non-branching) 2^R joint-action head, single critic, P-DQN single-pass vs. MP-DQN genuine multi-pass masking (verified by a dedicated unit test that perturbing a masked-out RRH's params does not change that action's Q-value); guarded against R>20 with an explicit error rather than a silent OOM | This session |
+| RQ3 (v1 concept note's design) | Pure-DDPG continuous-relaxation baseline | Strongly recommended | `agents/ddpg_agent.py` did not exist despite being listed as a `docs/workflow.md` Phase 2 deliverable. **Now implemented**: DDPG actor outputs a continuous "soft" RRH-activation gate thresholded only at execution time, per `manuscript/concept_document.md` §3's description of the original design | This session |
+| S3 | CSI robustness evaluation (σ∈{0,0.01,0.05,0.1}) | Strongly recommended | Concept Note §12.5 fully specified this; no code existed. **Now implemented**: `evaluation/csi_robustness.py` perturbs only the channel-gain slice of the *observation* fed to the frozen policy, leaving the environment's true physics/reward unaffected, matching the spec's "evaluation-only, no retraining" design | This session |
+| A5/G13 | Cross-profile generalization evaluation | Advisory | No second traffic profile existed anywhere in code. **Now implemented**: `cran_env/traffic_model.py` gained a `weekend_suburban` profile (flatter daytime, later/lower residential peak) alongside the existing default `weekday_urban`; `evaluation/generalization.py` trains once and evaluates zero-shot on both | This session |
+| A3/G14 | Inference-latency benchmark at R=5,12,20,35,50 | Advisory | `evaluation/scalability.py` measured full env-step time at a different, mismatched size set (6/12/24). **Added** `evaluation/latency_benchmark.py`, measuring isolated forward-pass time at exactly the documented five sizes, explicitly skipping P-DQN/MP-DQN above their R=20 cap rather than crashing — itself further empirical evidence for B3 | This session |
+| S4/G11 | Effect size (Cohen's d) alongside p-values | Strongly recommended | Concept Note §12.4 committed to this; `evaluation/convergence.py` had no such function. **Added** `compute_cohens_d()`. While fixing this, found and fixed a **real bug**: the module's `proposed_algo` lookup was still the hardcoded, superseded string `"Hybrid_SAC_DDQN"`, but `training/train_hybrid.py` actually saves `"Branching_MP_DQN"` — every paired comparison against the real proposed method was silently comparing against an empty `[0.0]` placeholder array. Same stale-name bug also existed in `evaluation/scalability.py`'s result dict key | This session |
+
+### Decisions Made
+
+| Decision | Rationale | Impact |
+|---|---|---|
+| No new Concept Note version (v5.0) drafted for this letter | Every substantive item was already resolved in the *documentation* by v3.0/v4.0; the gap this letter's re-verification found was purely between docs and code, not a new methodological question for the supervisor | Concept Note v4.0 remains the current reference document; only code, tests, and status trackers (`AGENTS.md`, `docs/workflow.md`) were updated |
+| P-DQN/MP-DQN implemented as a flat 2^R-action head (no branching, single critic), reusing the proposed method's `SharedEncoder`/`ContinuousParameterNetwork` | Matches §12.1's explicit "without branching or twin critics" framing exactly, while keeping the continuous-parameterization mechanism identical across methods for a fair comparison | `agents/mpdqn_agent.py` subclasses `agents/pdqn_agent.py`, overriding only the Q-evaluation step, to avoid duplicating the shared machinery |
+| CSI noise applied to the observation only, not the environment's internal channel state | The spec ("frozen trained policy", "no retraining", isolate policy *sensitivity*) requires the true physics/reward to stay computed from the true channel; only what the policy *sees* should be noisy | No changes needed to `cran_env/cran_env.py`'s core physics |
+
+### Next Meeting
+**Date**: N/A — this letter's items were already scheduled for v3.0/v4.0 sign-off (see the two entries below); no new meeting triggered
+**Focus**: N/A
+
+### Action Items
+- [x] Implement `agents/pdqn_agent.py`, `agents/mpdqn_agent.py`, `agents/ddpg_agent.py` (S2, RQ3) with unit tests
+- [x] Implement `evaluation/csi_robustness.py` (S3), `evaluation/generalization.py` (A5/G13), `evaluation/latency_benchmark.py` (A3/G14), each with a short-run test
+- [x] Add `compute_cohens_d()` to `evaluation/convergence.py` (S4/G11); fix the stale `"Hybrid_SAC_DDQN"` proposed-method lookup bug there and in `evaluation/scalability.py`
+- [x] Update `AGENTS.md`'s Code Architecture tree and `docs/workflow.md`'s Phase 2/3 checklists to match actual file existence (previously inconsistent in both directions per the earlier gap analysis)
+- [ ] Run the full 10-seed × 9-method experiment matrix and the CSI-robustness/generalization/latency sweeps at thesis scale (the infrastructure above is tested at small scale only; no full-scale results have been generated yet)
+
+---
+
 ## Verification follow-up: 2026-08-05 — HySoft authorship
 
 Requested: independently verify HySoft's authorship (the last open flag from the reference-verification pass below). Same standard applied as the OREO check: require a located identifier or independent corroborating signal, not just a repeated search snippet.

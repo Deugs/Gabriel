@@ -47,15 +47,15 @@
 **Duration**: 5 weeks (revised from 1 week — 8 baselines, including two published reproductions and two parameterized-action-space methods, is not a one-week task; per supervisor review, Concept Note v3.0 §15/B4)
 **Owner**: Baseline Implementer
 **Deliverables**:
-- [ ] `baselines/all_on_uniform.py` — All RRHs ON, uniform power
-- [ ] `baselines/greedy_heuristic.py` — Greedy RRH selection
-- [ ] `baselines/nmbs_binpack.py` — Al-Zubaedi's NMBS
-- [ ] `baselines/convex_power.py` — CVXPY power allocation
-- [ ] `agents/ddqn_agent.py` — Iqbal's DDQN reproduction
-- [ ] `baselines/ann_gsbf.py` — Fathy's ANN + Bi-Section GSBF reproduction
-- [ ] `agents/ddpg_agent.py` — pure-DDPG continuous relaxation (RQ3 baseline)
-- [ ] `agents/pdqn_agent.py`, `agents/mpdqn_agent.py` — P-DQN and MP-DQN, **new per supervisor review S2** (Concept Note v3.0 §12.1); validated only at R=5 and R=12 (untractable at R≥35, see §10.3.1/B3)
-- [ ] `tests/test_baselines.py` — Validation tests
+- [x] `baselines/all_on_uniform.py` — All RRHs ON, uniform power
+- [x] `baselines/greedy_heuristic.py` — Greedy RRH selection
+- [x] `baselines/nmbs_binpack.py` — Al-Zubaedi's NMBS
+- [x] `baselines/convex_power.py` — CVXPY power allocation
+- [x] `agents/ddqn_agent.py` — Iqbal's DDQN reproduction
+- [x] `baselines/ann_gsbf.py` — Fathy's ANN + Bi-Section GSBF reproduction
+- [x] `agents/ddpg_agent.py` — pure-DDPG continuous relaxation (RQ3 baseline)
+- [x] `agents/pdqn_agent.py`, `agents/mpdqn_agent.py` — P-DQN and MP-DQN, **new per supervisor review S2** (Concept Note v3.0 §12.1); code enforces the R<=12-validated / untractable-at-R>=35 limitation with an explicit guard rather than a silent failure (§10.3.1/B3)
+- [x] `tests/test_baselines.py`, `tests/test_new_baselines.py` — Validation tests (all 9 baselines + the proposed method)
 
 **Key Decisions**:
 - CVXPY for convex sub-problems (matches Fathy/Iqbal)
@@ -77,12 +77,12 @@
 **Duration**: 7 weeks (revised from 3 weeks; branching + multi-pass + twin-critic is more involved to stabilize than a single off-the-shelf agent, per Concept Note v3.0 §15/B4)
 **Owner**: Methodology Validator + Code Reviewer
 **Deliverables**:
-- [ ] `agents/branching_mp_dqn.py` — Branching, multi-pass, twin-critic parameterized DQN (the architecture specified in Concept Note v3.0 §10.3; `agents/hybrid_sac_dqn.py` remains only as the earlier, superseded alternative)
-- [ ] `training/train_hybrid.py` — Training loop
-- [ ] `config/default.yaml` — Default hyperparameters
-- [ ] `config/small_network.yaml` — Small scenario
-- [ ] `config/large_network.yaml` — Large scenario
-- [ ] `tests/test_hybrid_agent.py` — Agent unit tests
+- [x] `agents/branching_mp_dqn.py` — Branching, multi-pass, twin-critic parameterized DQN (the architecture specified in Concept Note v3.0 §10.3; `agents/hybrid_sac_dqn.py` remains only as the earlier, superseded alternative)
+- [x] `training/train_hybrid.py` — Training loop
+- [x] `config/default.yaml` — Default hyperparameters
+- [x] `config/small_network.yaml` — Small scenario
+- [x] `config/large_network.yaml` — Large scenario
+- [x] `tests/test_hybrid_agent.py`, `tests/test_branching_mp_dqn.py` — Agent unit tests
 
 **Key Decisions**:
 - Factorized, branching discrete actions (per-RRH binary head; 2R outputs, not 2^R — Concept Note v3.0 §10.3.1)
@@ -110,9 +110,10 @@
 - [ ] QoS performance analysis (SINR CDF)
 - [ ] Ablation study: RQ3 (hybrid vs pure-DDPG) and RQ4 (hybrid vs P-DQN/MP-DQN)
 - [ ] Scalability analysis (5 network sizes; R=50 is a stretch goal, not committed)
-- [ ] **CSI-robustness curve** (σ ∈ {0, 0.01, 0.05, 0.1}, evaluation-only, no retraining — Concept Note v3.0 §12.5)
-- [ ] **Cross-profile generalization result** (weekday/urban-trained policy evaluated on weekend/suburban profile — Concept Note v3.0 §12.3)
-- [ ] Inference-latency benchmark at R=5,12,20,35,50
+- [ ] **CSI-robustness curve** (σ ∈ {0, 0.01, 0.05, 0.1}, evaluation-only, no retraining — Concept Note v3.0 §12.5) — infrastructure done (`evaluation/csi_robustness.py`, tested), full-scale run not yet executed
+- [ ] **Cross-profile generalization result** (weekday/urban-trained policy evaluated on weekend/suburban profile — Concept Note v3.0 §12.3) — infrastructure done (`evaluation/generalization.py`, `cran_env/traffic_model.py`'s `weekend_suburban` profile, tested), full-scale run not yet executed
+- [ ] Inference-latency benchmark at R=5,12,20,35,50 — infrastructure done (`evaluation/latency_benchmark.py`, tested), full-scale run not yet executed
+- [ ] Statistical reporting: paired t-tests + **Cohen's d** for every head-to-head comparison (Concept Note v3.0/v4.0 §12.4, S4/G11) — infrastructure done (`evaluation/convergence.py::compute_cohens_d`, tested; also fixed a bug where the proposed-method name check was still the superseded "Hybrid_SAC_DDQN", silently excluding it from every comparison)
 - [ ] Statistical significance tests **and effect sizes (Cohen's d)** for every baseline comparison
 
 **Experiment Matrix**:

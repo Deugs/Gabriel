@@ -106,26 +106,31 @@ Gabriel/
 ├── agents/                # DRL algorithms
 │   ├── branching_mp_dqn.py# Proposed: Branching MP-DQN + TD3 (Concept Note v2.0, current through v4.0)
 │   ├── hybrid_sac_dqn.py  # Superseded alternative (v1.0 concept), kept for comparison only
-│   └── ddqn_agent.py      # Baseline: Iqbal et al. (2021) DDQN reproduction
-│   # Still missing per Concept Note v3.0/v4.0 §12.1 (tracked in docs/workflow.md Phase 2):
-│   #   ddpg_agent.py (pure-DDPG continuous relaxation), pdqn_agent.py, mpdqn_agent.py
-├── baselines/             # 9-method comparison suite (Concept Note v3.0/v4.0 §12.1); 6 of 9 implemented
+│   ├── ddqn_agent.py      # Baseline: Iqbal et al. (2021) DDQN reproduction
+│   ├── ddpg_agent.py      # Baseline: pure-DDPG continuous relaxation (RQ3)
+│   ├── pdqn_agent.py      # Baseline: P-DQN, flat 2^R head, no branching/twin critic (S2)
+│   └── mpdqn_agent.py     # Baseline: MP-DQN, flat 2^R head with multi-pass masking (S2)
+├── baselines/             # 9-method comparison suite (Concept Note v3.0/v4.0 §12.1); all 9 implemented
 │   ├── all_on_uniform.py  # Baseline 1: All-ON uniform power
 │   ├── greedy_heuristic.py# Baseline 2: Greedy heuristic
 │   ├── nmbs_binpack.py    # Baseline 3: Al-Zubaedi's NMBS bin-packing
 │   ├── convex_power.py    # Baseline 4: CVXPY SOCP power allocation
 │   ├── ddqn_socp.py       # Baseline 5: Two-stage DDQN + SOCP (Iqbal et al., 2021)
 │   └── ann_gsbf.py        # Baseline 6: Supervised ANN + GSBF (Fathy et al., 2021)
-│   # Missing (see agents/ note above): pure-DDPG, P-DQN, MP-DQN baselines 7-9
+│   # Baselines 7-9 (pure-DDPG, P-DQN, MP-DQN) live in agents/ alongside the
+│   # proposed method, per docs/workflow.md's Phase 2 convention (see above)
 ├── training/              # Training loops
 │   ├── train_hybrid.py
 │   ├── train_baselines.py
 │   ├── run_extended_sweeps.py
 │   └── hyperparam_search.py
 ├── evaluation/            # Analysis and plotting
-│   ├── convergence.py
+│   ├── convergence.py     # CIs, paired t-tests, Cohen's d (§12.4, S4/G11)
 │   ├── ablation.py        # RQ3 discrete vs continuous relaxation ablation
 │   ├── scalability.py     # 5-to-50 RRH scalability sweep
+│   ├── csi_robustness.py  # CSI-noise degradation curve (§12.5, S3)
+│   ├── generalization.py  # Cross-profile (weekday/weekend) evaluation (§12.3, A5)
+│   ├── latency_benchmark.py # Forward-pass latency at R=5,12,20,35,50 (§12.3, A3/G14)
 │   └── plot_utils.py
 ├── config/                # Experiment configurations
 │   ├── default.yaml

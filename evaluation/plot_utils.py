@@ -174,6 +174,47 @@ def plot_scalability_analysis(
         plt.close(fig)
 
 
+def plot_degradation_curve(
+    curve_dict: Dict[str, Dict[float, float]],
+    xlabel: str = "Perturbation level",
+    ylabel: str = "Energy Efficiency (Mbit/Joule)",
+    title: str = "Robustness Degradation Curve",
+    save_path: Optional[str] = None,
+):
+    """Plot a metric-vs-perturbation-level degradation curve per method.
+
+    Used for the CSI-robustness (Concept Note v3.0/v4.0 Section 12.5, S3) and
+    cross-profile generalization (Section 12.3, A5) evaluations, both of which
+    report a metric as a function of a single scalar perturbation/condition.
+
+    Args:
+        curve_dict: {method_name: {x_value: y_value, ...}, ...}.
+    """
+    setup_matplotlib_style()
+    fig, ax = plt.subplots(figsize=(7, 4.5))
+
+    colors = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b"]
+
+    for idx, (method, points) in enumerate(curve_dict.items()):
+        xs = sorted(points.keys())
+        ys = [points[x] for x in xs]
+        ax.plot(xs, ys, marker="o", label=method, color=colors[idx % len(colors)], linewidth=2.0)
+
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    ax.legend(loc="best", frameon=True)
+    fig.tight_layout()
+
+    if save_path is not None:
+        out_file = Path(save_path)
+        out_file.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(out_file)
+        plt.close(fig)
+    else:
+        plt.close(fig)
+
+
 def plot_ablation_comparison(
     ablation_dict: Dict[str, float],
     save_path: Optional[str] = None,

@@ -97,6 +97,7 @@ class CRANEnv(gym.Env):
             base_rate_mbps=float(getattr(traffic_cfg, "base_rate_mbps", 50.0)),
             peak_multiplier=float(getattr(traffic_cfg, "peak_multiplier", 3.0)),
             burstiness_sigma=float(getattr(traffic_cfg, "burstiness", 0.2)),
+            profile=str(getattr(traffic_cfg, "profile", "weekday_urban")),
         )
 
         self.power = PowerModel(

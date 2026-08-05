@@ -62,7 +62,7 @@ power:
 # DRL Algorithm
 # ============================================================
 algorithm:
-  name: "hybrid_sac_dqn"
+  name: "branching_mp_dqn"
   max_episodes: 5000
   max_steps_per_episode: 100
 
