@@ -38,7 +38,7 @@
 ### Action Items
 - [x] Draft Concept Note v4.0 resolving the detailed review's G1-G14 and relevance discussion
 - [x] Sync `AGENTS.md`/`README.md` pointers to v4.0
-- [x] Independently verify the OREO, TS-MP-DQN, and CP-DQN-journal references (Concept Note v4.0 §4.2-§4.3, §17) — TS-MP-DQN and CP-DQN's journal are now fully confirmed; OREO's authors are confirmed but its venue/year/DOI could not be verified against a primary source and remains flagged
+- [x] Independently verify the OREO, TS-MP-DQN, and CP-DQN-journal references (Concept Note v4.0 §4.2-§4.3, §17) — TS-MP-DQN and CP-DQN's journal are now fully confirmed. **OREO was retracted, not just flagged**: a direct IEEE Xplore check found no real paper matching the previously-cited description (PPO rApp, Sionna ray-tracing, Qazzaz/Salama/Hafeez/Zaidi); the only confirmed "OREO" is Mungari et al. (2024, INFOCOM, arXiv:2405.18198), a different topic (xApp orchestration), now cited correctly in its place. Take-away: the earlier "authors confirmed" note on OREO was itself wrong — repeated agreement across independent search queries is not the same as a located primary source, and should not have been treated as verification.
 - [ ] Supervisor sign-off on Concept Note v4.0
 - [ ] Begin Phase 1 (environment & power model) per `docs/workflow.md`
 
