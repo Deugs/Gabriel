@@ -2,6 +2,48 @@
 
 > Filled instances of `docs/supervisor_feedback_template.md`. Newest entry first.
 
+## Review: 2026-08-05 — Detailed review (Overall Assessment, Methodology Assessment, G1-G14, Scientific Relevance)
+
+### Agenda
+1. Full detailed review underlying the earlier condensed B1-B4/S1-S6/A1-A6 review
+2. Fourteen critical gaps (G1-G14) in literature, technical design, and evaluation
+3. Scientific relevance and timeliness of the C-RAN/perfect-CSI/single-agent framing given where the field (O-RAN) has moved
+
+### Feedback Received
+
+| Section | Feedback | Priority | Action | Deadline |
+|---|---|---|---|---|
+| §2.2 weaknesses | Shared twin critic ambiguity; exploration-strategy conflict (SAC entropy vs. ε-greedy); combinatorial 2^N explosion | High | Already resolved by the v2.0/v3.0 branching/MP-DQN/twin-critic redesign, which predates this review reaching the candidate — confirmed still valid, no further change needed | v4.0 §0.1 |
+| G1 | Parameterized-action lineage incomplete: add TS-MP-DQN, CP-DQN | Blocker-equivalent | Done — added, with TS-MP-DQN's primary source flagged unverified | v4.0 §4.2 |
+| G2 | O-RAN DRL energy work missing named systems: OREO, ES-xApp, federated TD3, EExApp | Blocker-equivalent | Done — all four added; EExApp identified as the closest published related work and discussed explicitly, not just tabulated | v4.0 §4.3, §4.4 |
+| G3 | 2025 hybrid A3C-Dueling DQN C-RAN paper | Blocker-equivalent | Already resolved in v3.0 (Chuang et al., 2025) | v4.0 §4.1 |
+| G4 | Acknowledge multi-agent/federated RL; justify single-agent scope | Recommended | Done, citing Liang et al. (2026) directly | v4.0 §7.1 |
+| G5 | Acknowledge foundation-model/LLM-driven network control | Recommended | Done | v4.0 §7.1 |
+| G9 | No hyperparameter tuning protocol | Recommended | Done — new lightweight, timeline-bounded protocol | v4.0 §12.11 |
+| G10 | Primary baseline (≥25% vs. All-ON) is a weak floor | Recommended | Done — re-ranked; DDQN/P-DQN/MP-DQN margins are now the headline comparison | v4.0 §5.2 |
+| G6-G8, G11-G14 | State-space dimensionality, reward-weighting methodology, reproducibility, statistical power, QoS-target context, generalization, inference latency | — | All already resolved in v3.0; confirmed still valid | v4.0 §0.1 |
+| §4 relevance | Novelty must be positioned precisely given mature hybrid-action-space solutions and O-RAN's dominance | High | Novelty synthesis rewritten around EExApp specifically, not just the general literature | v4.0 §4.4 |
+
+### Decisions Made
+
+| Decision | Rationale | Impact |
+|---|---|---|
+| Keep the branching/MP-DQN/twin-critic architecture (not EExApp's dual-actor-dual-critic pattern) as the proposed method | The single-coupled-network design remains the thesis's specific contribution claim; EExApp is named as the nearest comparable architecture to be argued against empirically (RQ3/RQ4), not adopted wholesale | The eventual Chapter 4 results must now explicitly discuss how the proposed design compares to a dual-actor-dual-critic alternative, even without re-implementing EExApp itself |
+| Do not add a foundation-model/LLM baseline | No foundation-model approach was located targeting this thesis's specific joint RRH-activation-and-power problem, so no like-for-like comparison exists yet | Acknowledged in Chapter 2/5 as future work rather than benchmarked |
+
+### Next Meeting
+**Date**: To be scheduled once Concept Note v4.0 is reviewed
+**Focus**: Sign-off on v4.0; confirm the EExApp differentiation is convincing; green-light Phase 1 implementation start
+
+### Action Items
+- [x] Draft Concept Note v4.0 resolving the detailed review's G1-G14 and relevance discussion
+- [x] Sync `AGENTS.md`/`README.md` pointers to v4.0
+- [ ] Independently verify the OREO, TS-MP-DQN, and CP-DQN-journal references before they enter the thesis bibliography (Concept Note v4.0 §4.2-§4.3, §17)
+- [ ] Supervisor sign-off on Concept Note v4.0
+- [ ] Begin Phase 1 (environment & power model) per `docs/workflow.md`
+
+---
+
 ## Review: 2026-08-05 — Review of Concept Note v2.0
 
 ### Agenda

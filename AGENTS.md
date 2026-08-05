@@ -63,7 +63,9 @@
 | Xiong et al. (2018) / Bester et al. (2019) | Core architecture | P-DQN / MP-DQN — parameterized discrete-continuous action coupling, corrected for cross-talk |
 | Tavakoli et al. (2018) | Core architecture | Branching (BDQ) — 2R not 2^R discrete output growth |
 | Li et al. (2022) | Considered, not adopted | HyAR — VAE-based hybrid action representation; arXiv:2109.05490 |
-| HySoft (2025) | Considered, not adopted | Max-entropy P-DQN/MP-DQN extension; **authorship unverified**, see Concept Note v3.0 §4.2 |
+| HySoft (2025) | Considered, not adopted | Max-entropy P-DQN/MP-DQN extension; **authorship unverified**, see Concept Note v4.0 §4.2 |
+| Lu, Yan & Zeng (2026) | Closest related work | EExApp — dual-actor-dual-critic PPO+GAT, RU sleep + DU slicing, real O-RAN testbed; arXiv:2602.09206. Explicitly differentiated (single coupled network vs. two actor-critic pairs), see Concept Note v4.0 §4.4 |
+| Liang et al. (2026) | Recent (O-RAN) | Federated TD3, rApp aggregator + xApp agents; arXiv:2604.00201. Cited as the justification for this thesis's single-agent scope (§7.1) |
 | Sthankiya et al. (2024) | Recent (O-RAN) | Survey: AI-driven energy optimization in NG-RAN; arXiv:2411.02164 |
 | Sohaib et al. (2024) | Recent (O-RAN) | DRL transfer learning for cloud-native O-RAN, eMBB+URLLC; arXiv:2407.11563 |
 | Chuang et al. (2025) | Recent (adjacent) | Hybrid A3C + Dueling DQN in a 5G C-RAN — different problem (industrial IoT scheduling), engaged per supervisor review B1 |
