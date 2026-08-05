@@ -115,6 +115,7 @@
 - [ ] Inference-latency benchmark at R=5,12,20,35,50 — infrastructure done (`evaluation/latency_benchmark.py`, tested), full-scale run not yet executed
 - [ ] Statistical reporting: paired t-tests + **Cohen's d** for every head-to-head comparison (Concept Note v3.0/v4.0 §12.4, S4/G11) — infrastructure done (`evaluation/convergence.py::compute_cohens_d`, tested; also fixed a bug where the proposed-method name check was still the superseded "Hybrid_SAC_DDQN", silently excluding it from every comparison)
 - [ ] Statistical significance tests **and effect sizes (Cohen's d)** for every baseline comparison
+- [ ] **Hyperparameter-tuning proxy sweep** (R=5, U=2, 100 episodes, 2 seeds; lr-pair and τ each varied ~half an order of magnitude, per Concept Note v4.0 §12.11/G9) — run *before* committing to the full 10-seed × 9-method matrix below, so any parameter change it surfaces is logged (`docs/daily_log_template.md`) and applied first. Infrastructure done (`training/hyperparam_search.py::run_proxy_sensitivity_sweep`, tested); the actual R=5/U=2/100-episode/2-seed sweep has not yet been run at full scale, and its decision (keep vs. change the default lr/τ) is not yet made
 
 **Experiment Matrix**:
 
