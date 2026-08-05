@@ -1,4 +1,4 @@
-"""Unit tests for Proposed Hybrid SAC-DDQN Agent (agents/hybrid_sac_dqn.py)."""
+"""Unit tests for the superseded Hybrid SAC-DDQN Agent (agents/hybrid_sac_dqn.py), kept only as the earlier alternative — see agents/branching_mp_dqn.py for the current proposed method."""
 
 from pathlib import Path
 import numpy as np

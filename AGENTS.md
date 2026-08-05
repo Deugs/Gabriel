@@ -104,19 +104,19 @@ Gabriel/
 │   ├── traffic_model.py   # Tidal traffic patterns
 │   └── power_model.py     # EARTH-validated power consumption
 ├── agents/                # DRL algorithms
-│   ├── branching_mp_dqn.py# Proposed: Branching MP-DQN + TD3 (Concept Note v2.0)
-│   ├── hybrid_sac_dqn.py  # Alternative hybrid
-│   ├── sac_agent.py       # Baseline: pure SAC
-│   ├── td3_agent.py       # Baseline: TD3
-│   ├── ddpg_agent.py      # Baseline: Pure DDPG continuous relaxation (RQ3 ablation)
-│   └── ddqn_agent.py      # Baseline: discrete only
-├── baselines/             # 7-Baseline comparison suite
+│   ├── branching_mp_dqn.py# Proposed: Branching MP-DQN + TD3 (Concept Note v2.0, current through v4.0)
+│   ├── hybrid_sac_dqn.py  # Superseded alternative (v1.0 concept), kept for comparison only
+│   └── ddqn_agent.py      # Baseline: Iqbal et al. (2021) DDQN reproduction
+│   # Still missing per Concept Note v3.0/v4.0 §12.1 (tracked in docs/workflow.md Phase 2):
+│   #   ddpg_agent.py (pure-DDPG continuous relaxation), pdqn_agent.py, mpdqn_agent.py
+├── baselines/             # 9-method comparison suite (Concept Note v3.0/v4.0 §12.1); 6 of 9 implemented
 │   ├── all_on_uniform.py  # Baseline 1: All-ON uniform power
 │   ├── greedy_heuristic.py# Baseline 2: Greedy heuristic
 │   ├── nmbs_binpack.py    # Baseline 3: Al-Zubaedi's NMBS bin-packing
 │   ├── convex_power.py    # Baseline 4: CVXPY SOCP power allocation
 │   ├── ddqn_socp.py       # Baseline 5: Two-stage DDQN + SOCP (Iqbal et al., 2021)
 │   └── ann_gsbf.py        # Baseline 6: Supervised ANN + GSBF (Fathy et al., 2021)
+│   # Missing (see agents/ note above): pure-DDPG, P-DQN, MP-DQN baselines 7-9
 ├── training/              # Training loops
 │   ├── train_hybrid.py
 │   ├── train_baselines.py

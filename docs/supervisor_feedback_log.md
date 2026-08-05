@@ -2,6 +2,16 @@
 
 > Filled instances of `docs/supervisor_feedback_template.md`. Newest entry first.
 
+## Verification follow-up: 2026-08-05 — HySoft authorship
+
+Requested: independently verify HySoft's authorship (the last open flag from the reference-verification pass below). Same standard applied as the OREO check: require a located identifier or independent corroborating signal, not just a repeated search snippet.
+
+**Result — corroborated, not primary-source-confirmed.** Authors: Lu, J., Jia, Y., & Görges, D. (2025), *IFAC-PapersOnLine*, ICONS 2025 (Padova, Italy). Unlike the retracted OREO citation, this PII (S2405896325027430) consistently resolves to the same title/venue/benchmarks across independently-phrased searches, and Daniel Görges has his own separately-verifiable ScienceDirect author profile (ID 23569037600) and academic identity (RPTU Kaiserslautern-Landau, control systems/ML) that surfaces specifically tied to this article — an independent corroborating signal the OREO case never had. Concept Note v4.0 §4.2/§17 updated accordingly.
+
+**Follow-up (same day): asked to complete the institutional-access check directly.** Retried the ScienceDirect fetch (still HTTP 403), and additionally checked IFAC-PapersOnLine's own listing and RPTU's KLUEDO open-access repository for a mirror — neither had a matching entry. This environment has no real library/institutional login, so it cannot get past ScienceDirect's access control regardless of how many times it's retried. **This is now a closed-out action item for the candidate**, not something further automated search can resolve: open the ScienceDirect page via KNUST's (or any) library subscription and confirm title/authors/volume before the thesis bibliography is finalized.
+
+---
+
 ## Review: 2026-08-05 — Detailed review (Overall Assessment, Methodology Assessment, G1-G14, Scientific Relevance)
 
 ### Agenda
@@ -38,7 +48,7 @@
 ### Action Items
 - [x] Draft Concept Note v4.0 resolving the detailed review's G1-G14 and relevance discussion
 - [x] Sync `AGENTS.md`/`README.md` pointers to v4.0
-- [ ] Independently verify the OREO, TS-MP-DQN, and CP-DQN-journal references before they enter the thesis bibliography (Concept Note v4.0 §4.2-§4.3, §17)
+- [x] Independently verify the OREO, TS-MP-DQN, and CP-DQN-journal references (Concept Note v4.0 §4.2-§4.3, §17) — TS-MP-DQN and CP-DQN's journal are now fully confirmed. **OREO was retracted, not just flagged**: a direct IEEE Xplore check found no real paper matching the previously-cited description (PPO rApp, Sionna ray-tracing, Qazzaz/Salama/Hafeez/Zaidi); the only confirmed "OREO" is Mungari et al. (2024, INFOCOM, arXiv:2405.18198), a different topic (xApp orchestration), now cited correctly in its place. Take-away: the earlier "authors confirmed" note on OREO was itself wrong — repeated agreement across independent search queries is not the same as a located primary source, and should not have been treated as verification.
 - [ ] Supervisor sign-off on Concept Note v4.0
 - [ ] Begin Phase 1 (environment & power model) per `docs/workflow.md`
 
@@ -87,6 +97,6 @@
 - [x] Draft Concept Note v3.0 resolving B1-B4, S1-S6, A1-A6
 - [x] Sync `docs/rules.md` (seed list) and `docs/workflow.md` (phases, experiment matrix, milestone timeline) to v3.0
 - [x] Sync `AGENTS.md` / `README.md` status tables and key-decisions log to v3.0
-- [ ] Independently verify the HySoft (2025) reference's author list/venue before it enters the thesis bibliography (Concept Note v3.0 §4.2)
+- [x] Independently verify the HySoft (2025) reference's author list/venue (Concept Note v4.0 §4.2) — corroborated (Lu, Jia & Görges; IFAC-PapersOnLine, ICONS 2025) via an independent evidence chain (Görges' separately-verifiable ScienceDirect author profile and academic identity). Institutional-access check attempted directly (retried ScienceDirect, checked IFAC-PapersOnLine and RPTU's KLUEDO repository) — no route past the paywall exists without a real library login. **Closed out as a candidate action item**, not resolvable by further automated search: open the ScienceDirect page via KNUST's (or any) library subscription before citing definitively.
 - [ ] Supervisor sign-off on Concept Note v3.0
 - [ ] Begin Phase 1 (environment & power model) per the revised `docs/workflow.md` timeline

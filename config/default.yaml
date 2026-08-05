@@ -114,7 +114,7 @@ reward:
 evaluation:
   eval_freq: 100            # Evaluate every N episodes
   n_eval_episodes: 10
-  n_random_seeds: 5
+  n_random_seeds: 10  # [42, 123, 456, 789, 1011, 1337, 2024, 2718, 3141, 4242] per docs/rules.md Rule 3
   save_checkpoints: true
   checkpoint_freq: 500
 

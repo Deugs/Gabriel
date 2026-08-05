@@ -1,4 +1,4 @@
-"""Hyperparameter Tuning Search Utility for Hybrid SAC-DDQN Agent."""
+"""Hyperparameter Tuning Search Utility for the Branching MP-DQN + TD3 Agent."""
 
 from copy import deepcopy
 import json
@@ -10,7 +10,7 @@ from training.train_hybrid import train_hybrid_agent
 
 
 class HyperparameterSearch:
-    """Grid/Random hyperparameter search runner for Hybrid SAC-DDQN agent."""
+    """Grid/Random hyperparameter search runner for the Branching MP-DQN + TD3 agent."""
 
     def __init__(
         self,
