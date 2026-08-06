@@ -146,7 +146,7 @@ def plot_scalability_analysis(
 
     scales = list(
         scalability_dict.keys()
-    )  # e.g. ["Small (6x5)", "Medium (12x10)", "Large (24x20)"]
+    )  # e.g. ["R=5, U=2", "R=12, U=10", "R=20, U=20", "R=35, U=25", "R=50, U=30 (stretch)"]
 
     for algo in scalability_dict[scales[0]].keys():
         powers = [scalability_dict[s][algo]["power"] for s in scales]

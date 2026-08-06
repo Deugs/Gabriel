@@ -119,5 +119,5 @@ def test_scalability_short_run(tmp_path):
         save_dir=fig_dir,
     )
 
-    assert len(res) == 3
+    assert len(res) == 5
     assert (Path(fig_dir) / "scalability_analysis.pdf").exists()

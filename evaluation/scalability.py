@@ -18,10 +18,15 @@ def analyze_scalability(
     with open(config_path, "r") as f:
         base_cfg = yaml.safe_load(f)
 
+    # Matches docs/workflow.md's committed Experiment Matrix (R=5/12/20/35/50);
+    # R=35's UE count isn't listed there (only R=5/12/20/50 are), so 25 is used
+    # as an interpolation between the R=20/U=20 and R=50/U=30 rows.
     scales = {
-        "Small (6x5)": {"n_rrh": 6, "n_ue": 5},
-        "Medium (12x10)": {"n_rrh": 12, "n_ue": 10},
-        "Large (24x20)": {"n_rrh": 24, "n_ue": 20},
+        "R=5, U=2": {"n_rrh": 5, "n_ue": 2},
+        "R=12, U=10": {"n_rrh": 12, "n_ue": 10},
+        "R=20, U=20": {"n_rrh": 20, "n_ue": 20},
+        "R=35, U=25": {"n_rrh": 35, "n_ue": 25},
+        "R=50, U=30 (stretch)": {"n_rrh": 50, "n_ue": 30},
     }
 
     scalability_results: Dict[str, Dict[str, Dict[str, float]]] = {}
