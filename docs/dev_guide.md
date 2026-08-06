@@ -10,7 +10,7 @@ source venv/bin/activate  # or venv\Scripts\activate on Windows
 
 # Core dependencies
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-pip install gymnasium stable-baselines3[extra] ray[rllib]
+pip install gymnasium
 pip install numpy scipy pandas matplotlib seaborn
 pip install cvxpy tensorboard wandb
 pip install pytest black flake8 mypy
@@ -69,7 +69,7 @@ gymnasium.Env
 | Greedy Heuristic | `baselines/greedy_heuristic.py` | Sort UEs by channel gain; activate minimum RRHs |
 | NMBS Bin-Packing | `baselines/nmbs_binpack.py` | Modified first-fit decreasing; load-aware switching |
 | Convex Power | `baselines/convex_power.py` | CVXPY: minimize Σp subject to SINR ≥ γ_target |
-| DDQN (Iqbal) | `agents/ddqn_agent.py` | Stable-Baselines3 DQN; discrete action = RRH subset |
+| DDQN (Iqbal) | `agents/ddqn_agent.py` | Hand-rolled PyTorch Double DQN; discrete action = RRH subset |
 
 **Validation Checkpoints**:
 - [ ] Convex baseline matches CVXPY reference solution
