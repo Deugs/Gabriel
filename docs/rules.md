@@ -29,7 +29,9 @@ Test: tests/test_power_model.py::test_total_power_matches_equation
 **Rule**: All algorithms must be evaluated under identical conditions: same environment, same random seeds, same evaluation protocol.
 
 **Enforcement**:
-- Single evaluation script: `evaluation/compare_all.py`
+- Single evaluation script: `evaluation/compare_all.py` (planned — not yet
+  implemented; `training/train_baselines.py` currently runs the shared
+  9-method benchmark suite under one config)
 - Shared config file for all experiments
 - Fixed random seed list (10 seeds, revised from 5 per supervisor review, Concept Note v3.0 §12.4): [42, 123, 456, 789, 1011, 1337, 2024, 2718, 3141, 4242]
 
@@ -39,15 +41,20 @@ Test: tests/test_power_model.py::test_total_power_matches_equation
 **Rule**: Any experiment must be reproducible from a single command within 24 hours on standard hardware.
 
 **Enforcement**:
-- All experiments defined in `experiments/` YAML files
-- Docker container with pinned dependency versions
+- All experiments defined in `experiments/` YAML files (planned — not yet
+  implemented; `config/*.yaml` currently serves this role)
+- Docker container with pinned dependency versions — done (`Dockerfile`,
+  `docker-compose.yml`, pinned `requirements.txt`)
 - Random seeds fixed; deterministic operations where possible
 - Results saved with full config hash
 
-**Required**:
+**Required** (planned — `run_experiment.py`/`experiments/*.yaml` not yet
+implemented; today's equivalent is):
 ```bash
-# Reproduce any experiment
-python run_experiment.py --config experiments/hybrid_medium.yaml --seed 42
+# Reproduce the proposed method's training run
+python training/train_hybrid.py --config config/default.yaml --seed 42
+# or, via the Docker setup:
+docker compose run --rm train hybrid --config config/default.yaml --seed 42
 ```
 
 ## 5. Novelty Defense Rule
