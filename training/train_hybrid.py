@@ -3,6 +3,7 @@
 import argparse
 import gc
 import json
+import os
 from pathlib import Path
 import random
 import time
@@ -11,6 +12,11 @@ from typing import Any, Dict, Optional
 import numpy as np
 import torch
 import yaml  # type: ignore[import-untyped]
+
+try:
+    import wandb
+except ImportError:
+    wandb = None
 
 from agents import BranchingMPDQN
 from cran_env import CRANEnv
@@ -83,7 +89,7 @@ def train_hybrid_agent(
     episodes: int = 100,
     eval_freq: int = 10,
     save_dir: Optional[str] = None,
-    use_wandb: bool = False,
+    use_wandb: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """Train Branching MP-DQN + TD3 agent and log training metrics."""
     set_seed(seed)
@@ -91,6 +97,29 @@ def train_hybrid_agent(
     # Load configuration
     with open(config_path, "r") as f:
         cfg = yaml.safe_load(f)
+
+    logging_cfg = cfg.get("logging", {})
+    if use_wandb is None:
+        use_wandb = logging_cfg.get("use_wandb", False)
+    if use_wandb and wandb is None:
+        raise RuntimeError(
+            "use_wandb=True but the 'wandb' package is not installed. "
+            "Install it with `pip install wandb` or disable W&B logging."
+        )
+    if use_wandb:
+        if not os.environ.get("WANDB_API_KEY"):
+            # Avoid hanging on an interactive login prompt in headless/remote
+            # containers (e.g. docker compose run) when no API key is set.
+            os.environ.setdefault("WANDB_MODE", "offline")
+            print(
+                "WANDB_API_KEY not set — running W&B in offline mode "
+                "(run `wandb sync` on the run directory later to upload)."
+            )
+        wandb.init(
+            project=logging_cfg.get("wandb_project", "cran-drl-thesis"),
+            name=f"branching_mp_dqn_seed{seed}",
+            config=cfg,
+        )
 
     env = CRANEnv(cfg)
     validate_hardware_constants(env)
@@ -170,6 +199,19 @@ def train_hybrid_agent(
         history["active_rrhs"].append(mean_active)
         history["critic_losses"].append(mean_loss)
 
+        if use_wandb:
+            wandb.log(
+                {
+                    "episode": ep,
+                    "train/episode_reward": float(ep_reward),
+                    "train/mean_power_w": mean_power,
+                    "train/qos_satisfaction_rate": qos_rate,
+                    "train/mean_active_rrhs": mean_active,
+                    "train/critic_loss": mean_loss,
+                },
+                step=ep,
+            )
+
         # Anomaly checking
         if np.isnan(ep_reward) or np.isinf(ep_reward):
             raise RuntimeError(
@@ -189,6 +231,12 @@ def train_hybrid_agent(
                 f"QoS: {eval_metrics['eval_qos_satisfaction_rate']*100:5.1f}% | "
                 f"Active RRHs: {eval_metrics['eval_mean_active_rrhs']:4.1f}/{env.n_rrh}"
             )
+
+            if use_wandb:
+                wandb.log(
+                    {f"eval/{k}": v for k, v in eval_metrics.items() if k != "episode"},
+                    step=ep,
+                )
 
         gc.collect()
 
@@ -236,6 +284,18 @@ def train_hybrid_agent(
         )
         print(f"Saved results and model checkpoint to {out_path}")
 
+    if use_wandb:
+        wandb.log(
+            {
+                "summary/final_train_reward": summary["final_train_reward"],
+                "summary/final_eval_reward": summary["final_eval_reward"],
+                "summary/final_eval_power_w": summary["final_eval_power_w"],
+                "summary/final_qos_rate": summary["final_qos_rate"],
+                "summary/total_training_time_sec": elapsed_time,
+            }
+        )
+        wandb.finish()
+
     gc.collect()
     return summary
 
@@ -255,6 +315,21 @@ if __name__ == "__main__":
     parser.add_argument(
         "--save-dir", type=str, default="data/results", help="Directory to save results"
     )
+    wandb_group = parser.add_mutually_exclusive_group()
+    wandb_group.add_argument(
+        "--use-wandb",
+        dest="use_wandb",
+        action="store_true",
+        default=None,
+        help="Force-enable W&B logging (overrides config/default.yaml's logging.use_wandb)",
+    )
+    wandb_group.add_argument(
+        "--no-wandb",
+        dest="use_wandb",
+        action="store_false",
+        default=None,
+        help="Force-disable W&B logging (overrides config/default.yaml's logging.use_wandb)",
+    )
     args = parser.parse_args()
 
     train_hybrid_agent(
@@ -263,4 +338,5 @@ if __name__ == "__main__":
         episodes=args.episodes,
         eval_freq=args.eval_freq,
         save_dir=args.save_dir,
+        use_wandb=args.use_wandb,
     )
