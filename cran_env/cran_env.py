@@ -220,7 +220,11 @@ class CRANEnv(gym.Env):
         """Execute one step in the C-RAN environment.
 
         Args:
-            action (dict): Action dictionary containing 'rrh_on' and 'power'.
+            action (dict): Action dictionary containing 'rrh_on', 'power', and
+                (optionally) 'bandwidth' — each active RRH's share of the total
+                channel bandwidth B, beta_r in [0, 1]. If omitted, or if the
+                active RRHs' shares sum to (near) zero, falls back to an equal
+                split across active RRHs.
 
         Returns:
             Tuple[np.ndarray, float, bool, bool, Dict]: (obs, reward, terminated, truncated, info).
@@ -235,11 +239,36 @@ class CRANEnv(gym.Env):
         power = np.clip(power, 0.0, self.p_max_w)
         power[~rrh_on] = 0.0
 
-        # Compute SINR and achievable capacity
-        sinr = self._compute_sinr(rrh_on, power)
+        # Signal/interference per user, and which RRH serves each user
+        signal, interference, serving_rrh = self._signal_interference(rrh_on, power)
+        sinr = np.where(
+            signal > 0.0, signal / (interference + self.noise_power_w), 0.0
+        ).astype(np.float32)
 
-        # Achievable capacity per user across channel bandwidth B
-        achievable_capacity_bps = self.channel.bandwidth * np.log2(1.0 + sinr)
+        # Bandwidth share beta_r per RRH: only active RRHs consume bandwidth,
+        # and their shares are renormalized to sum to 1 (an inactive RRH's
+        # share is unused capacity, reallocated among the active RRHs).
+        bandwidth_share_raw = np.array(
+            action.get("bandwidth", np.ones(self.n_rrh, dtype=np.float32)),
+            dtype=np.float32,
+        )
+        active_shares = bandwidth_share_raw * rrh_on.astype(np.float32)
+        share_sum = np.sum(active_shares)
+        if share_sum > 1e-12:
+            bandwidth_share = active_shares / share_sum
+        else:
+            n_active = max(1, int(np.sum(rrh_on)))
+            bandwidth_share = rrh_on.astype(np.float32) / n_active
+
+        # Each user gets the bandwidth share of the RRH serving it (0 if unserved)
+        user_bandwidth_hz = np.where(
+            serving_rrh >= 0,
+            bandwidth_share[np.clip(serving_rrh, 0, self.n_rrh - 1)],
+            0.0,
+        ) * self.channel.bandwidth
+
+        # Achievable capacity per user across its allocated share of bandwidth B
+        achievable_capacity_bps = user_bandwidth_hz * np.log2(1.0 + sinr)
         total_throughput_mbps = np.sum(achievable_capacity_bps) / 1e6
 
         # Traffic demands
@@ -305,33 +334,48 @@ class CRANEnv(gym.Env):
 
         return obs, float(reward), terminated, truncated, info
 
-    def _compute_sinr(self, active_mask: np.ndarray, power: np.ndarray) -> np.ndarray:
-        """Compute Signal-to-Interference-plus-Noise Ratio (SINR) for each user.
+    def _signal_interference(
+        self, active_mask: np.ndarray, power: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Compute per-user signal power, interference power, and serving RRH.
 
         User u is assigned to the best active serving RRH:
             r*(u) = argmax_{r in active} (p_r * |h_{r,u}|^2)
         Desired Signal: S_u = p_{r*(u)} * |h_{r*(u),u}|^2
         Interference: I_u = sum_{r in active, r != r*(u)} (p_r * |h_{r,u}|^2)
-        SINR_u = S_u / (I_u + noise_power)
+
+        Returns:
+            Tuple of (signal_power, interference_power, serving_rrh_idx), each
+            shape (n_ue,). serving_rrh_idx is -1 for a user when no RRH is active.
         """
-        sinr = np.zeros(self.n_ue, dtype=np.float32)
+        signal = np.zeros(self.n_ue, dtype=np.float64)
+        interference = np.zeros(self.n_ue, dtype=np.float64)
+        serving_rrh = np.full(self.n_ue, -1, dtype=np.int64)
         active_indices = np.where(active_mask)[0]
 
         if len(active_indices) == 0:
-            return sinr  # All RRHs OFF -> zero signal
+            return signal, interference, serving_rrh  # All RRHs OFF -> zero signal
 
         for u in range(self.n_ue):
             # Calculate received power from each active RRH to user u
             channel_mag_sq = np.abs(self.channel_gains[active_indices, u]) ** 2
             rx_powers = channel_mag_sq * power[active_indices]
 
-            best_idx = np.argmax(rx_powers)
-            signal_power = rx_powers[best_idx]
-            interference_power = np.sum(rx_powers) - signal_power
+            best_local_idx = np.argmax(rx_powers)
+            signal[u] = rx_powers[best_local_idx]
+            interference[u] = np.sum(rx_powers) - signal[u]
+            serving_rrh[u] = active_indices[best_local_idx]
 
-            if signal_power <= 0.0:
-                sinr[u] = 0.0
-            else:
-                sinr[u] = signal_power / (interference_power + self.noise_power_w)
+        return signal, interference, serving_rrh
 
-        return sinr
+    def _compute_sinr(self, active_mask: np.ndarray, power: np.ndarray) -> np.ndarray:
+        """Compute Signal-to-Interference-plus-Noise Ratio (SINR) for each user.
+
+        SINR_u = S_u / (I_u + noise_power); see _signal_interference for how the
+        serving RRH, signal, and interference terms are derived.
+        """
+        signal, interference, _ = self._signal_interference(active_mask, power)
+        sinr = np.where(
+            signal > 0.0, signal / (interference + self.noise_power_w), 0.0
+        )
+        return sinr.astype(np.float32)
