@@ -1,7 +1,7 @@
 # C-RAN Energy Optimization Thesis — Antigravity Agent Context
 
 ## Project Identity
-**Title**: Optimization of Energy Efficient Cloud Radio Access Network for 5G Using Deep Deterministic Policy Gradient Algorithm  
+**Title**: Optimization of Energy Efficient Cloud Radio Access Network for 5G Using a Branching Multi-Pass Parameterized Deep Q-Network with Twin Critics (Branching MP-DQN + TD3)  
 **Candidate**: Gabriel Kwame Freeman  
 **Degree**: MPhil (Master of Philosophy)  
 **Institution**: [University Name]  
