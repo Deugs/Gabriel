@@ -150,13 +150,17 @@ def analyze_convergence(
     )
 
     for algo, m in analysis_report["algorithms"].items():
-        ttest_info = analysis_report["paired_ttests"].get(algo, {})
-        p_val_str = (
-            f"{ttest_info.get('p_value', 1.0):.4f}" if ttest_info else "N/A (Proposed)"
-        )
-        d_val_str = (
-            f"{ttest_info.get('cohens_d', 0.0):.3f}" if ttest_info else "N/A (Proposed)"
-        )
+        if algo == proposed_algo:
+            p_val_str = "N/A (Proposed)"
+            d_val_str = "N/A (Proposed)"
+        else:
+            ttest_info = analysis_report["paired_ttests"].get(algo, {})
+            if ttest_info:
+                p_val_str = f"{ttest_info['p_value']:.4f}"
+                d_val_str = f"{ttest_info['cohens_d']:.3f}"
+            else:
+                p_val_str = "N/A (insufficient data)"
+                d_val_str = "N/A (insufficient data)"
         qos_pct = m["mean_qos_rate"] * 100
 
         latex_content += (
