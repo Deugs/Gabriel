@@ -19,7 +19,7 @@
 
 ## Project at a Glance
 
-**Title**: Optimization of Energy Efficient Cloud Radio Access Network for 5G Using Deep Deterministic Policy Gradient Algorithm
+**Title**: Optimization of Energy Efficient Cloud Radio Access Network for 5G Using a Branching Multi-Pass Parameterized Deep Q-Network with Twin Critics (Branching MP-DQN + TD3)
 
 **Status**: Incomplete draft — major restructuring required
 
