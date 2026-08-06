@@ -84,11 +84,17 @@ class CRANEnv(gym.Env):
         self.gamma_switch = float(getattr(reward_cfg, "gamma_switch", 0.5))
 
         # Instantiate physical models
+        channel_cfg = getattr(cfg, "channel", cfg)
         self.channel = ChannelModel(
             n_rrh=self.n_rrh,
             n_ue=self.n_ue,
             carrier_freq_ghz=self.carrier_freq_ghz,
             bandwidth_mhz=self.bandwidth_mhz,
+            path_loss_exponent=float(getattr(channel_cfg, "path_loss_exponent", 3.5)),
+            shadowing_std_db=float(getattr(channel_cfg, "shadowing_std_db", 8.0)),
+            correlation_coeff=float(
+                getattr(channel_cfg, "correlation_coefficient", 0.9)
+            ),
         )
 
         traffic_cfg = getattr(cfg, "traffic", cfg)
@@ -100,9 +106,22 @@ class CRANEnv(gym.Env):
             profile=str(getattr(traffic_cfg, "profile", "weekday_urban")),
         )
 
+        rrh_power_cfg = getattr(power_cfg, "rrh", power_cfg)
+        bbu_cfg = getattr(power_cfg, "bbu", power_cfg)
+        fronthaul_cfg = getattr(power_cfg, "fronthaul", power_cfg)
         self.power = PowerModel(
             n_rrh=self.n_rrh,
             n_bbu=self.n_bbu,
+            p_active_w=float(getattr(rrh_power_cfg, "p_active_w", 6.8)),
+            p_sleep_w=float(getattr(rrh_power_cfg, "p_sleep_w", 4.3)),
+            p_switch_w=float(getattr(rrh_power_cfg, "p_switch_w", 3.0)),
+            pa_efficiency=float(getattr(rrh_power_cfg, "pa_efficiency", 0.25)),
+            p_stat_w=float(getattr(bbu_cfg, "p_stat_w", 175.0)),
+            p_dyn_w=float(getattr(bbu_cfg, "p_dyn_w", 250.0)),
+            delta_p=float(getattr(bbu_cfg, "delta_p", 0.44)),
+            p_olt_w=float(getattr(fronthaul_cfg, "p_olt_w", 20.0)),
+            p_onu_active_w=float(getattr(fronthaul_cfg, "p_onu_active_w", 5.0)),
+            p_onu_sleep_w=float(getattr(fronthaul_cfg, "p_onu_sleep_w", 0.5)),
         )
 
         # State dimensions: gains (R*U) + mask (R) + demands (U) + prev_power (1) + hour (1)
