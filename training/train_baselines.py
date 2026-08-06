@@ -174,7 +174,7 @@ def run_baseline_benchmarks(
             }
             algo_results.append(seed_summary)
 
-            qos_pct = float(str(seed_summary["qos_satisfaction_rate"])) * 100
+            qos_pct = seed_summary["qos_satisfaction_rate"] * 100
             print(
                 f"Algo: {algo:8s} | Seed: {seed:4d} | "
                 f"Reward: {seed_summary['mean_reward']:8.2f} | "
