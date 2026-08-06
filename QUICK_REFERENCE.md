@@ -36,13 +36,15 @@ python training/train_hybrid.py --config config/default.yaml --seed 42
 # Run all baselines
 python training/train_baselines.py --config config/default.yaml
 
-# Generate figures
+# Generate figures (planned — evaluation/generate_figures.py not yet implemented;
+# see evaluation/plot_utils.py's individual plotting functions for what exists today)
 python evaluation/generate_figures.py --results-dir data/results/
 
-# Build thesis
+# Build thesis (planned — thesis/main.tex not yet written; only thesis/figures/
+# and thesis/tables/ output targets exist so far)
 cd thesis && pdflatex main.tex && bibtex main && pdflatex main.tex
 
-# Pre-submission check
+# Pre-submission check (planned — scripts/pre_submission.sh not yet implemented)
 bash scripts/pre_submission.sh
 ```
 
@@ -66,7 +68,7 @@ bash scripts/pre_submission.sh
 | Issue | Who | How |
 |-------|-----|-----|
 | Algorithm not converging | Methodology Validator | Check hooks.md debugging checklist |
-| Code-text mismatch | Code Reviewer | Run scripts/check_code_text_consistency.py |
+| Code-text mismatch | Code Reviewer | Manually diff against docs/equation_code_mapping.md (scripts/check_code_text_consistency.py is planned — not yet implemented) |
 | Missing references | Literature Curator | Check BibTeX; search recent papers |
 | Scope creep | Thesis Architect | Review rules.md Scope Boundary Rule |
 | Behind schedule | Gap Analyst | Re-prioritize per workflow.md risk table |
