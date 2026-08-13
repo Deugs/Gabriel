@@ -206,7 +206,7 @@ Two active research directions are related to this thesis but deliberately not a
 
 Downlink transmission only; a single BBU pool; a single centralized DRL agent; uplink, multi-pool scenarios and multi-agent RL are out of scope.
 
-Evaluation is simulation-based (MATLAB, consistent with the existing simulation work); no physical or SDR testbed is used.
+Evaluation is simulation-based (Python: Gymnasium environment, PyTorch agents — see `cran_env/`, `agents/`); no physical or SDR testbed is used.
 
 Channel state information is assumed available to the BBU pool at training time. The CSI-robustness evaluation added in Section 12.5 (S3) is a post-hoc *evaluation* of a policy trained under this assumption — it stress-tests, but does not remove, the perfect-CSI assumption, so it does not expand the thesis scope under the Scope Boundary Rule (`docs/rules.md` §6); training under imperfect CSI remains future work.
 
@@ -380,7 +380,7 @@ Exploration uses two mechanisms: epsilon-greedy (decayed) for the R discrete bra
 
 11. O-RAN Positioning (new, S1)
 
-Even though the evaluation environment (MATLAB, Section 8) does not implement O-RAN's actual interfaces, the trained SAC-DDQN-lineage policy maps naturally onto O-RAN's split-control architecture, and stating this costs nothing in implementation while materially increasing the work's relevance:
+Even though the evaluation environment (Python/Gymnasium, Section 8) does not implement O-RAN's actual interfaces, the trained Branching MP-DQN + TD3 policy maps naturally onto O-RAN's split-control architecture, and stating this costs nothing in implementation while materially increasing the work's relevance:
 
 - The **discrete decision** k_r(t) (RRH on/off) is a configuration-management-style action with a naturally slower cadence — exactly the kind of decision O-RAN routes through the **O1 interface** from the Non-RT RIC (minutes-to-hours control loop), consistent with how Bordin et al. (2025, §4.3) frame RF-frontend activation/deactivation in their O-RAN DRL work.
 - The **continuous decision** x_r(t) = (p_r(t), β_r(t)) (transmit power, bandwidth share) is a faster, per-slot control action — the kind of decision O-RAN routes through the **E2 interface** between the Near-RT RIC and E2 nodes (10 ms–1 s control loop).
@@ -405,18 +405,18 @@ The radio and power-model parameters are unchanged from Chapter 3 and trace back
 | Noise power σ² / Bandwidth B | −102 dBm / 10 MHz | Unchanged (Iqbal et al., 2021, Table 2) |
 | RRH active / sleep / switch power | 6.8 W / 4.3 W / 3 W | Unchanged |
 | RRHs (scalability sweep) | 5, 12, 20, 35, 50 | Branching keeps output size linear (2R) across this range; R=50 is a stretch goal (Section 15) |
-| BBUs / Users (primary scenario) | B = 4 / U = 20 | Re-run Iqbal's R=5,U=2 and R=12,U=4 scenarios too, for direct comparability |
-| Replay buffer N_D | 1×10⁵ | Unchanged |
-| Mini-batch / training episodes | 64 / 1000 | Unchanged |
+| BBUs / Users (primary scenario) | B = 3 / U = 10 (`config/default.yaml`, R=12) | Re-run Iqbal's R=5,U=2 and R=12,U=4 scenarios too, for direct comparability |
+| Replay buffer N_D | 1×10⁶ | `config/default.yaml`'s `buffer_size` |
+| Mini-batch / training episodes | 256 / set per experiment | `config/default.yaml`'s `batch_size`; episode count is a per-run CLI arg (`--episodes`), not a fixed default — `max_episodes: 5000` is only an upper cap |
 | Discount factor γ | 0.99 | Standard DDPG/TD3 value |
 | Soft-update rate τ / actor delay d | 0.005 / every 2 critic updates | TD3 defaults |
-| Learning rate (branches / continuous net) | 1×10⁻³ / 1×10⁻⁴ | Branch (Q) network typically tolerates a higher rate |
-| Discrete exploration | ε-greedy, 1.0→0.05 decayed over training | — |
+| Learning rate (branches / continuous net) | 1×10⁻⁴ / 3×10⁻⁴ | `config/default.yaml`'s `lr_discrete`/`lr_actor` |
+| Discrete exploration | ε-greedy, 1.0→0.01 decayed over training | `config/default.yaml`'s `epsilon_end` |
 | Continuous exploration | Gaussian, σ=0.1·P_max (decayed) | TD3-style |
 | Random seeds per method per scenario | **10** (revised from 5, S4) | See Section 12.4 |
 | CSI perturbation levels (evaluation-only, S3) | σ ∈ {0, 0.01, 0.05, 0.1} | See Section 12.5 |
 
-MATLAB's Reinforcement Learning Toolbox supports custom multi-headed agents; the branching/multi-pass/twin-critic combination is not a single built-in agent type, so the branch heads, multi-pass masking and twin-critic loss need custom implementation regardless of language choice.
+PyTorch (the actual implementation language, see `agents/branching_mp_dqn.py`) has no single built-in agent type for the branching/multi-pass/twin-critic combination either; the branch heads, multi-pass masking and twin-critic loss are implemented as custom modules regardless of framework choice.
 
 12.3  Performance metrics (extended per A3, A5)
 
