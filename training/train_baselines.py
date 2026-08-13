@@ -134,6 +134,7 @@ def run_baseline_benchmarks(
             ep_powers = []
             ep_qos_rates = []
             ep_active_rrhs = []
+            ep_switching_events = []
 
             for ep in range(episodes):
                 obs, _ = env.reset()
@@ -141,6 +142,7 @@ def run_baseline_benchmarks(
                 powers = []
                 qos_flags = []
                 actives = []
+                switches = []
 
                 done = False
                 while not done:
@@ -178,6 +180,7 @@ def run_baseline_benchmarks(
                         1.0 if info.get("qos_violations_count", 0) == 0 else 0.0
                     )
                     actives.append(info.get("active_rrhs", 0))
+                    switches.append(info.get("switching_events", 0))
 
                     obs = next_obs
                     done = terminated or truncated
@@ -186,6 +189,7 @@ def run_baseline_benchmarks(
                 ep_powers.append(float(np.mean(powers)))
                 ep_qos_rates.append(float(np.mean(qos_flags)))
                 ep_active_rrhs.append(float(np.mean(actives)))
+                ep_switching_events.append(float(np.mean(switches)))
 
             seed_summary: Dict[str, Any] = {
                 "algorithm": algo,
@@ -195,6 +199,7 @@ def run_baseline_benchmarks(
                 "mean_power_w": float(np.mean(ep_powers)),
                 "qos_satisfaction_rate": float(np.mean(ep_qos_rates)),
                 "mean_active_rrhs": float(np.mean(ep_active_rrhs)),
+                "mean_switching_events": float(np.mean(ep_switching_events)),
             }
             algo_results.append(seed_summary)
 

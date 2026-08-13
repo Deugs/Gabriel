@@ -51,6 +51,7 @@ def evaluate_agent(
     eval_powers = []
     eval_qos_rates = []
     eval_active_rrhs = []
+    eval_switching_events = []
 
     for ep in range(eval_episodes):
         obs, _ = env.reset(seed=1000 + ep)
@@ -58,6 +59,7 @@ def evaluate_agent(
         ep_power = []
         ep_qos = []
         ep_active = []
+        ep_switch = []
 
         done = False
         while not done:
@@ -67,12 +69,14 @@ def evaluate_agent(
             ep_power.append(info.get("total_power_w", 0.0))
             ep_qos.append(1.0 if info.get("qos_violations_count", 0) == 0 else 0.0)
             ep_active.append(info.get("active_rrhs", 0))
+            ep_switch.append(info.get("switching_events", 0))
             done = terminated or truncated
 
         eval_rewards.append(ep_reward)
         eval_powers.append(float(np.mean(ep_power)))
         eval_qos_rates.append(float(np.mean(ep_qos)))
         eval_active_rrhs.append(float(np.mean(ep_active)))
+        eval_switching_events.append(float(np.mean(ep_switch)))
 
     return {
         "eval_mean_reward": float(np.mean(eval_rewards)),
@@ -80,6 +84,7 @@ def evaluate_agent(
         "eval_mean_power_w": float(np.mean(eval_powers)),
         "eval_qos_satisfaction_rate": float(np.mean(eval_qos_rates)),
         "eval_mean_active_rrhs": float(np.mean(eval_active_rrhs)),
+        "eval_mean_switching_events": float(np.mean(eval_switching_events)),
     }
 
 
@@ -139,6 +144,7 @@ def train_hybrid_agent(
         "episode_powers": [],
         "qos_rates": [],
         "active_rrhs": [],
+        "switching_events": [],
         "critic_losses": [],
         "eval_history": [],
     }
@@ -153,6 +159,7 @@ def train_hybrid_agent(
         ep_powers = []
         ep_qos = []
         ep_active = []
+        ep_switch = []
         critic_loss_list = []
 
         done = False
@@ -183,6 +190,7 @@ def train_hybrid_agent(
             ep_powers.append(info.get("total_power_w", 0.0))
             ep_qos.append(1.0 if info.get("qos_violations_count", 0) == 0 else 0.0)
             ep_active.append(info.get("active_rrhs", 0))
+            ep_switch.append(info.get("switching_events", 0))
 
             obs = next_obs
             done = terminated or truncated
@@ -191,12 +199,14 @@ def train_hybrid_agent(
         mean_power = float(np.mean(ep_powers)) if ep_powers else 0.0
         qos_rate = float(np.mean(ep_qos)) if ep_qos else 0.0
         mean_active = float(np.mean(ep_active)) if ep_active else 0.0
+        mean_switching = float(np.mean(ep_switch)) if ep_switch else 0.0
         mean_loss = float(np.mean(critic_loss_list)) if critic_loss_list else 0.0
 
         history["episode_rewards"].append(float(ep_reward))
         history["episode_powers"].append(mean_power)
         history["qos_rates"].append(qos_rate)
         history["active_rrhs"].append(mean_active)
+        history["switching_events"].append(mean_switching)
         history["critic_losses"].append(mean_loss)
 
         if use_wandb:
@@ -207,6 +217,7 @@ def train_hybrid_agent(
                     "train/mean_power_w": mean_power,
                     "train/qos_satisfaction_rate": qos_rate,
                     "train/mean_active_rrhs": mean_active,
+                    "train/mean_switching_events": mean_switching,
                     "train/critic_loss": mean_loss,
                 },
                 step=ep,
@@ -229,7 +240,8 @@ def train_hybrid_agent(
                 f"Eval Reward: {eval_metrics['eval_mean_reward']:8.2f} | "
                 f"Power: {eval_metrics['eval_mean_power_w']:6.1f}W | "
                 f"QoS: {eval_metrics['eval_qos_satisfaction_rate']*100:5.1f}% | "
-                f"Active RRHs: {eval_metrics['eval_mean_active_rrhs']:4.1f}/{env.n_rrh}"
+                f"Active RRHs: {eval_metrics['eval_mean_active_rrhs']:4.1f}/{env.n_rrh} | "
+                f"Switches/step: {eval_metrics['eval_mean_switching_events']:4.2f}"
             )
 
             if use_wandb:
@@ -261,6 +273,11 @@ def train_hybrid_agent(
         ),
         "final_qos_rate": (
             history["eval_history"][-1]["eval_qos_satisfaction_rate"]
+            if history["eval_history"]
+            else 0.0
+        ),
+        "final_switching_events": (
+            history["eval_history"][-1]["eval_mean_switching_events"]
             if history["eval_history"]
             else 0.0
         ),
@@ -304,6 +321,7 @@ def train_hybrid_agent(
                 "summary/final_eval_reward": summary["final_eval_reward"],
                 "summary/final_eval_power_w": summary["final_eval_power_w"],
                 "summary/final_qos_rate": summary["final_qos_rate"],
+                "summary/final_switching_events": summary["final_switching_events"],
                 "summary/total_training_time_sec": elapsed_time,
             }
         )
