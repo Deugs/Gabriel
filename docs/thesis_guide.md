@@ -160,20 +160,23 @@ s_t = [h_{1,1}(t), ..., h_{R,U}(t),    # Channel gains (flattened)
 
 **Action Space**:
 ```
-a_t = (v(t+1), p(t))
-where v(t+1) in {0,1}^R    # Discrete: RRH on/off decisions
-      p(t) in [0, P_max]^R  # Continuous: transmit power per RRH
+a_t = (v(t+1), p(t), beta(t))
+where v(t+1)  in {0,1}^R    # Discrete: RRH on/off decisions
+      p(t)    in [0, P_max]^R  # Continuous: transmit power per RRH
+      beta(t) in [0, 1]^R      # Continuous: bandwidth share per RRH (sums to 1 over active RRHs)
 ```
 
-**Reward Function**:
+**Reward Function** (Concept Note v4.0 Section 10.2 — energy-efficiency ratio, not a raw power penalty):
 ```
-r_t = -alpha * P_total(t) 
-      - beta * sum_{u=1}^U max(0, D_u(t) - C_u(t)) 
-      - gamma * sum_{r=1}^R |v_r(t) - v_r(t-1)| * P_switch
+r_t = alpha * EE(t)
+      - beta * sum_{u=1}^U max(0, D_u(t) - C_u(t))
+      - gamma * sum_{r=1}^R |v_r(t) - v_r(t-1)|
+
+where EE(t) = C_total(t) / P_total(t)   # Mbit/Joule, C_total(t) = sum_u C_u(t)
 ```
 
 Where:
-- alpha: energy weight (normalize by max power)
+- alpha: EE(t) weight (default 1.0 recovers the note's literal formula)
 - beta: QoS violation penalty (must dominate if QoS is hard constraint)
 - gamma: switching cost weight (prevents oscillation)
 
