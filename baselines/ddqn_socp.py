@@ -22,13 +22,20 @@ class DDQNSOCPBaseline:
         n_ue: int,
         p_max_w: float = 1.0,
         config: Optional[Union[dict, Any]] = None,
+        csi_uncertainty: float = 0.05,
     ):
         self.n_rrh = n_rrh
         self.n_ue = n_ue
         self.p_max_w = p_max_w
         self.ddqn = DDQNAgent(state_dim=state_dim, n_rrh=n_rrh, p_max_w=p_max_w)
+        # csi_uncertainty > 0 makes Stage 2 solve a genuine second-order cone
+        # program (robust worst-case SINR constraint) rather than a plain
+        # LP — see ConvexPowerBaseline.solve_power_allocation(). This is what
+        # distinguishes this baseline (labeled "SOCP") from the plain
+        # ConvexPowerBaseline used standalone as the "Convex" baseline, which
+        # stays LP-based (nominal channel, csi_uncertainty=0.0 default).
         self.convex_solver = ConvexPowerBaseline(
-            n_rrh=n_rrh, n_ue=n_ue, p_max_w=p_max_w
+            n_rrh=n_rrh, n_ue=n_ue, p_max_w=p_max_w, csi_uncertainty=csi_uncertainty
         )
 
     def select_action(
