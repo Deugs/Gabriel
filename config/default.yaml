@@ -76,20 +76,15 @@ algorithm:
   # Learning rates
   lr_discrete: 1.0e-4
   lr_actor: 3.0e-4
-  lr_critic: 3.0e-4
-  lr_alpha: 1.0e-4         # SAC entropy temperature
+  lr_critic: 3.0e-4        # Used by the pure-DDPG baseline (agents/ddpg_agent.py)
 
   # Network architecture
   hidden_dims: [256, 256]
   activation: "relu"
   use_layer_norm: true
 
-  # SAC parameters
   gamma: 0.99
   tau: 0.005               # Soft update rate
-  alpha: 0.2               # Initial entropy temperature
-  auto_tune_alpha: true
-  target_entropy: "auto"   # -dim(action)
 
   # DQN parameters
   epsilon_start: 1.0
