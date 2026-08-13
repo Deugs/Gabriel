@@ -568,6 +568,8 @@ Total estimated duration: about 20 weeks from approval of this document — thre
 | 5 | Conclusion & Future Work | Not started | Write after Chapter 4 results are available; flag the O1/E2 timescale-reconciliation item (Section 11) and the HySoft/HyAR follow-up comparison (Section 10.1) as future work |
 | — | References | Partial / inconsistent numbering | Consolidate into one bibliography including the nine new references in Section 16 (§17 below); do a final institutional-access check on the HySoft citation before finalizing (Section 4.2) — its authorship is corroborated but not primary-source-confirmed |
 
+**Where this content actually lives**: the drafted Chapters 1–3 and the References section above are in `manuscript/MPhil thesis.docx`, not `thesis/chapters/` — the latter is an intentionally empty scaffold (`.gitkeep` only) reserved for the final consolidated LaTeX source once Chapter 4's results are in and Chapters 1–3 are folded in per the "Remaining work" column above. Treat the `.docx` as the authoritative draft until that consolidation happens.
+
 17. Key References
 
 Iqbal, A., Tham, M.-L., & Chang, Y. C. (2021). Double Deep Q-Network-Based Energy-Efficient Resource Allocation in Cloud Radio Access Network. IEEE Access, 9, 20440–20449. https://doi.org/10.1109/ACCESS.2021.3054909

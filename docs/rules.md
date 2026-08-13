@@ -95,7 +95,7 @@ docker compose run --rm train hybrid --config config/default.yaml --seed 42
 3. Code-text consistency: Equations match implementation
 4. Reproducibility: Experiment runnable from config
 5. Baseline comparison: Results compared against ≥2 baselines
-6. Statistical significance: n≥5 seeds, confidence intervals reported
+6. Statistical significance: n≥10 seeds (revised from 5 per supervisor review, Concept Note v3.0/v4.0 §12.4 — see Rule 3's seed list above), confidence intervals reported
 7. Peer review: Signed off by supervisor or designated reviewer
 
 ## 8. Version Control Rule
