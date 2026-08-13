@@ -3,6 +3,7 @@
 from evaluation.ablation import run_ablation_study
 from evaluation.convergence import analyze_convergence, compute_cohens_d
 from evaluation.csi_robustness import run_csi_robustness_evaluation
+from evaluation.demand_response import run_demand_response_evaluation
 from evaluation.generalization import run_generalization_evaluation
 from evaluation.latency_benchmark import run_latency_benchmark
 from evaluation.plot_utils import (
@@ -13,6 +14,7 @@ from evaluation.plot_utils import (
     plot_learning_curves,
     plot_scalability_analysis,
 )
+from evaluation.power_time_profile import run_power_time_profile_evaluation
 from evaluation.scalability import analyze_scalability
 
 __all__ = [
@@ -21,8 +23,10 @@ __all__ = [
     "run_ablation_study",
     "analyze_scalability",
     "run_csi_robustness_evaluation",
+    "run_demand_response_evaluation",
     "run_generalization_evaluation",
     "run_latency_benchmark",
+    "run_power_time_profile_evaluation",
     "compute_confidence_interval",
     "plot_learning_curves",
     "plot_energy_efficiency_bar",
