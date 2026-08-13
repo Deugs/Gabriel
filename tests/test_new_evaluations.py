@@ -1,13 +1,16 @@
-"""Short-run tests for the CSI-robustness, generalization, and inference-latency
-evaluation modules added per Concept Note v3.0/v4.0 Section 12.3/12.5 (S3, A3, A5).
+"""Short-run tests for the CSI-robustness, generalization, inference-latency,
+demand-response, and power/time-profile evaluation modules added per Concept
+Note v3.0/v4.0 Section 12.3/12.5 (S3, A3, A5).
 """
 
 from pathlib import Path
 
 from evaluation import (
     run_csi_robustness_evaluation,
+    run_demand_response_evaluation,
     run_generalization_evaluation,
     run_latency_benchmark,
+    run_power_time_profile_evaluation,
 )
 
 
@@ -72,3 +75,43 @@ def test_latency_benchmark_short_run(tmp_path):
     # Branching scales to R=25 with no cap.
     assert results["branching_mp_dqn"][25] is not None
     assert (Path(fig_dir) / "latency_benchmark.pdf").exists()
+
+
+def test_demand_response_short_run(tmp_path):
+    fig_dir = str(tmp_path / "figures")
+
+    results = run_demand_response_evaluation(
+        config_path="config/small_network.yaml",
+        methods=["branching_mp_dqn", "ddqn"],
+        demand_multipliers=[0.5, 1.5],
+        train_episodes=2,
+        eval_episodes=1,
+        batch_size=16,
+        save_dir=fig_dir,
+    )
+
+    assert set(results.keys()) == {"branching_mp_dqn", "ddqn"}
+    for method_results in results.values():
+        assert set(method_results.keys()) == {0.5, 1.5}
+        for demand_metrics in method_results.values():
+            assert "ee_mbit_per_joule" in demand_metrics
+            assert "mean_power_w" in demand_metrics
+    assert (Path(fig_dir) / "demand_response_ee.pdf").exists()
+    assert (Path(fig_dir) / "demand_response_power.pdf").exists()
+
+
+def test_power_time_profile_short_run(tmp_path):
+    fig_dir = str(tmp_path / "figures")
+
+    results = run_power_time_profile_evaluation(
+        config_path="config/small_network.yaml",
+        methods=["branching_mp_dqn"],
+        train_episodes=2,
+        eval_episodes=2,
+        batch_size=16,
+        save_dir=fig_dir,
+    )
+
+    assert "branching_mp_dqn" in results
+    assert set(results["branching_mp_dqn"].keys()) == set(range(24))
+    assert (Path(fig_dir) / "power_time_profile.pdf").exists()
