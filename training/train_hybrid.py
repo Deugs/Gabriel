@@ -274,6 +274,19 @@ def train_hybrid_agent(
         with open(out_path / "summary.json", "w") as f:
             json.dump(summary, f, indent=2)
 
+        # Save the exact config used, plus the run-level args not captured in
+        # cfg itself, so this checkpoint/summary is reproducible on its own
+        # (Reproducibility Commitment, Concept Note v4.0 Section 12.10).
+        run_record = dict(cfg)
+        run_record["_run"] = {
+            "config_path": config_path,
+            "seed": seed,
+            "episodes": episodes,
+            "eval_freq": eval_freq,
+        }
+        with open(out_path / "config.yaml", "w") as f:
+            yaml.dump(run_record, f)
+
         torch.save(
             {
                 "encoder": agent.encoder.state_dict(),
