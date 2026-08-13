@@ -104,13 +104,24 @@ def train_hybrid_agent(
         cfg = yaml.safe_load(f)
 
     logging_cfg = cfg.get("logging", {})
+    use_wandb_explicit = use_wandb is not None
     if use_wandb is None:
         use_wandb = logging_cfg.get("use_wandb", False)
     if use_wandb and wandb is None:
-        raise RuntimeError(
-            "use_wandb=True but the 'wandb' package is not installed. "
-            "Install it with `pip install wandb` or disable W&B logging."
+        if use_wandb_explicit:
+            raise RuntimeError(
+                "use_wandb=True but the 'wandb' package is not installed. "
+                "Install it with `pip install wandb` or pass --no-wandb."
+            )
+        # W&B was only requested via the config default, not explicitly by
+        # the caller/CLI — don't let a missing optional package (e.g. in a
+        # lightweight test/CI environment) crash training outright.
+        print(
+            "W&B logging requested by config/default.yaml but the 'wandb' "
+            "package is not installed — continuing without it. Install it "
+            "with `pip install wandb`, or pass --no-wandb to silence this."
         )
+        use_wandb = False
     if use_wandb:
         if not os.environ.get("WANDB_API_KEY"):
             # Avoid hanging on an interactive login prompt in headless/remote
