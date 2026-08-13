@@ -75,6 +75,7 @@ def analyze_convergence(
     algo_scores: Dict[str, List[float]] = {}
     algo_powers: Dict[str, List[float]] = {}
     algo_qos: Dict[str, List[float]] = {}
+    algo_switching: Dict[str, List[float]] = {}
 
     for s_file in summary_files:
         try:
@@ -86,20 +87,24 @@ def analyze_convergence(
                 reward = float(data.get("final_eval_reward", 0.0))
                 power = float(data.get("final_eval_power_w", 0.0))
                 qos = float(data.get("final_qos_rate", 0.0))
+                switching = float(data.get("final_switching_events", 0.0))
 
                 algo_scores.setdefault(algo, []).append(reward)
                 algo_powers.setdefault(algo, []).append(power)
                 algo_qos.setdefault(algo, []).append(qos)
+                algo_switching.setdefault(algo, []).append(switching)
             elif isinstance(data, list):
                 for item in data:
                     algo = str(item.get("algorithm", "unknown"))
                     reward = float(item.get("mean_reward", 0.0))
                     power = float(item.get("mean_power_w", 0.0))
                     qos = float(item.get("qos_satisfaction_rate", 0.0))
+                    switching = float(item.get("mean_switching_events", 0.0))
 
                     algo_scores.setdefault(algo, []).append(reward)
                     algo_powers.setdefault(algo, []).append(power)
                     algo_qos.setdefault(algo, []).append(qos)
+                    algo_switching.setdefault(algo, []).append(switching)
         except Exception as e:
             print(f"Warning: Failed to parse {s_file}: {e}")
 
@@ -121,6 +126,7 @@ def analyze_convergence(
             "ci_95_upper": float(upper),
             "mean_power_w": float(np.mean(algo_powers.get(algo, [0.0]))),
             "mean_qos_rate": float(np.mean(algo_qos.get(algo, [0.0]))),
+            "mean_switching_events": float(np.mean(algo_switching.get(algo, [0.0]))),
         }
 
         if (
@@ -142,10 +148,10 @@ def analyze_convergence(
         "\\begin{table}[h]\n"
         "\\centering\n"
         "\\caption{Performance Comparison and Statistical Significance Analysis.}\n"
-        "\\begin{tabular}{lccccc}\n"
+        "\\begin{tabular}{lcccccc}\n"
         "\\hline\n"
         "Algorithm & Mean Reward (95\\% CI) & Mean Power (W) & "
-        "QoS Rate (\\%) & $p$-value (vs Proposed) & Cohen's $d$ \\\\\n"
+        "QoS Rate (\\%) & Switching Freq. & $p$-value (vs Proposed) & Cohen's $d$ \\\\\n"
         "\\hline\n"
     )
 
@@ -165,7 +171,8 @@ def analyze_convergence(
 
         latex_content += (
             f"{algo} & {m['mean_reward']:.2f} [{m['ci_95_lower']:.2f}, {m['ci_95_upper']:.2f}] & "
-            f"{m['mean_power_w']:.1f} & {qos_pct:.1f}\\% & {p_val_str} & {d_val_str} \\\\\n"
+            f"{m['mean_power_w']:.1f} & {qos_pct:.1f}\\% & "
+            f"{m['mean_switching_events']:.2f} & {p_val_str} & {d_val_str} \\\\\n"
         )
 
     latex_content += "\\hline\n\\end{tabular}\n\\end{table}\n"
