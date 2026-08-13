@@ -293,14 +293,18 @@ class CRANEnv(gym.Env):
         # Energy Efficiency EE(t) in Mbit / Joule
         ee_mbit_per_joule = total_throughput_mbps / (p_total + 1e-6)
 
-        # Scalar Reward Calculation (Energy + QoS Penalty + Switching Cost)
-        energy_penalty = self.alpha_energy * (p_total / 1000.0)  # Power in kW
+        # Scalar Reward: r(t) = EE(t) - lambda1*QoS_penalty - lambda2*switch_penalty
+        # (Concept Note v4.0 Section 10.2). alpha_energy scales the EE(t) term
+        # itself (default 1.0 recovers the note's literal formula) rather than
+        # a raw power penalty, since the objective is to maximize energy
+        # efficiency (Mbit/Joule), not merely minimize power consumption.
+        energy_efficiency_term = self.alpha_energy * ee_mbit_per_joule
         qos_penalty = self.beta_qos * (
             np.sum(qos_violations_bps) / 1e6
         )  # QoS shortfall in Mbps
         switch_penalty = self.gamma_switch * exact_switching_count
 
-        reward = -(energy_penalty + qos_penalty + switch_penalty)
+        reward = energy_efficiency_term - qos_penalty - switch_penalty
 
         # Update environment state for next step
         self.active_mask = rrh_on
