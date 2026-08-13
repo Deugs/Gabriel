@@ -192,6 +192,19 @@ def run_baseline_benchmarks(
         with open(out_path / "summary.json", "w") as f:
             json.dump(algo_results, f, indent=2)
 
+        # Save the exact config and run-level args used, so this summary is
+        # reproducible on its own (Reproducibility Commitment, Concept Note
+        # v4.0 Section 12.10).
+        run_record = dict(cfg)
+        run_record["_run"] = {
+            "config_path": config_path,
+            "algorithm": algo,
+            "seeds": seeds,
+            "episodes": episodes,
+        }
+        with open(out_path / "config.yaml", "w") as f:
+            yaml.dump(run_record, f)
+
     gc.collect()
     return results
 
