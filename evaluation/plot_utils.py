@@ -1,7 +1,7 @@
 """Publication-Quality Plotting Utilities for C-RAN Thesis Evaluation."""
 
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -175,20 +175,24 @@ def plot_scalability_analysis(
 
 
 def plot_degradation_curve(
-    curve_dict: Dict[str, Dict[float, float]],
+    curve_dict: Dict[str, Dict[Any, float]],
     xlabel: str = "Perturbation level",
     ylabel: str = "Energy Efficiency (Mbit/Joule)",
     title: str = "Robustness Degradation Curve",
     save_path: Optional[str] = None,
 ):
-    """Plot a metric-vs-perturbation-level degradation curve per method.
+    """Plot a metric-vs-swept-x-value curve per method.
 
-    Used for the CSI-robustness (Concept Note v3.0/v4.0 Section 12.5, S3) and
-    cross-profile generalization (Section 12.3, A5) evaluations, both of which
-    report a metric as a function of a single scalar perturbation/condition.
+    Used for the CSI-robustness (Concept Note v3.0/v4.0 Section 12.5, S3),
+    cross-profile generalization (Section 12.3, A5), demand-response
+    (Section 12.3, demand_response.py), and power-vs-time-of-day
+    (Section 12.3, power_time_profile.py) evaluations — all of which report a
+    metric as a function of a single swept x-value (a perturbation level, a
+    demand multiplier, or an integer hour-of-day).
 
     Args:
-        curve_dict: {method_name: {x_value: y_value, ...}, ...}.
+        curve_dict: {method_name: {x_value: y_value, ...}, ...}. x_value may
+            be int (e.g. hour-of-day) or float (e.g. a perturbation sigma).
     """
     setup_matplotlib_style()
     fig, ax = plt.subplots(figsize=(7, 4.5))
