@@ -97,6 +97,10 @@ algorithm:
   epsilon_decay: 0.995     # Per episode
   target_update_freq: 1    # Update target every N critic updates
 
+  # Continuous exploration noise (Section 12.2: Gaussian, sigma=0.1*P_max, decayed)
+  continuous_noise_std: 0.1
+  continuous_noise_std_end: 0.01
+
   # Training stability
   gradient_clip_norm: 1.0
   reward_scale: 1.0
