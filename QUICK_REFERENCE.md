@@ -26,6 +26,7 @@
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 pre-commit install
+export PYTHONPATH="$(pwd):$PYTHONPATH"  # no setup.py/pyproject.toml — needed for the commands below
 
 # Test environment
 pytest tests/test_env.py -v

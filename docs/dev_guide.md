@@ -17,6 +17,12 @@ pip install pytest black flake8 mypy
 
 # Optional: Jupyter for prototyping
 pip install jupyterlab ipywidgets
+
+# Required before running any of the commands below (or add to your shell
+# profile / venv activate script): there's no setup.py/pyproject.toml, so
+# `python training/train_hybrid.py` etc. won't find the top-level packages
+# (agents/, cran_env/, ...) without the repo root on PYTHONPATH.
+export PYTHONPATH="$(pwd):$PYTHONPATH"
 ```
 
 ### Repository Structure
