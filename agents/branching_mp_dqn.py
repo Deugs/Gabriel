@@ -222,6 +222,16 @@ class BranchingMPDQN:
         self.epsilon_end = float(get_val("epsilon_end", 0.01))
         self.epsilon_decay = float(get_val("epsilon_decay", 0.995))
 
+        # Continuous exploration noise (Section 12.2: "Gaussian, sigma=0.1*P_max
+        # (decayed)"). p_ratio/bw_share are already normalized to [0,1] as a
+        # fraction of P_max, so a std of 0.1 there is exactly "0.1*P_max" in
+        # absolute power units. Decays alongside epsilon (same rate, once per
+        # update() call) down to a small floor rather than vanishing entirely.
+        self.continuous_noise_std = float(get_val("continuous_noise_std", 0.1))
+        self.continuous_noise_std_end = float(
+            get_val("continuous_noise_std_end", 0.01)
+        )
+
         lr_branch = float(get_val("lr_discrete", 1e-3))
         lr_param = float(get_val("lr_actor", 1e-4))
         buffer_size = int(get_val("buffer_size", 100000))
@@ -290,10 +300,13 @@ class BranchingMPDQN:
                 q_vals_a, _ = self._multi_pass_q(self.twin_critic, state_t, cont_params)
                 rrh_on = q_vals_a[0].argmax(dim=-1).cpu().numpy()
 
-            # Continuous exploration noise
+            # Continuous exploration noise (decayed; applies to both continuous
+            # parameters, not just power)
             if not evaluate:
-                noise = torch.randn_like(p_ratio) * 0.05
-                p_ratio = torch.clamp(p_ratio + noise, 0.0, 1.0)
+                p_noise = torch.randn_like(p_ratio) * self.continuous_noise_std
+                p_ratio = torch.clamp(p_ratio + p_noise, 0.0, 1.0)
+                bw_noise = torch.randn_like(bw_share) * self.continuous_noise_std
+                bw_share = torch.clamp(bw_share + bw_noise, 0.0, 1.0)
 
             p_np = p_ratio[0].cpu().numpy() * self.p_max_w
             bw_np = bw_share[0].cpu().numpy()
@@ -314,6 +327,7 @@ class BranchingMPDQN:
                 "critic_loss": 0.0,
                 "param_loss": 0.0,
                 "epsilon": self.epsilon,
+                "continuous_noise_std": self.continuous_noise_std,
             }
 
         self.update_counter += 1
@@ -398,11 +412,15 @@ class BranchingMPDQN:
             self._soft_update(self.twin_critic_target, self.twin_critic)
 
         self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
+        self.continuous_noise_std = max(
+            self.continuous_noise_std_end, self.continuous_noise_std * self.epsilon_decay
+        )
 
         return {
             "critic_loss": float(critic_loss.item()),
             "param_loss": param_loss_val,
             "epsilon": float(self.epsilon),
+            "continuous_noise_std": float(self.continuous_noise_std),
         }
 
     def _soft_update(self, target: nn.Module, source: nn.Module):
