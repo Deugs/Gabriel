@@ -250,6 +250,29 @@ class BranchingMPDQN:
         self.memory = ParameterizedReplayBuffer(buffer_size)
         self.update_counter = 0
 
+    def _multi_pass_q(
+        self, critic: TwinBranchCritic, state: torch.Tensor, cont_params: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Evaluate every branch's Q-value via its own MP-DQN masked pass.
+
+        One forward pass per branch (R total, per critic evaluation): each
+        pass masks the critic to branch r's own (p_r, beta_r) only, and only
+        that pass's branch-r slice of the output is kept. This is what
+        removes the cross-talk P-DQN's single shared (or, as before this
+        fix, mean-pooled) parameter feature otherwise introduces between
+        unrelated RRHs (Bester et al., 2019) — Section 10.3/10.5 of the
+        concept note. Compute cost scales with R, as documented in Section
+        10.5/14 (the top flagged risk at large R).
+        """
+        batch_size = state.shape[0]
+        q_a = torch.zeros(batch_size, self.n_rrh, 2, device=self.device)
+        q_b = torch.zeros(batch_size, self.n_rrh, 2, device=self.device)
+        for r in range(self.n_rrh):
+            q_a_r, q_b_r = critic(state, cont_params, branch_mask_idx=r)
+            q_a[:, r, :] = q_a_r[:, r, :]
+            q_b[:, r, :] = q_b_r[:, r, :]
+        return q_a, q_b
+
     def select_action(
         self, obs: np.ndarray, evaluate: bool = False
     ) -> Dict[str, np.ndarray]:
@@ -264,7 +287,7 @@ class BranchingMPDQN:
             if not evaluate and random.random() < self.epsilon:
                 rrh_on = np.random.randint(0, 2, size=self.n_rrh)
             else:
-                q_vals_a, _ = self.twin_critic(state_t, cont_params)
+                q_vals_a, _ = self._multi_pass_q(self.twin_critic, state_t, cont_params)
                 rrh_on = q_vals_a[0].argmax(dim=-1).cpu().numpy()
 
             # Continuous exploration noise
@@ -323,8 +346,10 @@ class BranchingMPDQN:
             )
             next_cont_params = (next_cont_params + noise).clamp(0.0, 1.0)
 
-            # Evaluate next target discrete actions
-            next_q1, next_q2 = self.twin_critic_target(next_states, next_cont_params)
+            # Evaluate next target discrete actions (multi-pass, per branch)
+            next_q1, next_q2 = self._multi_pass_q(
+                self.twin_critic_target, next_states, next_cont_params
+            )
             next_disc_actions = next_q1.argmax(dim=-1)  # Double DQN target selection
 
             next_q_min = torch.min(
@@ -336,8 +361,8 @@ class BranchingMPDQN:
                 dim=-1, keepdim=True
             )
 
-        # --- 2. Critic Loss Computation ---
-        q1_curr, q2_curr = self.twin_critic(states, cont_params)
+        # --- 2. Critic Loss Computation (multi-pass, per branch) ---
+        q1_curr, q2_curr = self._multi_pass_q(self.twin_critic, states, cont_params)
         q1_sel = q1_curr.gather(-1, disc_actions.unsqueeze(-1)).squeeze(-1)
         q2_sel = q2_curr.gather(-1, disc_actions.unsqueeze(-1)).squeeze(-1)
 
@@ -358,7 +383,7 @@ class BranchingMPDQN:
             p_ratio, bw_share = self.param_net(feat)
             pred_params = torch.stack([p_ratio, bw_share], dim=-1)
 
-            q1_pred, _ = self.twin_critic(states, pred_params)
+            q1_pred, _ = self._multi_pass_q(self.twin_critic, states, pred_params)
             param_loss = -q1_pred.mean()
 
             self.param_opt.zero_grad()
