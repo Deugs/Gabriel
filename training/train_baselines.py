@@ -63,6 +63,7 @@ def run_baseline_benchmarks(
     for algo in algorithms:
         print(f"\n================ Running Benchmark: {algo.upper()} ================")
         algo_results = []
+        skipped = False
 
         for seed in seeds:
             set_seed(seed)
@@ -71,40 +72,63 @@ def run_baseline_benchmarks(
 
             # Instantiate baseline model
             model: Any
-            if algo == "all_on":
-                model = AllOnUniformBaseline(env.n_rrh, env.p_max_w)
-            elif algo == "greedy":
-                model = GreedyHeuristicBaseline(env.n_rrh, env.n_ue, env.p_max_w)
-            elif algo == "nmbs":
-                model = NMBSBinPackingBaseline(env.n_rrh, env.n_ue, env.p_max_w)
-            elif algo == "convex":
-                model = ConvexPowerBaseline(env.n_rrh, env.n_ue, env.p_max_w)
-            elif algo == "ddqn":
-                model = DDQNAgent(env.state_dim, env.n_rrh)
-            elif algo == "ann_gsbf":
-                model = ANNGSBFBaseline(env.n_rrh, env.n_ue, env.p_max_w)
-            elif algo == "ddqn_socp":
-                model = DDQNSOCPBaseline(
-                    state_dim=env.state_dim,
-                    n_rrh=env.n_rrh,
-                    n_ue=env.n_ue,
-                    p_max_w=env.p_max_w,
-                    config=cfg,
-                )
-            elif algo == "ddpg":
-                model = DDPGAgent(
-                    state_dim=env.state_dim, n_rrh=env.n_rrh, p_max_w=env.p_max_w, config=cfg
-                )
-            elif algo == "pdqn":
-                model = PDQNAgent(
-                    state_dim=env.state_dim, n_rrh=env.n_rrh, p_max_w=env.p_max_w, config=cfg
-                )
-            elif algo == "mpdqn":
-                model = MPDQNAgent(
-                    state_dim=env.state_dim, n_rrh=env.n_rrh, p_max_w=env.p_max_w, config=cfg
-                )
-            else:
-                raise ValueError(f"Unknown algorithm: {algo}")
+            try:
+                if algo == "all_on":
+                    model = AllOnUniformBaseline(env.n_rrh, env.p_max_w)
+                elif algo == "greedy":
+                    model = GreedyHeuristicBaseline(env.n_rrh, env.n_ue, env.p_max_w)
+                elif algo == "nmbs":
+                    model = NMBSBinPackingBaseline(env.n_rrh, env.n_ue, env.p_max_w)
+                elif algo == "convex":
+                    model = ConvexPowerBaseline(env.n_rrh, env.n_ue, env.p_max_w)
+                elif algo == "ddqn":
+                    model = DDQNAgent(env.state_dim, env.n_rrh)
+                elif algo == "ann_gsbf":
+                    model = ANNGSBFBaseline(env.n_rrh, env.n_ue, env.p_max_w)
+                elif algo == "ddqn_socp":
+                    model = DDQNSOCPBaseline(
+                        state_dim=env.state_dim,
+                        n_rrh=env.n_rrh,
+                        n_ue=env.n_ue,
+                        p_max_w=env.p_max_w,
+                        config=cfg,
+                    )
+                elif algo == "ddpg":
+                    model = DDPGAgent(
+                        state_dim=env.state_dim,
+                        n_rrh=env.n_rrh,
+                        p_max_w=env.p_max_w,
+                        config=cfg,
+                    )
+                elif algo == "pdqn":
+                    model = PDQNAgent(
+                        state_dim=env.state_dim,
+                        n_rrh=env.n_rrh,
+                        p_max_w=env.p_max_w,
+                        config=cfg,
+                    )
+                elif algo == "mpdqn":
+                    model = MPDQNAgent(
+                        state_dim=env.state_dim,
+                        n_rrh=env.n_rrh,
+                        p_max_w=env.p_max_w,
+                        config=cfg,
+                    )
+                else:
+                    raise ValueError(f"Unknown algorithm: {algo}")
+            except ValueError as exc:
+                # P-DQN/MP-DQN's flat joint discrete action space is
+                # intractable above MAX_N_RRH_FOR_FLAT_JOINT_ACTION (Section
+                # 10.3.1/12.1) — reported as a finding (matching
+                # evaluation/latency_benchmark.py's same graceful skip),
+                # not left to crash the whole benchmark run.
+                if algo in ("pdqn", "mpdqn"):
+                    print(
+                        f"  R={env.n_rrh:3d} | {algo:10s} | SKIPPED (intractable): {exc}"
+                    )
+                    skipped = True
+                    break
+                raise
 
             ep_rewards = []
             ep_powers = []
@@ -183,6 +207,10 @@ def run_baseline_benchmarks(
 
             del model, env
             gc.collect()
+
+        if skipped:
+            results[algo] = []
+            continue
 
         results[algo] = algo_results
 
