@@ -114,14 +114,19 @@ Gabriel/
 │   ├── all_on_uniform.py  # Baseline 1: All-ON uniform power
 │   ├── greedy_heuristic.py# Baseline 2: Greedy heuristic
 │   ├── nmbs_binpack.py    # Baseline 3: Al-Zubaedi's NMBS bin-packing
-│   ├── convex_power.py    # Baseline 4: CVXPY SOCP power allocation
+│   ├── convex_power.py    # Baseline 4: CVXPY/LP power allocation (nominal
+│   │                      # channel); also backs Baseline 5's Stage 2, where
+│   │                      # csi_uncertainty>0 makes it solve a genuine SOCP
 │   ├── ddqn_socp.py       # Baseline 5: Two-stage DDQN + SOCP (Iqbal et al., 2021)
-│   └── ann_gsbf.py        # Baseline 6: Supervised ANN + GSBF (Fathy et al., 2021)
+│   └── ann_gsbf.py        # Baseline 6: ANN + GSBF (Fathy et al., 2021) — ANN
+│                          # trained via training/train_ann_gsbf.py; falls
+│                          # back to a heuristic proxy if untrained
 │   # Baselines 7-9 (pure-DDPG, P-DQN, MP-DQN) live in agents/ alongside the
 │   # proposed method, per docs/workflow.md's Phase 2 convention (see above)
 ├── training/              # Training loops
 │   ├── train_hybrid.py
 │   ├── train_baselines.py
+│   ├── train_ann_gsbf.py  # Trains Baseline 6's ANN stage (offline-labelled)
 │   ├── run_extended_sweeps.py
 │   └── hyperparam_search.py
 ├── evaluation/            # Analysis and plotting
