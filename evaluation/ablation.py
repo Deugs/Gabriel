@@ -39,6 +39,7 @@ def run_ablation_study(
                 episodes=episodes,
                 eval_freq=episodes,
                 save_dir=None,
+                config_overrides=override,
             )
             variant_rewards.append(res["final_eval_reward"])
 

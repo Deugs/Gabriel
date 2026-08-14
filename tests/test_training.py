@@ -6,6 +6,7 @@ import yaml  # type: ignore[import-untyped]
 
 from training import (
     HyperparameterSearch,
+    apply_config_overrides,
     run_baseline_benchmarks,
     run_proxy_sensitivity_sweep,
     train_hybrid_agent,
@@ -43,6 +44,43 @@ def test_train_hybrid_agent_short_run(config_path, tmp_path):
     out_folder = Path(save_dir) / "branching_mp_dqn_seed42"
     assert (out_folder / "summary.json").exists()
     assert (out_folder / "final_model.pt").exists()
+
+
+def test_apply_config_overrides_updates_nested_section():
+    cfg = {"algorithm": {"lr_actor": 3.0e-4}, "reward": {"beta_qos": 10.0}}
+    updated = apply_config_overrides(cfg, {"lr_actor": 0.0, "beta_qos": 5.0})
+
+    assert updated["algorithm"]["lr_actor"] == 0.0
+    assert updated["reward"]["beta_qos"] == 5.0
+    # The input config must not be mutated.
+    assert cfg["algorithm"]["lr_actor"] == 3.0e-4
+    assert cfg["reward"]["beta_qos"] == 10.0
+
+
+def test_apply_config_overrides_no_overrides_is_a_no_op():
+    cfg = {"algorithm": {"lr_actor": 3.0e-4}}
+    assert apply_config_overrides(cfg, None) is cfg
+    assert apply_config_overrides(cfg, {}) is cfg
+
+
+def test_apply_config_overrides_rejects_unknown_key():
+    cfg = {"algorithm": {"lr_actor": 3.0e-4}}
+    with pytest.raises(ValueError):
+        apply_config_overrides(cfg, {"not_a_real_key": 1.0})
+
+
+def test_train_hybrid_agent_rejects_unknown_override_key(config_path):
+    """Proves config_overrides is actually wired into train_hybrid_agent,
+    not just accepted and ignored (the bug found in evaluation/ablation.py)."""
+    with pytest.raises(ValueError):
+        train_hybrid_agent(
+            config_path=config_path,
+            seed=42,
+            episodes=1,
+            eval_freq=1,
+            save_dir=None,
+            config_overrides={"not_a_real_key": 1.0},
+        )
 
 
 def test_run_baseline_benchmarks_short_run(config_path, tmp_path):
