@@ -53,7 +53,7 @@ def run_baseline_benchmarks(
             "mpdqn",
         ]
 
-    drl_trained_algorithms = {"ddqn", "ddpg", "pdqn", "mpdqn"}
+    drl_trained_algorithms = {"ddqn", "ddqn_socp", "ddpg", "pdqn", "mpdqn"}
 
     with open(config_path, "r") as f:
         cfg = yaml.safe_load(f)
@@ -164,9 +164,22 @@ def run_baseline_benchmarks(
                             obs, action["rrh_on"], reward, next_obs, terminated
                         )
                         model.update()
+                    elif algo == "ddqn_socp":
+                        # DDQNSOCPBaseline wraps a plain DDQNAgent (Stage 1,
+                        # discrete activation) at self.ddqn; Stage 2 (SOCP
+                        # power) is a solver, not a learned component, so
+                        # only the Stage 1 DDQN needs training here.
+                        model.ddqn.memory.push(
+                            obs, action["rrh_on"], reward, next_obs, terminated
+                        )
+                        model.ddqn.update()
                     elif algo == "ddpg":
                         model.memory.push(
-                            obs, action["continuous_action"], reward, next_obs, terminated
+                            obs,
+                            action["continuous_action"],
+                            reward,
+                            next_obs,
+                            terminated,
                         )
                         model.update()
                     elif algo in ("pdqn", "mpdqn"):
