@@ -244,9 +244,11 @@ No part of the adopted design needs to be taken on faith — each piece has its 
 
 State space
 
-s(t) = [ D1(t),…,DU(t),  k1(t−1),…,kR(t−1),  g1,1(t),…,gR,U(t),  ρBBU(t),  E(t) ]T
+s(t) = [ D1(t),…,DU(t),  k1(t−1),…,kR(t−1),  g1,1(t),…,gR,U(t),  Ptotal(t−1),  τ(t) ]T
 
-k_r(t−1) is RRH r's true binary activation state (0/1) from the previous slot.
+k_r(t−1) is RRH r's true binary activation state (0/1) from the previous slot. P_total(t−1) is the previous slot's realized total network power (Section 9), giving the policy a scalar summary of recent load without re-deriving it from the raw channel/demand terms every step. τ(t)∈[0,1) is the time-of-day, normalized (hour of the 24-hour cycle divided by 24) — a direct, low-dimensional signal of where the agent is in the tidal traffic pattern (Section 12.8), which the raw per-UE demands D_u(t) alone do not make explicit.
+
+**Correction (v4.0):** an earlier draft of this formula used a BBU-pool load term ρ_BBU(t) and a generic energy term E(t) for these two trailing scalars. The actual implementation (`cran_env/cran_env.py`) instead uses P_total(t−1) and τ(t) as just described; this is the accurate, current state-space definition, not the ρ_BBU(t)/E(t) placeholder. P_total(t−1) is closely related to ρ_BBU(t) in spirit (BBU-pool power is itself load-dependent, Section 9), and τ(t) is a more direct, already-implemented substitute for a bespoke energy-state term, since it lets the policy anticipate the demand shifts that drive energy consumption rather than only reacting to them after the fact. No dimensionality change results from this correction (still two trailing scalars; Section 12.9's O(R·U) dimensionality count is unaffected).
 
 Action space — a parameterized (hybrid) action
 
