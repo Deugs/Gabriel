@@ -11,6 +11,7 @@ from evaluation import (
     run_generalization_evaluation,
     run_latency_benchmark,
     run_power_time_profile_evaluation,
+    run_reward_sensitivity_sweep,
 )
 
 
@@ -115,3 +116,25 @@ def test_power_time_profile_short_run(tmp_path):
     assert "branching_mp_dqn" in results
     assert set(results["branching_mp_dqn"].keys()) == set(range(24))
     assert (Path(fig_dir) / "power_time_profile.pdf").exists()
+
+
+def test_reward_sensitivity_sweep_short_run(tmp_path):
+    fig_dir = str(tmp_path / "figures")
+
+    results = run_reward_sensitivity_sweep(
+        config_path="config/small_network.yaml",
+        gamma_switch_grid=[0.01, 1.0],
+        train_episodes=2,
+        eval_episodes=1,
+        batch_size=16,
+        save_dir=fig_dir,
+    )
+
+    assert set(results.keys()) == {0.01, 1.0}
+    for metrics in results.values():
+        assert "ee_mbit_per_joule" in metrics
+        assert "qos_violation_rate" in metrics
+        assert "switching_frequency" in metrics
+    assert (Path(fig_dir) / "reward_sensitivity_ee.pdf").exists()
+    assert (Path(fig_dir) / "reward_sensitivity_qos.pdf").exists()
+    assert (Path(fig_dir) / "reward_sensitivity_switching.pdf").exists()

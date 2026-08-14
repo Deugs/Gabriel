@@ -15,6 +15,7 @@ from evaluation.plot_utils import (
     plot_scalability_analysis,
 )
 from evaluation.power_time_profile import run_power_time_profile_evaluation
+from evaluation.reward_sensitivity import run_reward_sensitivity_sweep
 from evaluation.scalability import analyze_scalability
 
 __all__ = [
@@ -27,6 +28,7 @@ __all__ = [
     "run_generalization_evaluation",
     "run_latency_benchmark",
     "run_power_time_profile_evaluation",
+    "run_reward_sensitivity_sweep",
     "compute_confidence_interval",
     "plot_learning_curves",
     "plot_energy_efficiency_bar",
