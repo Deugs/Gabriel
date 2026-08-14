@@ -24,7 +24,8 @@ class ConvexPowerBaseline:
         n_ue (int): Number of User Equipments.
         p_max_w (float): Maximum transmit power per RRH in Watts.
         target_sinr_db (float): Target SINR in dB (default: 0 dB).
-        noise_power_w (float): Noise power in Watts (default: 3.98e-15 W).
+        noise_power_w (float): Noise power in Watts (default: 6.309573e-14 W,
+            i.e. -102 dBm, matching Iqbal et al. (2021), Table 2).
         csi_uncertainty (float): Bounded per-user channel-gain estimation-error
             radius, as a fraction of the estimated gain vector's norm (default:
             0.0, the plain nominal/deterministic problem). When > 0, the SINR
@@ -39,7 +40,7 @@ class ConvexPowerBaseline:
         n_ue: int,
         p_max_w: float = 1.0,
         target_sinr_db: float = 0.0,
-        noise_power_w: float = 3.98e-15,  # -114 dBm in Watts
+        noise_power_w: float = 6.309573e-14,  # -102 dBm in Watts
         csi_uncertainty: float = 0.0,
     ):
         self.n_rrh = n_rrh

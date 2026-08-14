@@ -10,8 +10,8 @@ network:
   n_bbu: 3
   area_size_m: 1000  # 1km x 1km square
   carrier_freq_ghz: 2.1
-  bandwidth_mhz: 20
-  noise_power_dbm: -114  # per RB
+  bandwidth_mhz: 10
+  noise_power_dbm: -102  # Iqbal et al. (2021), Table 2
 
 # ============================================================
 # Channel Model
@@ -90,7 +90,7 @@ algorithm:
   epsilon_start: 1.0
   epsilon_end: 0.01
   epsilon_decay: 0.995     # Per episode
-  target_update_freq: 1    # Update target every N critic updates
+  policy_delay: 2          # TD3 actor/target-update delay, every N critic updates (Section 12.2)
 
   # Continuous exploration noise (Section 12.2: Gaussian, sigma=0.1*P_max, decayed)
   continuous_noise_std: 0.1

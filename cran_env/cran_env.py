@@ -64,7 +64,7 @@ class CRANEnv(gym.Env):
         self.area_size_m = float(getattr(net_cfg, "area_size_m", 1000.0))
         self.carrier_freq_ghz = float(getattr(net_cfg, "carrier_freq_ghz", 2.1))
         self.bandwidth_mhz = float(getattr(net_cfg, "bandwidth_mhz", 20.0))
-        self.noise_power_dbm = float(getattr(net_cfg, "noise_power_dbm", -114.0))
+        self.noise_power_dbm = float(getattr(net_cfg, "noise_power_dbm", -102.0))
 
         # Thermal noise power in Watts per subband/user
         self.noise_power_w = 10.0 ** ((self.noise_power_dbm - 30.0) / 10.0)

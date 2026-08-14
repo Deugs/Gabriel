@@ -80,7 +80,12 @@ def run_baseline_benchmarks(
                 elif algo == "nmbs":
                     model = NMBSBinPackingBaseline(env.n_rrh, env.n_ue, env.p_max_w)
                 elif algo == "convex":
-                    model = ConvexPowerBaseline(env.n_rrh, env.n_ue, env.p_max_w)
+                    model = ConvexPowerBaseline(
+                        env.n_rrh,
+                        env.n_ue,
+                        env.p_max_w,
+                        noise_power_w=env.noise_power_w,
+                    )
                 elif algo == "ddqn":
                     model = DDQNAgent(env.state_dim, env.n_rrh)
                 elif algo == "ann_gsbf":
@@ -92,6 +97,7 @@ def run_baseline_benchmarks(
                         n_ue=env.n_ue,
                         p_max_w=env.p_max_w,
                         config=cfg,
+                        noise_power_w=env.noise_power_w,
                     )
                 elif algo == "ddpg":
                     model = DDPGAgent(

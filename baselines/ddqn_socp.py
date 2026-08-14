@@ -23,6 +23,7 @@ class DDQNSOCPBaseline:
         p_max_w: float = 1.0,
         config: Optional[Union[dict, Any]] = None,
         csi_uncertainty: float = 0.05,
+        noise_power_w: float = 6.309573e-14,  # -102 dBm, Iqbal et al. (2021) Table 2
     ):
         self.n_rrh = n_rrh
         self.n_ue = n_ue
@@ -35,7 +36,11 @@ class DDQNSOCPBaseline:
         # ConvexPowerBaseline used standalone as the "Convex" baseline, which
         # stays LP-based (nominal channel, csi_uncertainty=0.0 default).
         self.convex_solver = ConvexPowerBaseline(
-            n_rrh=n_rrh, n_ue=n_ue, p_max_w=p_max_w, csi_uncertainty=csi_uncertainty
+            n_rrh=n_rrh,
+            n_ue=n_ue,
+            p_max_w=p_max_w,
+            noise_power_w=noise_power_w,
+            csi_uncertainty=csi_uncertainty,
         )
 
     def select_action(
