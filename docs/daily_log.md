@@ -40,9 +40,9 @@ This doesn't invalidate the 2026-08-05 entry below — that sweep genuinely ran 
 ## Date: 2026-08-05
 
 ### What I Did Today
-- [x] Ran `training/hyperparam_search.py::run_proxy_sensitivity_sweep()` at full scale — Concept Note v4.0 Section 12.11's hyperparameter proxy sweep (R=5, U=2, 100 episodes, 2 seeds, 6 variants: lr-pair down/default/up, τ down/default/up), the gate this section requires before committing to the full 10-seed × 9-method experiment matrix.
+- [x] Ran `training/hyperparam_search.py::run_proxy_sensitivity_sweep()` at full scale — Concept Note v4.0 Section 12.11's hyperparameter proxy sweep (R=5, U=2, 100 episodes, 2 seeds, 6 variants: lr-pair down/default/up, τ down/default/up), the gate this section requires before committing to the full 10-seed × 11-method experiment matrix.
 - [x] Logged the resulting keep/change decision (below) per Section 12.11 item 3.
-- [ ] Begin the full 10-seed × 9-method experiment matrix (Phase 4)
+- [ ] Begin the full 10-seed × 11-method experiment matrix (Phase 4)
 
 ### Time Spent
 | Activity | Hours |
@@ -66,8 +66,8 @@ This doesn't invalidate the 2026-08-05 entry below — that sweep genuinely ran 
 | None | — | — |
 
 ### Tomorrow's Plan
-- [ ] Begin the full 10-seed × 9-method experiment matrix (Phase 4), now that Section 12.11's gate has run and kept the defaults
-- [ ] Reconcile `evaluation/scalability.py`'s RRH-size set (6/12/24) with Section 12.2's table (5/12/20/35/50)
+- [ ] Begin the full 10-seed × 11-method experiment matrix (Phase 4), now that Section 12.11's gate has run and kept the defaults
+- [x] Reconcile `evaluation/scalability.py`'s RRH-size set (6/12/24) with Section 12.2's table (5/12/20/35/50) — already done: `SCALABILITY_SWEEP_N_RRH`/`scales` in `evaluation/scalability.py` and `evaluation/latency_benchmark.py` both use {5,12,20,35,50}
 
 ### Notes
 Full per-variant results (`data/results/proxy_sweep/proxy_sweep_summary.json`, raw log in `data/results/proxy_sweep/run_log.txt`):

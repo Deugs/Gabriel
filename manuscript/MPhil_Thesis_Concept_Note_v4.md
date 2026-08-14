@@ -163,7 +163,7 @@ Formulate the joint RRH-activation-and-power-control problem as a parameterized-
 
 Design and train the hybrid agent — branching discrete heads, a continuous parameter network, and twin critics — addressing the false-gradient and combinatorial-scaling issues documented in the P-DQN/branching literature from the outset rather than retrofitting fixes (Section 10.3, 10.3.1).
 
-Re-implement Full Activation, a greedy/NMBS heuristic (Al-Zubaedi, 2019), convex-only power allocation, DDQN (Iqbal et al., 2021), ANN+GSBF (Fathy et al., 2021), pure-DDPG (continuous relaxation) and, newly, P-DQN and MP-DQN (Section 12.1) as baselines under identical simulation conditions to the proposed agent.
+Re-implement Full Activation, a greedy heuristic and a separate NMBS bin-packing heuristic (Al-Zubaedi, 2019), convex-only power allocation, DDQN (Iqbal et al., 2021) together with its full two-stage DDQN+SOCP reproduction, ANN+GSBF (Fathy et al., 2021), pure-DDPG (continuous relaxation) and, newly, P-DQN and MP-DQN (Section 12.1) as baselines under identical simulation conditions to the proposed agent.
 
 Evaluate energy efficiency, QoS-violation rate, RRH-switching frequency, training stability and convergence, computational cost, CSI robustness (Section 12.5) and cross-traffic-profile generalization (Section 12.3), benchmarking improvements against the margins reported by the closest published baselines rather than a fixed pass/fail target. **Objective ranking (revised per G10):** the headline comparison is the margin over DDQN (Iqbal et al., 2021) and over P-DQN/MP-DQN directly (RQ4, Section 6) — both non-trivial DRL baselines already solving a version of this problem. The all-RRHs-on/uniform-power figure is retained only as a sanity-check floor that any working method, including the simple heuristics, is expected to clear comfortably; it is not reported as a contribution in its own right.
 
@@ -191,7 +191,7 @@ Extends the discrete-action DRL and supervised-learning literature for C-RAN ene
 
 Brings peer-reviewed discrete-continuous RL methods (P-DQN, MP-DQN, branching, TD3) into the C-RAN domain for the first time, to my knowledge, rather than a bespoke architecture, and is the first, to my knowledge, to frame such a policy as an O-RAN-deployable rApp with an explicit O1/E2 interface split (Section 11).
 
-Produces a reusable simulation and benchmarking harness (FA, heuristic, convex, DDQN, ANN+GSBF, pure-DDPG, P-DQN, MP-DQN, hybrid) for future C-RAN DRL work.
+Produces a reusable simulation and benchmarking harness (FA, greedy, NMBS, convex, DDQN, DDQN+SOCP, ANN+GSBF, pure-DDPG, P-DQN, MP-DQN, hybrid) for future C-RAN DRL work.
 
 The scalability characterization (5–50 RRH), the CSI-robustness and generalization results, and the energy/QoS/switching trade-off findings are relevant to green-communication planning for 5G and future 6G networks, including resource-constrained deployment settings.
 
@@ -394,7 +394,9 @@ This framing surfaces one honest limitation rather than hiding it: the current M
 
 12.1  Baselines (S2)
 
-Nine methods are compared under identical simulation conditions: Full Activation (FA), a greedy/NMBS bin-packing heuristic (Al-Zubaedi, 2019), convex-only power allocation with fixed RRH selection, DDQN (Iqbal et al., 2021), ANN + Bi-Section GSBF (Fathy et al., 2021), pure DDPG with continuous relaxation (the v1 concept note's design, kept specifically to answer RQ3), **P-DQN** (Xiong et al., 2018) and **MP-DQN** (Bester et al., 2019) without branching or twin critics, and the proposed hybrid agent.
+Eleven methods are compared under identical simulation conditions: Full Activation (FA), a greedy heuristic, a separate NMBS bin-packing heuristic (Al-Zubaedi, 2019), convex-only power allocation with fixed RRH selection, DDQN (Iqbal et al., 2021), a second discrete-RL baseline reproducing Iqbal et al.'s full two-stage design (DDQN discrete activation + a genuine, optionally CSI-uncertainty-robust SOCP power solver, "DDQN+SOCP" — distinct from the plain convex-only baseline above, which fixes RRH selection rather than coupling it to a learned discrete policy), ANN + Bi-Section GSBF (Fathy et al., 2021), pure DDPG with continuous relaxation (the v1 concept note's design, kept specifically to answer RQ3), **P-DQN** (Xiong et al., 2018) and **MP-DQN** (Bester et al., 2019) without branching or twin critics, and the proposed hybrid agent.
+
+**Correction (v4.0):** an earlier draft of this section undercounted the baseline suite as "nine methods," treating greedy and NMBS as one combined heuristic and omitting the DDQN+SOCP baseline entirely. `training/train_baselines.py`'s actual default baseline list (10 baselines: `all_on, greedy, nmbs, convex, ddqn, ann_gsbf, ddqn_socp, ddpg, pdqn, mpdqn`) plus the proposed hybrid agent is 11 methods total; this is the correct count used consistently throughout this note from this point forward (Sections 7, 12.10, 13, 14).
 
 P-DQN and MP-DQN are run only at the smaller scalability-sweep sizes (R=5 and R=12, i.e. 2^5=32 and 2^12=4,096 joint discrete actions — both tractable), *not* at R=35 or R=50 (2^35, 2^50 — intractable, per Section 10.3.1). This is a deliberate, reported limitation of the two baselines, not a gap in the evaluation: it directly demonstrates, empirically, why branching was necessary at scale (B3), complementing the analytical argument in Section 10.3.1. Pure-SAC and pure-TD3 remain optional stretch comparisons (Section 14) rather than core baselines, per v2.0's reasoning: as continuous-only algorithms they face the same discrete-representation question as plain DDPG.
 
@@ -435,7 +437,7 @@ PyTorch (the actual implementation language, see `agents/branching_mp_dqn.py`) h
 
 12.4  Fair comparison and statistical reporting (S4)
 
-All nine methods are implemented in one shared environment and run under the same scenario(s), each averaged over **10 random seeds** (revised up from 5) with 95% confidence intervals, consistent with standard practice in the DRL comparison literature (e.g. Shengren et al., 2022). Given the modest 5% target margin over the DDQN baseline (Objective 2, §5.2 in the earlier proposal lineage), statistical power at n=5 was a genuine concern; n=10 substantially tightens the confidence interval on that comparison. Alongside the standard significance test (two-sided t-test or Mann-Whitney U, p<0.05), **effect size (Cohen's d)** is reported for every head-to-head comparison against a baseline, so that a statistically significant but practically small difference is visible as such. `docs/rules.md`'s Baseline Fairness Rule fixed-seed list is updated in this revision from 5 to 10 seeds to keep the governing rule and this evaluation plan consistent (see the accompanying edit to that file).
+All eleven methods are implemented in one shared environment and run under the same scenario(s), each averaged over **10 random seeds** (revised up from 5) with 95% confidence intervals, consistent with standard practice in the DRL comparison literature (e.g. Shengren et al., 2022). Given the modest 5% target margin over the DDQN baseline (Objective 2, §5.2 in the earlier proposal lineage), statistical power at n=5 was a genuine concern; n=10 substantially tightens the confidence interval on that comparison. Alongside the standard significance test (two-sided t-test or Mann-Whitney U, p<0.05), **effect size (Cohen's d)** is reported for every head-to-head comparison against a baseline, so that a statistically significant but practically small difference is visible as such. `docs/rules.md`'s Baseline Fairness Rule fixed-seed list is updated in this revision from 5 to 10 seeds to keep the governing rule and this evaluation plan consistent (see the accompanying edit to that file).
 
 12.5  CSI Robustness Evaluation (new, S3)
 
@@ -472,14 +474,14 @@ The state vector s(t) (Section 10.2) is a flat concatenation of per-UE demands, 
 
 12.10  Reproducibility Commitment (new, A4)
 
-Consistent with the Reproducibility Rule already in force (`docs/rules.md` §4), the candidate commits to releasing the environment, all nine baseline implementations, the hybrid agent, trained model checkpoints, and the exact hyperparameter configurations used to produce every reported result, via the project's existing repository, upon thesis submission. This commitment is stated here so it appears in the concept note the supervisor reviews, not only in the internal development rules.
+Consistent with the Reproducibility Rule already in force (`docs/rules.md` §4), the candidate commits to releasing the environment, all ten baseline implementations, the hybrid agent, trained model checkpoints, and the exact hyperparameter configurations used to produce every reported result, via the project's existing repository, upon thesis submission. This commitment is stated here so it appears in the concept note the supervisor reviews, not only in the internal development rules.
 
 12.11  Hyperparameter Tuning Protocol (new, G9)
 
 DRL performance is sensitive to learning rates, network width, replay buffer size, batch size, target-update rate τ, and the ε-greedy/Gaussian-noise decay schedules (Section 12.2). A full Bayesian or grid search over this space is not attempted, for the same reason a Lagrangian reward-weighting search was not adopted in Section 12.6: it does not fit the revised but still bounded timeline (Section 15). Instead:
 
 1. The defaults in Section 12.2 are the published TD3/DDPG operating points (Lillicrap et al., 2016; Fujimoto et al., 2018) already validated in the wider actor-critic literature, not values invented for this problem.
-2. Before committing to the full 10-seed × 9-method experiment matrix, a **short proxy sweep** is run at the smallest scenario (R=5, U=2, 100 episodes, 2 seeds) over the single most sensitive parameter per network — the branch/continuous-net learning-rate pair (currently 1×10⁻³ / 1×10⁻⁴) and τ (currently 0.005) — varying each roughly half an order of magnitude up and down. This is a targeted sensitivity check, not a search for a new optimum: if the default operating point is not visibly unstable (critic loss diverging, reward collapsing) relative to the swept alternatives, the default is kept.
+2. Before committing to the full 10-seed × 11-method experiment matrix, a **short proxy sweep** is run at the smallest scenario (R=5, U=2, 100 episodes, 2 seeds) over the single most sensitive parameter per network — the branch/continuous-net learning-rate pair (currently 1×10⁻³ / 1×10⁻⁴) and τ (currently 0.005) — varying each roughly half an order of magnitude up and down. This is a targeted sensitivity check, not a search for a new optimum: if the default operating point is not visibly unstable (critic loss diverging, reward collapsing) relative to the swept alternatives, the default is kept.
 3. Any parameter changed as a result of step 2 is logged in `docs/daily_log_template.md`-style entries with the before/after value and the observed effect, so the final configuration is traceable rather than silently tuned.
 4. This protocol is deliberately lightweight; a more systematic hyperparameter search (e.g., population-based training) is noted as future work rather than adopted, consistent with the Scope Boundary Rule (`docs/rules.md` §6).
 
@@ -497,7 +499,7 @@ A scalability characterization from 5 to ≈50 RRHs, including the point at whic
 
 Evaluation results on CSI robustness and cross-traffic-profile generalization, directly addressing the perfect-CSI limitation without expanding scope.
 
-A head-to-head comparison against FA, heuristic, convex, DDQN, ANN+GSBF, P-DQN and MP-DQN baselines re-implemented under identical conditions — a comparison that does not yet exist in the published literature.
+A head-to-head comparison against FA, greedy, NMBS, convex, DDQN, DDQN+SOCP, ANN+GSBF, P-DQN and MP-DQN baselines re-implemented under identical conditions — a comparison that does not yet exist in the published literature.
 
 14. Risks and Mitigations
 
@@ -508,7 +510,7 @@ A head-to-head comparison against FA, heuristic, convex, DDQN, ANN+GSBF, P-DQN a
 | Reproduced baselines don't match published numbers | Unit-test each baseline independently against its source paper's reported operating point before using it comparatively |
 | P-DQN/MP-DQN baselines cannot scale past R≈12–15 without branching | Reported explicitly as a finding (Section 12.1), not treated as an implementation bug — it is itself evidence for B3 |
 | HySoft/HyAR too recent to safely adopt as the primary architecture | Not adopted as primary (Section 10.1); HySoft's authorship/venue is now corroborated (Section 4.2) but not primary-source-confirmed in this environment — do a final institutional-access check before citing it as settled, then revisit as a comparison point in follow-up work |
-| 10-seed × 9-method evaluation matrix (up from 5×7) increases compute load | Absorbed into the extended timeline (Section 15); CSI-robustness and generalization runs reuse already-trained checkpoints (evaluation-only, no extra training) |
+| 10-seed × 11-method evaluation matrix (up from 5×7) increases compute load | Absorbed into the extended timeline (Section 15); CSI-robustness and generalization runs reuse already-trained checkpoints (evaluation-only, no extra training) |
 | Scope creep | Enforced via Section 8; any expansion returns to this document for re-approval |
 
 15. Revised Indicative Timeline (B4)
@@ -542,14 +544,14 @@ gantt
 
 | Week(s) | Phase | Deliverable |
 |---|---|---|
-| 1–2 | Environment & power model | Validated C-RAN simulator, shared across all nine methods |
-| 2–5 | Baselines, set 1 | FA, greedy/NMBS heuristic, convex-only power allocation |
-| 3–6 | Baselines, set 2 | DDQN (Iqbal repro), ANN+GSBF (Fathy repro), pure-DDPG |
+| 1–2 | Environment & power model | Validated C-RAN simulator, shared across all eleven methods |
+| 2–5 | Baselines, set 1 | FA, greedy heuristic, NMBS heuristic, convex-only power allocation |
+| 3–6 | Baselines, set 2 | DDQN (Iqbal repro), DDQN+SOCP (Iqbal full repro), ANN+GSBF (Fathy repro), pure-DDPG |
 | 5–7 | Baselines, set 3 (new) | P-DQN and MP-DQN, validated at R=5 and R=12 only |
 | 5–8 | Hybrid agent — build | Branching/multi-pass/twin-critic implementation, validated at small R |
 | 8–11 | Hybrid agent — scale | Scale to R=20, 35, then attempt R=50 (stretch) |
 | 11–13 | Evaluation harness (new) | CSI-perturbation harness (Section 12.5); reward-weight sensitivity sweep (Section 12.6) |
-| 13–16 | Main experiments | All nine methods, 10 seeds, main EE/QoS comparison, RQ3 (hybrid vs pure-DDPG) and RQ4 (hybrid vs P-DQN/MP-DQN) ablations |
+| 13–16 | Main experiments | All eleven methods, 10 seeds, main EE/QoS comparison, RQ3 (hybrid vs pure-DDPG) and RQ4 (hybrid vs P-DQN/MP-DQN) ablations |
 | 16–19 | Extended experiments | Scalability sweep 5→35 (50 if time permits), CSI-robustness curve, cross-profile generalization, inference-latency benchmarking |
 | 9–24 (parallel) | Thesis writing | Chapters 1–5, starting once early baseline results are available |
 | 25–26 | Full draft + supervisor review round | Complete draft submitted for feedback |
@@ -566,7 +568,7 @@ Total estimated duration: about 20 weeks from approval of this document — thre
 | 1 | Introduction | Drafted | Update framing to mention the O-RAN positioning (Section 11); core problem statement unchanged |
 | 2 | Literature Review | Substantially drafted | Fold in §4.2–4.4 of this note (updated DRL-building-blocks table, expanded O-RAN subsection including EExApp, revised novelty synthesis); reference count now ~30, at the top of the reviewer's 20–30 range |
 | 3 | System Model & Problem Formulation | System model unchanged and reusable | Replace §3.7 with Section 10 of this note, including the new §10.3.1 (B3) and §10.3 diagram (B2) |
-| 4 | Simulation Results, Performance Evaluation & Discussion | Not started | Implement the shared environment and all nine methods (Section 12); run scenarios per the revised timeline (Section 15); produce figures analogous to Iqbal et al.'s Figs. 3–7, plus RQ3/RQ4 ablations, the scalability sweep, the CSI-robustness curve, and the generalization result |
+| 4 | Simulation Results, Performance Evaluation & Discussion | Not started | Implement the shared environment and all eleven methods (Section 12); run scenarios per the revised timeline (Section 15); produce figures analogous to Iqbal et al.'s Figs. 3–7, plus RQ3/RQ4 ablations, the scalability sweep, the CSI-robustness curve, and the generalization result |
 | 5 | Conclusion & Future Work | Not started | Write after Chapter 4 results are available; flag the O1/E2 timescale-reconciliation item (Section 11) and the HySoft/HyAR follow-up comparison (Section 10.1) as future work |
 | — | References | Partial / inconsistent numbering | Consolidate into one bibliography including the nine new references in Section 16 (§17 below); do a final institutional-access check on the HySoft citation before finalizing (Section 4.2) — its authorship is corroborated but not primary-source-confirmed |
 

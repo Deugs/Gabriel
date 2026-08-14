@@ -82,7 +82,7 @@ This revision is flagged explicitly per the project's own scope-boundary process
 - **Baselines**: All-ON + uniform power, greedy heuristic, NMBS bin-packing (Al-Zubaedi, 2019) [4], convex power allocation (CVXPY), and reproduced DDQN (Iqbal et al., 2021) [2], plus pure-SAC, pure-TD3, and pure-DDPG agents for algorithm-family comparison.
 - **Evaluation**: convergence, energy efficiency, QoS performance, an ablation study (removing switching cost / fronthaul power / QoS penalty individually), and a scalability sweep — all averaged over 5 fixed random seeds with reported confidence intervals and statistical significance tests.
 
-> **Status update (05 August 2026)**: every bullet above has since expanded. **Agent**: the branching MP-DQN + TD3 architecture from Section 3's update note, not hybrid SAC-DDQN. **Baselines**: nine methods, not five — the four above plus reproduced ANN+GSBF (Fathy et al., 2021), pure-DDPG (kept specifically to answer RQ3, the discrete-vs-continuous-relaxation question), and **P-DQN and MP-DQN** (added per supervisor recommendation S2, specifically to isolate branching's own contribution — deliberately run only at R=5/R=12 where the flat 2^R joint action space they use without branching remains tractable, itself empirical evidence for why branching was necessary at scale). **Evaluation**: 10 seeds, not 5, with Cohen's d effect sizes reported alongside every significance test (S4); a CSI-robustness evaluation (perturbing the trained policy's observed channel gains at σ∈{0,0.01,0.05,0.1}, S3) and a cross-profile generalization evaluation (zero-shot transfer from a weekday/urban to a weekend/suburban traffic profile, A5) were added to address the perfect-CSI and single-traffic-pattern limitations without expanding training scope; an inference-latency benchmark at R=5,12,20,35,50 was added (A3) to report deployability, not just accuracy. All nine baselines and all three new evaluations now exist as tested code (`agents/`, `evaluation/`), not only as a plan — see Section 11 below for what has and has not yet been run at full scale.
+> **Status update (05 August 2026)**: every bullet above has since expanded. **Agent**: the branching MP-DQN + TD3 architecture from Section 3's update note, not hybrid SAC-DDQN. **Baselines**: ten methods, not five — the five above plus reproduced ANN+GSBF (Fathy et al., 2021), a two-stage DDQN+SOCP reproduction of Iqbal et al. (2021) (distinct from the plain convex-only allocator already listed, which fixes RRH selection rather than coupling it to a learned discrete policy), pure-DDPG (kept specifically to answer RQ3, the discrete-vs-continuous-relaxation question), and **P-DQN and MP-DQN** (added per supervisor recommendation S2, specifically to isolate branching's own contribution — deliberately run only at R=5/R=12 where the flat 2^R joint action space they use without branching remains tractable, itself empirical evidence for why branching was necessary at scale). **Evaluation**: 10 seeds, not 5, with Cohen's d effect sizes reported alongside every significance test (S4); a CSI-robustness evaluation (perturbing the trained policy's observed channel gains at σ∈{0,0.01,0.05,0.1}, S3) and a cross-profile generalization evaluation (zero-shot transfer from a weekday/urban to a weekend/suburban traffic profile, A5) were added to address the perfect-CSI and single-traffic-pattern limitations without expanding training scope; an inference-latency benchmark at R=5,12,20,35,50 was added (A3) to report deployability, not just accuracy. All ten baselines and all three new evaluations now exist as tested code (`agents/`, `evaluation/`), not only as a plan — see Section 11 below for what has and has not yet been run at full scale.
 
 ## 7. Significance
 
@@ -98,12 +98,12 @@ Reducing RAN energy consumption directly reduces mobile operators' operating exp
 
 ## 9. Indicative Timeline
 
-> **Status update (05 August 2026)**: the 14-week timeline below was the original estimate before the methodology and evaluation plan grew per the supervisor's review (nine baselines instead of five, ten seeds instead of five, three additional evaluation protocols, and the architecture change in Section 3). It is superseded by the week-by-week Gantt chart in Concept Note v4.0 §15, now approximately **27 weeks** from approval, summarized here rather than reproduced in full:
+> **Status update (05 August 2026)**: the 14-week timeline below was the original estimate before the methodology and evaluation plan grew per the supervisor's review (ten baselines instead of five, ten seeds instead of five, three additional evaluation protocols, and the architecture change in Section 3). It is superseded by the week-by-week Gantt chart in Concept Note v4.0 §15, now approximately **27 weeks** from approval, summarized here rather than reproduced in full:
 
 | Phase | Duration | Status as of 05 August 2026 |
 |---|---|---|
 | Environment | Weeks 1–2 | Done — `cran_env/` implemented and tested |
-| Baselines (9 methods) | Weeks 2–7 | Done — all 9 implemented and unit-tested (`agents/`, `baselines/`); no full-scale run yet |
+| Baselines (10 methods) | Weeks 2–7 | Done — all 10 implemented and unit-tested (`agents/`, `baselines/`); no full-scale run yet |
 | Proposed agent | Weeks 5–11 | Done — `agents/branching_mp_dqn.py` implemented and unit-tested |
 | Experiments | Weeks 13–19 | **Not started** — convergence, energy, QoS, ablation, scalability, CSI-robustness, generalization, latency, and the §12.11 hyperparameter proxy sweep all have tested infrastructure but no full 10-seed run yet |
 | Thesis writing (Ch. 1–5) | Weeks 17–25 (parallel) | Chapters 1–2 drafted from this document and its predecessors; Chapters 3–5 not started |
@@ -131,9 +131,9 @@ The candidate's original three requests below (24 July 2026) have already been a
 3. ~~Any feedback on the indicative timeline in Section 9 before implementation begins in earnest.~~ Received and incorporated; see Section 9's update note.
 
 **Current requests, as of 05 August 2026** (detailed in full in `manuscript/response_to_supervisor_review.md`):
-1. **Sign-off on Concept Note v4.0** as the governing document, so the architecture, nine-method baseline suite, and evaluation plan can be treated as settled.
+1. **Sign-off on Concept Note v4.0** as the governing document, so the architecture, ten-method baseline suite, and evaluation plan can be treated as settled.
 2. **Confirmation that the current single-agent, simulation-only, O-RAN-*framed*-but-not-O-RAN-*implemented* scope is still acceptable** — unchanged from what v3.0 already proposed.
-3. Any remaining concerns **before the full 10-seed × 9-method experiment matrix is run**, since that is the next step and represents a non-trivial compute commitment.
+3. Any remaining concerns **before the full 10-seed × 11-method experiment matrix is run**, since that is the next step and represents a non-trivial compute commitment.
 
 ## 12. References
 

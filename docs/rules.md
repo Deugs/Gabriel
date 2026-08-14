@@ -31,7 +31,9 @@ Test: tests/test_power_model.py::test_total_power_matches_equation
 **Enforcement**:
 - Single evaluation script: `evaluation/compare_all.py` (planned — not yet
   implemented; `training/train_baselines.py` currently runs the shared
-  9-method benchmark suite under one config)
+  10-method benchmark suite under one config: all_on, greedy, nmbs, convex,
+  ddqn, ann_gsbf, ddqn_socp, ddpg, pdqn, mpdqn — plus the proposed hybrid
+  agent trained separately via `training/train_hybrid.py`, 11 methods total)
 - Shared config file for all experiments
 - Fixed random seed list (10 seeds, revised from 5 per supervisor review, Concept Note v3.0 §12.4): [42, 123, 456, 789, 1011, 1337, 2024, 2718, 3141, 4242]
 
