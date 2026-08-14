@@ -129,7 +129,7 @@ Gabriel/
 ├── training/              # Training loops
 │   ├── train_hybrid.py
 │   ├── train_baselines.py
-│   ├── train_ann_gsbf.py  # Trains Baseline 6's ANN stage (offline-labelled)
+│   ├── train_ann_gsbf.py  # Trains Baseline 7's ANN stage (offline-labelled)
 │   ├── run_extended_sweeps.py
 │   └── hyperparam_search.py
 ├── evaluation/            # Analysis and plotting

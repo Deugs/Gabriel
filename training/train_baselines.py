@@ -89,7 +89,13 @@ def run_baseline_benchmarks(
                 elif algo == "ddqn":
                     model = DDQNAgent(env.state_dim, env.n_rrh)
                 elif algo == "ann_gsbf":
-                    model = ANNGSBFBaseline(env.n_rrh, env.n_ue, env.p_max_w)
+                    model = ANNGSBFBaseline(
+                        env.n_rrh,
+                        env.n_ue,
+                        env.p_max_w,
+                        noise_power_w=env.noise_power_w,
+                        bandwidth_hz=env.channel.bandwidth,
+                    )
                 elif algo == "ddqn_socp":
                     model = DDQNSOCPBaseline(
                         state_dim=env.state_dim,

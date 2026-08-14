@@ -65,9 +65,7 @@ def _score_candidate(
     sinr = np.where(signal > 0.0, signal / (interference + env.noise_power_w), 0.0)
     served = serving_rrh >= 0
     bw_hz = np.zeros_like(sinr)
-    bw_hz[served] = (
-        bandwidth_share[serving_rrh[served]] * env.channel.bandwidth
-    )
+    bw_hz[served] = bandwidth_share[serving_rrh[served]] * env.channel.bandwidth
     capacity_bps = bw_hz * np.log2(1.0 + sinr)
     qos_violations_bps = np.maximum(0.0, demands_bps - capacity_bps)
     throughput_mbps = np.sum(capacity_bps) / 1e6
@@ -117,7 +115,16 @@ def generate_labelled_dataset(
                 best_req_active = req_active
 
         demands_mbps = demands_bps / 1e6
-        features.append(extract_features(gains_mag, demands_mbps, env.n_rrh))
+        features.append(
+            extract_features(
+                gains_mag,
+                demands_mbps,
+                env.n_rrh,
+                env.p_max_w,
+                env.noise_power_w,
+                env.channel.bandwidth,
+            )
+        )
         labels.append(best_req_active / env.n_rrh)
 
     return np.array(features, dtype=np.float32), np.array(labels, dtype=np.float32)
@@ -131,15 +138,29 @@ def train_ann_predictor(
     seed: int = 0,
     save_path: str = str(DEFAULT_CHECKPOINT_PATH),
 ) -> Dict[str, Any]:
-    """Generate a labelled dataset and train the ANN+GSBF baseline's predictor."""
+    """Generate a labelled dataset and train the ANN+GSBF baseline's predictor.
+
+    Features are standardized (zero mean, unit variance, per dimension)
+    before training -- the raw features span roughly six orders of
+    magnitude (e.g. demand-derived features ~O(10-100) vs. channel-gain
+    magnitudes ~O(1e-5)), which otherwise starves the smaller-scale
+    features of gradient signal. The per-feature mean/std used are saved
+    alongside the model weights so inference (baselines/ann_gsbf.py)
+    applies the identical transform.
+    """
     features, labels = generate_labelled_dataset(
         config_path, n_samples=n_samples, seed=seed
     )
-    x = torch.FloatTensor(features)
+    feat_mean = features.mean(axis=0)
+    feat_std = features.std(axis=0)
+    feat_std[feat_std < 1e-8] = 1.0  # guard against zero-variance features (e.g. n_rrh)
+    features_norm = (features - feat_mean) / feat_std
+
+    x = torch.FloatTensor(features_norm)
     y = torch.FloatTensor(labels).unsqueeze(1)
 
     model = ANNPredictor()
-    opt = optim.Adam(model.parameters(), lr=lr)
+    opt = optim.Adam(model.parameters(), lr=lr, weight_decay=1e-3)
     loss_fn = nn.MSELoss()
 
     losses = []
@@ -154,7 +175,17 @@ def train_ann_predictor(
     if save_path is not None:
         out_path = Path(save_path)
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        torch.save(model.state_dict(), out_path)
+        torch.save(
+            {
+                "model_state": model.state_dict(),
+                # Stored as tensors, not numpy arrays: PyTorch 2.6+'s
+                # torch.load defaults to weights_only=True, whose safe
+                # unpickler allows tensors but rejects numpy arrays.
+                "feat_mean": torch.from_numpy(feat_mean),
+                "feat_std": torch.from_numpy(feat_std),
+            },
+            out_path,
+        )
         print(f"Saved trained ANN+GSBF predictor to {out_path}")
 
     return {
@@ -169,10 +200,16 @@ if __name__ == "__main__":
         description="Train the ANN+GSBF baseline's active-RRH-count predictor"
     )
     parser.add_argument(
-        "--config", type=str, default="config/small_network.yaml", help="Config file path"
+        "--config",
+        type=str,
+        default="config/small_network.yaml",
+        help="Config file path",
     )
     parser.add_argument(
-        "--n-samples", type=int, default=200, help="Number of synthetic training scenarios"
+        "--n-samples",
+        type=int,
+        default=200,
+        help="Number of synthetic training scenarios",
     )
     parser.add_argument("--epochs", type=int, default=200, help="Training epochs")
     parser.add_argument("--lr", type=float, default=1e-3, help="Adam learning rate")
