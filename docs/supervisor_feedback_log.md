@@ -2,6 +2,22 @@
 
 > Filled instances of `docs/supervisor_feedback_template.md`. Newest entry first.
 
+## Follow-up audit: 2026-08-14 — OREO retraction reversed (primary source obtained)
+
+**Requested**: none directly — this was surfaced when the candidate supplied the actual "OREO" (Qazzaz, Salama, Hafeez & Zaidi) paper as a PDF during an unrelated audit task.
+
+**Result — the earlier OREO retraction (see the 2026-08-05 entry's action item below) was itself wrong.** The paper is genuine: *OREO: Open RAN Energy Optimization via Deep Reinforcement Learning for 6G Networks*, IEEE Open Journal of the Communications Society, Vol. 67 (2026), pp. 4165-4182, DOI 10.1109/OJCOMS.2026.3685554, received 14 March 2026 and published 20 April 2026. Read directly (not searched for): every previously-cited detail matches exactly (PPO rApp-xApp architecture, Sionna ray-tracing, 34.6% energy reduction, 0.89% outage). It did not resolve via search at the time of the original verification attempt almost certainly because it is a very recent 2026 publication, not because it doesn't exist — "does not resolve via search" is not equivalent to "does not exist," and should not have been treated as grounds for retraction on its own.
+
+**Consequences for Concept Note v4.0**: the citation is restored in §4.3/§17 (marked "retraction reversed, primary-source-verified"), and — since the paper turns out to be architecturally relevant, not just a name collision with Mungari et al.'s unrelated OREO — §4.4's synthesis now discusses it explicitly as a second close comparator alongside EExApp: it couples RU activation and user-association through **one** PPO network, but its "discrete" decision is a continuous relaxation (sigmoid + threshold), not a genuine discrete decision, which is exactly the distinction this thesis's contribution rests on. The HySoft verification note (§4.2) was also corrected, since it previously used "unlike the retracted OREO citation" as a point of contrast that no longer holds.
+
+**Take-away for future verification passes**: a failed search is inconclusive, not disconfirming, particularly for recent (same-year) publications — the appropriate response to "could not resolve via search" is "unconfirmed, keep looking or ask the candidate for the primary source," not "retract."
+
+### Action Items
+- [x] Restore the Qazzaz et al. OREO citation in Concept Note v4.0 §4.3/§17, marked as primary-source-verified
+- [x] Update §4.4's synthesis to discuss OREO as a second close comparator (continuous-relaxation vs. true-discrete-decision distinction)
+- [x] Correct the HySoft verification note (§4.2), which referenced the now-reversed OREO retraction as a contrast point
+- [x] Disambiguate the two unrelated real papers both named "OREO" (Qazzaz et al. 2026; Mungari et al. 2024) everywhere either is mentioned
+
 ## Follow-up audit: 2026-08-05 — post-merge recheck + §12.11 proxy sweep implementation
 
 **Requested**: independently re-verify (not just re-summarize) that the consolidated-letter fixes below actually match the Concept Note v4.0 spec and introduced no regressions, after merging them into `main` (PR #4).
@@ -17,7 +33,7 @@
 - [x] Implement `training/hyperparam_search.py::run_proxy_sensitivity_sweep` (§12.11/G9) with a short-run test
 - [x] Add a `docs/workflow.md` Phase 4 tracking line for the §12.11 sweep
 - [x] Run the §12.11 sweep at full scale (100 episodes, 2 seeds) and log its keep/change decision — done 2026-08-05, both the lr-pair and τ defaults kept unchanged (no variant crashed; the defaults outperformed both swept alternatives in each dimension); full results in `data/results/proxy_sweep/` and `docs/daily_log.md`
-- [ ] Reconcile `evaluation/scalability.py`'s RRH-size set with §12.2's table (5/12/20/35/50), or explicitly document why it intentionally differs
+- [x] Reconcile `evaluation/scalability.py`'s RRH-size set with §12.2's table (5/12/20/35/50), or explicitly document why it intentionally differs — done in a later audit pass: `evaluation/scalability.py` and `evaluation/latency_benchmark.py` both now sweep {5,12,20,35,50}
 
 ---
 

@@ -13,9 +13,11 @@ egress policy; a manually supplied PDF turned out to be an unrelated paper
 by a different author who happens to share a surname with Fathy, Abood &
 Hamdi, 2021). Fabricating a specific "reported number" that cannot be
 checked against a primary source would violate the project's own Ethical
-AI Rule (docs/rules.md Section 10) -- the same standard already applied to
-the retracted OREO citation and the not-yet-primary-source-confirmed
-HySoft reference.
+AI Rule (docs/rules.md Section 10) -- the same standard applied to the
+OREO citation (initially retracted for not resolving via search, then
+restored once the primary source was actually obtained and read -- a
+failed search is inconclusive, not disconfirming) and to the
+not-yet-primary-source-confirmed HySoft reference.
 
 What CAN be validated without a primary-source read is that a reproduced
 baseline exhibits the *qualitative* behavior its source paper claims, at
