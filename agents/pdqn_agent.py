@@ -32,7 +32,7 @@ from agents.branching_mp_dqn import ContinuousParameterNetwork, SharedEncoder
 # P-DQN/MP-DQN are only tractable up to R=12 (2^12=4,096 joint actions); beyond
 # this the flat discrete head would need 2^R output units, which is why these
 # baselines are capped here rather than left to fail via OOM at R=35/50.
-MAX_N_RRH_FOR_FLAT_JOINT_ACTION = 20
+MAX_N_RRH_FOR_FLAT_JOINT_ACTION = 12
 
 
 class JointDiscreteQNetwork(nn.Module):

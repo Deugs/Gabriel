@@ -9,7 +9,7 @@ their hardware, not a per-decision cost — this benchmark instead reports a
 per-decision forward-pass time in milliseconds, the relevant quantity for a
 real-time control loop).
 
-P-DQN/MP-DQN are included where tractable (R<=20, Section 10.3.1/B3) and
+P-DQN/MP-DQN are included where tractable (R<=12, Section 10.3.1/B3) and
 skipped with an explicit note above that size — the resulting gap in the
 comparison is itself part of the documented case for branching, not missing
 data.
