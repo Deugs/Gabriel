@@ -106,23 +106,26 @@ Gabriel/
 ├── agents/                # DRL algorithms
 │   ├── branching_mp_dqn.py# Proposed: Branching MP-DQN + TD3 (Concept Note v2.0, current through v4.0)
 │   ├── hybrid_sac_dqn.py  # Superseded alternative (v1.0 concept), kept for comparison only
-│   ├── ddqn_agent.py      # Baseline: Iqbal et al. (2021) DDQN reproduction
-│   ├── ddpg_agent.py      # Baseline: pure-DDPG continuous relaxation (RQ3)
-│   ├── pdqn_agent.py      # Baseline: P-DQN, flat 2^R head, no branching/twin critic (S2)
-│   └── mpdqn_agent.py     # Baseline: MP-DQN, flat 2^R head with multi-pass masking (S2)
-├── baselines/             # 9-method comparison suite (Concept Note v3.0/v4.0 §12.1); all 9 implemented
+│   ├── ddqn_agent.py      # Baseline 5: Iqbal et al. (2021) DDQN reproduction
+│   │                      # (discrete-only; no SOCP — see baselines/ddqn_socp.py
+│   │                      # for the coupled two-stage version)
+│   ├── ddpg_agent.py      # Baseline 8: pure-DDPG continuous relaxation (RQ3)
+│   ├── pdqn_agent.py      # Baseline 9: P-DQN, flat 2^R head, no branching/twin critic (S2)
+│   └── mpdqn_agent.py     # Baseline 10: MP-DQN, flat 2^R head with multi-pass masking (S2)
+├── baselines/             # 10-method comparison suite (Concept Note v4.0 §12.1); all 10 implemented
 │   ├── all_on_uniform.py  # Baseline 1: All-ON uniform power
 │   ├── greedy_heuristic.py# Baseline 2: Greedy heuristic
 │   ├── nmbs_binpack.py    # Baseline 3: Al-Zubaedi's NMBS bin-packing
 │   ├── convex_power.py    # Baseline 4: CVXPY/LP power allocation (nominal
-│   │                      # channel); also backs Baseline 5's Stage 2, where
+│   │                      # channel); also backs Baseline 6's Stage 2, where
 │   │                      # csi_uncertainty>0 makes it solve a genuine SOCP
-│   ├── ddqn_socp.py       # Baseline 5: Two-stage DDQN + SOCP (Iqbal et al., 2021)
-│   └── ann_gsbf.py        # Baseline 6: ANN + GSBF (Fathy et al., 2021) — ANN
+│   ├── ddqn_socp.py       # Baseline 6: Two-stage DDQN + SOCP (Iqbal et al., 2021)
+│   └── ann_gsbf.py        # Baseline 7: ANN + GSBF (Fathy et al., 2021) — ANN
 │                          # trained via training/train_ann_gsbf.py; falls
 │                          # back to a heuristic proxy if untrained
-│   # Baselines 7-9 (pure-DDPG, P-DQN, MP-DQN) live in agents/ alongside the
-│   # proposed method, per docs/workflow.md's Phase 2 convention (see above)
+│   # Baseline 5 (plain DDQN) and Baselines 8-10 (pure-DDPG, P-DQN, MP-DQN)
+│   # live in agents/ alongside the proposed method, per docs/workflow.md's
+│   # Phase 2 convention (see above)
 ├── training/              # Training loops
 │   ├── train_hybrid.py
 │   ├── train_baselines.py

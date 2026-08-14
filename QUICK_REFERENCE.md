@@ -13,7 +13,7 @@
 | BBU dynamic power? | **250 W** total |
 | Switching cost? | **3 W** per transition; include in reward |
 | Fronthaul in reward? | **Yes** — TWDM-PON model |
-| Baselines required? | 9 methods (Concept Note v3.0/v4.0 §12.1): All-ON/FA, Greedy, NMBS, Convex, DDQN, ANN+GSBF, pure-DDPG, P-DQN, MP-DQN, plus the proposed hybrid agent. Pure-SAC/TD3 are optional stretch comparisons, not core baselines |
+| Baselines required? | 10 baselines (Concept Note v4.0 §12.1): All-ON/FA, Greedy, NMBS, Convex, DDQN, DDQN+SOCP, ANN+GSBF, pure-DDPG, P-DQN, MP-DQN, plus the proposed hybrid agent (11 methods total). Pure-SAC/TD3 are optional stretch comparisons, not core baselines |
 | Random seeds? | 10 seeds: [42, 123, 456, 789, 1011, 1337, 2024, 2718, 3141, 4242] |
 | Convergence target? | <= 3000 episodes |
 | Energy savings target? | >= 25% vs. All ON; >= 5% vs. Iqbal DDQN |

@@ -57,7 +57,7 @@ Every individual B/S/A/G item in this letter maps to a row already marked "Done"
 - [x] Implement `evaluation/csi_robustness.py` (S3), `evaluation/generalization.py` (A5/G13), `evaluation/latency_benchmark.py` (A3/G14), each with a short-run test
 - [x] Add `compute_cohens_d()` to `evaluation/convergence.py` (S4/G11); fix the stale `"Hybrid_SAC_DDQN"` proposed-method lookup bug there and in `evaluation/scalability.py`
 - [x] Update `AGENTS.md`'s Code Architecture tree and `docs/workflow.md`'s Phase 2/3 checklists to match actual file existence (previously inconsistent in both directions per the earlier gap analysis)
-- [ ] Run the full 10-seed × 9-method experiment matrix and the CSI-robustness/generalization/latency sweeps at thesis scale (the infrastructure above is tested at small scale only; no full-scale results have been generated yet)
+- [ ] Run the full 10-seed × 11-method experiment matrix and the CSI-robustness/generalization/latency sweeps at thesis scale (the infrastructure above is tested at small scale only; no full-scale results have been generated yet)
 
 ---
 

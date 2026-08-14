@@ -55,7 +55,7 @@
 - [x] `baselines/ann_gsbf.py` — Fathy's ANN + Bi-Section GSBF reproduction
 - [x] `agents/ddpg_agent.py` — pure-DDPG continuous relaxation (RQ3 baseline)
 - [x] `agents/pdqn_agent.py`, `agents/mpdqn_agent.py` — P-DQN and MP-DQN, **new per supervisor review S2** (Concept Note v3.0 §12.1); code enforces the R<=12-validated / untractable-at-R>=35 limitation with an explicit guard rather than a silent failure (§10.3.1/B3)
-- [x] `tests/test_baselines.py`, `tests/test_new_baselines.py` — Validation tests (all 9 baselines + the proposed method)
+- [x] `tests/test_baselines.py`, `tests/test_new_baselines.py` — Validation tests (all 10 baselines + the proposed method)
 
 **Key Decisions**:
 - CVXPY for convex sub-problems (matches Fathy/Iqbal)
