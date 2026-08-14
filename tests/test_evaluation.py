@@ -15,6 +15,31 @@ from evaluation import (
 from evaluation.convergence import perform_paired_ttest
 
 
+def test_run_ablation_study_applies_variant_overrides(monkeypatch, tmp_path):
+    """Each ablation variant's config_overrides must actually reach
+    train_hybrid_agent, not just be defined and silently dropped."""
+    import evaluation.ablation as ablation_module
+
+    captured_overrides = []
+
+    def fake_train_hybrid_agent(*, config_overrides=None, **kwargs):
+        captured_overrides.append(config_overrides)
+        return {"final_eval_reward": 0.0}
+
+    monkeypatch.setattr(ablation_module, "train_hybrid_agent", fake_train_hybrid_agent)
+
+    ablation_module.run_ablation_study(
+        seeds=[42], episodes=1, save_dir=str(tmp_path / "figures")
+    )
+
+    assert captured_overrides == [
+        {},
+        {"lr_actor": 0.0},
+        {"epsilon_start": 0.0, "epsilon_end": 0.0},
+        {"beta_qos": 5.0},
+    ]
+
+
 def test_compute_confidence_interval():
     data = np.random.randn(5, 20)
     mean, lower, upper = compute_confidence_interval(data)

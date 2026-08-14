@@ -1,6 +1,7 @@
 """Training pipeline for Proposed Branching MP-DQN + TD3 Agent in 5G C-RAN Simulation."""
 
 import argparse
+from copy import deepcopy
 import gc
 import json
 import os
@@ -20,6 +21,35 @@ except ImportError:
 
 from agents import BranchingMPDQN
 from cran_env import CRANEnv
+
+
+def apply_config_overrides(
+    cfg: Dict[str, Any], overrides: Optional[Dict[str, Any]]
+) -> Dict[str, Any]:
+    """Apply flat {key: value} overrides to whichever top-level config section
+    already defines that key, e.g. {"lr_actor": 0.0} -> cfg["algorithm"]["lr_actor"],
+    {"beta_qos": 5.0} -> cfg["reward"]["beta_qos"].
+
+    Returns a new config dict; does not mutate the input. Raises ValueError if
+    an override key isn't found in any top-level section, since a silently
+    ignored override (e.g. a typo) is exactly the failure mode this exists to
+    prevent (see evaluation/ablation.py's variants, which previously defined
+    such overrides but never applied them).
+    """
+    if not overrides:
+        return cfg
+    cfg = deepcopy(cfg)
+    for key, value in overrides.items():
+        for section in cfg.values():
+            if isinstance(section, dict) and key in section:
+                section[key] = value
+                break
+        else:
+            raise ValueError(
+                f"Config override key '{key}' not found in any top-level "
+                "section of the config; check for a typo or a missing default."
+            )
+    return cfg
 
 
 def set_seed(seed: int):
@@ -95,6 +125,7 @@ def train_hybrid_agent(
     eval_freq: int = 10,
     save_dir: Optional[str] = None,
     use_wandb: Optional[bool] = None,
+    config_overrides: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Train Branching MP-DQN + TD3 agent and log training metrics."""
     set_seed(seed)
@@ -102,6 +133,7 @@ def train_hybrid_agent(
     # Load configuration
     with open(config_path, "r") as f:
         cfg = yaml.safe_load(f)
+    cfg = apply_config_overrides(cfg, config_overrides)
 
     logging_cfg = cfg.get("logging", {})
     use_wandb_explicit = use_wandb is not None
