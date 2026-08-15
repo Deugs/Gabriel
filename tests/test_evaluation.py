@@ -145,4 +145,12 @@ def test_scalability_short_run(tmp_path):
     )
 
     assert len(res) == 5
+    # RQ5 (Section 6) asks about the energy/QoS/switching trade-off vs.
+    # scale, not just power/time -- guard against silently dropping these.
+    for scale_metrics in res.values():
+        algo_metrics = scale_metrics["Branching_MP_DQN"]
+        assert "power" in algo_metrics
+        assert "time" in algo_metrics
+        assert "qos_rate" in algo_metrics
+        assert "switching_events" in algo_metrics
     assert (Path(fig_dir) / "scalability_analysis.pdf").exists()

@@ -140,20 +140,47 @@ def plot_scalability_analysis(
     scalability_dict: Dict[str, Dict[str, Dict[str, float]]],
     save_path: Optional[str] = None,
 ):
-    """Plot network scalability metrics (Execution Time & Total Power)."""
+    """Plot network scalability metrics: power, execution time, QoS
+    satisfaction rate and switching frequency vs. network size (RQ5,
+    Section 6) -- the three-way energy/QoS/switching trade-off, not just
+    power/time. QoS/switching subplots are skipped gracefully (with a
+    printed note) if a caller's data doesn't include those keys."""
     setup_matplotlib_style()
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4.5))
 
     scales = list(
         scalability_dict.keys()
     )  # e.g. ["R=5, U=2", "R=12, U=10", "R=20, U=20", "R=35, U=25", "R=50, U=30 (stretch)"]
+    algos = list(scalability_dict[scales[0]].keys())
+    has_qos_switching = all(
+        "qos_rate" in scalability_dict[s][a]
+        and "switching_events" in scalability_dict[s][a]
+        for s in scales
+        for a in algos
+    )
 
-    for algo in scalability_dict[scales[0]].keys():
+    if has_qos_switching:
+        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(11, 9))
+    else:
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4.5))
+        ax3 = ax4 = None
+        print(
+            "plot_scalability_analysis: 'qos_rate'/'switching_events' keys "
+            "not found — plotting power/time only, skipping the QoS and "
+            "switching-frequency subplots."
+        )
+
+    for algo in algos:
         powers = [scalability_dict[s][algo]["power"] for s in scales]
         times = [scalability_dict[s][algo]["time"] for s in scales]
 
         ax1.plot(scales, powers, marker="o", label=algo, linewidth=2.0)
         ax2.plot(scales, times, marker="s", label=algo, linewidth=2.0)
+
+        if has_qos_switching:
+            qos_rates = [scalability_dict[s][algo]["qos_rate"] for s in scales]
+            switching = [scalability_dict[s][algo]["switching_events"] for s in scales]
+            ax3.plot(scales, qos_rates, marker="^", label=algo, linewidth=2.0)
+            ax4.plot(scales, switching, marker="d", label=algo, linewidth=2.0)
 
     ax1.set_ylabel("Mean Total Power (W)")
     ax1.set_title("Power Scaling vs Network Size")
@@ -162,6 +189,15 @@ def plot_scalability_analysis(
     ax2.set_ylabel("Step Execution Time (ms)")
     ax2.set_title("Computation Time vs Network Size")
     ax2.legend()
+
+    if has_qos_switching:
+        ax3.set_ylabel("QoS Satisfaction Rate")
+        ax3.set_title("QoS Satisfaction vs Network Size")
+        ax3.legend()
+
+        ax4.set_ylabel("Mean Switching Events (per step)")
+        ax4.set_title("Switching Frequency vs Network Size")
+        ax4.legend()
 
     fig.tight_layout()
 
@@ -202,7 +238,14 @@ def plot_degradation_curve(
     for idx, (method, points) in enumerate(curve_dict.items()):
         xs = sorted(points.keys())
         ys = [points[x] for x in xs]
-        ax.plot(xs, ys, marker="o", label=method, color=colors[idx % len(colors)], linewidth=2.0)
+        ax.plot(
+            xs,
+            ys,
+            marker="o",
+            label=method,
+            color=colors[idx % len(colors)],
+            linewidth=2.0,
+        )
 
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
