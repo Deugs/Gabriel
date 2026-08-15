@@ -23,12 +23,19 @@ What CAN be validated without a primary-source read is that a reproduced
 baseline exhibits the *qualitative* behavior its source paper claims, at
 the *exact* network scenarios that paper studies. This module does that
 for the DDQN+SOCP baseline (Iqbal et al., 2021) at both scenarios their
-paper uses. An equivalent generalization test was attempted for ANN+GSBF
-(Fathy et al., 2021) and is deliberately NOT included — see the note below
-the DDQN+SOCP test for why. Section 14's risk-mitigation text has been
-corrected to describe this scoped-down, partial validation rather than
-overclaiming coverage of "each" baseline (see the accompanying edit to
+paper uses. Section 14's risk-mitigation text has been corrected to
+describe this scoped-down, partial validation rather than overclaiming
+coverage of "each" baseline (see the accompanying edit to
 manuscript/MPhil_Thesis_Concept_Note_v4.md).
+
+An equivalent generalization test was originally attempted here for
+ANN+GSBF (Fathy et al., 2021) and failed on this module's first pass: the
+trained ANN's held-out predictions showed no learnable signal at all
+(Spearman/Pearson both ~0, p>0.4). That gap has since been fixed at its
+source (baselines/ann_gsbf.py's feature set and training/train_ann_gsbf.py's
+normalization) rather than here; see
+tests/test_ann_gsbf_training.py::test_ann_gsbf_generalizes_on_held_out_scenarios
+for the corresponding regression test.
 """
 
 from copy import deepcopy
@@ -87,17 +94,3 @@ def test_ddqn_socp_reduces_power_vs_all_on_at_iqbal_scenario(
     ddqn_socp_power = results["ddqn_socp"][0]["mean_power_w"]
 
     assert ddqn_socp_power < all_on_power
-
-
-# NOTE: an ANN+GSBF generalization test (does the trained ANN predict the
-# near-optimal active-RRH fraction on *held-out* scenarios better than a
-# naive constant predictor?) was attempted here and deliberately left out.
-# It failed: on both config/small_network.yaml (R=5) and config/default.yaml
-# (R=12), the exhaustive-search ground-truth labels are heavily skewed
-# toward one or two low RRH-count values, and the trained ANN's held-out
-# predictions did not beat a naive "always predict the training-set mean"
-# baseline on MAE, nor show a statistically significant correlation with
-# the true labels (Spearman/Pearson both ~0, p > 0.4). This is a genuine
-# finding about the current ANN+GSBF implementation's generalization,
-# surfaced during this audit and reported separately rather than silently
-# worked around with a weaker assertion.
