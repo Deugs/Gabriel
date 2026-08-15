@@ -469,7 +469,7 @@ The 5% QoS-violation-rate target (used as ≤5% throughout Sections 5, 11 in the
 
 12.8  Traffic Model (new, A1)
 
-The traffic model is **synthetic**, not a real operator trace (none were available for this project): a tidal (time-of-day) pattern — sinusoidal variation over 24 hours with distinct business-hour (09:00–12:00, 14:00–17:00) and residential-hour (19:00–23:00) peaks — with Poisson-arrival burstiness superimposed on the time-varying rate, per `docs/thesis_guide.md` §3.3. The generalization experiment in Section 12.3 (A5) evaluates the trained policy on a second synthetic profile (weekend/suburban: flatter daytime profile, later and lower residential peak) to test robustness to a traffic pattern never seen in training.
+The traffic model is **synthetic**, not a real operator trace (none were available for this project): a tidal (time-of-day) pattern — a **dual-Gaussian** diurnal factor over 24 hours, not a sinusoid, with a business-hour peak centered at 11:00 and a residential-hour peak centered at 20:00 — with **log-normal** (not Poisson) multiplicative burstiness applied per user on top of the time-varying rate, per `cran_env/traffic_model.py` and `docs/thesis_guide.md` §3.3. (**Correction, v4.0**: an earlier draft of this section, and of `docs/thesis_guide.md` §3.3, described the model as sinusoidal-with-Poisson-arrivals; that description did not match the actual implementation and has been corrected in both places.) The generalization experiment in Section 12.3 (A5) evaluates the trained policy on a second synthetic profile (weekend/suburban: flatter daytime profile, no business peak, a later and lower residential peak at 23:00) to test robustness to a traffic pattern never seen in training.
 
 12.9  State Representation at Scale (new, A2)
 
@@ -502,7 +502,7 @@ A scalability characterization from 5 to ≈50 RRHs, including the point at whic
 
 Evaluation results on CSI robustness and cross-traffic-profile generalization, directly addressing the perfect-CSI limitation without expanding scope.
 
-A head-to-head comparison against FA, greedy, NMBS, convex, DDQN, DDQN+SOCP, ANN+GSBF, P-DQN and MP-DQN baselines re-implemented under identical conditions — a comparison that does not yet exist in the published literature.
+A head-to-head comparison against FA, greedy, NMBS, convex, DDQN, DDQN+SOCP, ANN+GSBF, pure-DDPG, P-DQN and MP-DQN baselines re-implemented under identical conditions — a comparison that does not yet exist in the published literature.
 
 14. Risks and Mitigations
 
@@ -561,6 +561,8 @@ gantt
 | 27 | Revision & submission | Final draft submitted |
 
 Total estimated duration: about 20 weeks from approval of this document — three weeks longer than v2.0's estimate, reflecting the added baselines and evaluation work from this review rather than a change in ambition; R=50 is explicitly a stretch goal so the core timeline does not depend on it landing.
+
+**Date note**: `docs/daily_log.md`/`docs/workflow.md` record the Section 12.11 hyperparameter-tuning proxy sweep (a Phase 4 deliverable above) as run on 2026-08-05 — five days before this Gantt's Phase 1 start (2026-08-10). This is preliminary/exploratory validation carried out on early dev infrastructure ahead of the formally scheduled timeline below, not evidence that Phase 4 itself started early; the full 10-seed × 11-method experiment matrix remains unstarted, consistent with the Gantt as drawn.
 
 16. Thesis Structure, Current Status and Recommended Next Steps
 
