@@ -7,8 +7,8 @@ network:
   n_bbu: 10
   area_size_m: 2000
   carrier_freq_ghz: 2.1
-  bandwidth_mhz: 20
-  noise_power_dbm: -102
+  bandwidth_mhz: 10  # Iqbal et al. (2021), Table 2 -- matches default.yaml/small_network.yaml
+  noise_power_dbm: -102  # Iqbal et al. (2021), Table 2
 
 power:
   rrh:

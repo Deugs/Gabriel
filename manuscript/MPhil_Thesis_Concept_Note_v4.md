@@ -25,7 +25,7 @@ v3.0 resolved the condensed review of v2.0 (blockers B1–B4, recommendations S1
 | B3 | Combinatorial action space for N RRHs — how does the discrete head handle 2^N actions? | Dedicated worked-example subsection: there is no 2^N head — branching removes it by construction | §10.3.1 |
 | B4 | Revise timeline — 6 weeks is infeasible; reduce scope or extend, with week-by-week Gantt | 20-week week-by-week Gantt; R=50 demoted to stretch goal | §15 |
 | S1 | Frame within O-RAN (rApp; O1 for discrete, E2 for continuous) | New section | §11 |
-| S2 | Add P-DQN / MP-DQN as baselines | Added as baselines 8–9, with an explicit scaling caveat that itself evidences B3 | §12.1 |
+| S2 | Add P-DQN / MP-DQN as baselines | Added as baselines 9–10, with an explicit scaling caveat that itself evidences B3 | §12.1 |
 | S3 | CSI robustness: train on perfect CSI, evaluate under N(0,σ²), σ∈{0.01,0.05,0.1} | New evaluation subsection | §12.5 |
 | S4 | 10+ seeds; report effect sizes (Cohen's d) alongside p-values | Seed count and statistics updated; `docs/rules.md` seed list updated to match | §12.4 |
 | S5 | Define reward-weighting methodology | Manual tuning + documented sensitivity analysis, with a stated criterion for λ1/λ2 | §12.6 |
