@@ -32,7 +32,10 @@ def test_pdqn_action_selection_and_update(small_config):
     obs, _ = env.reset(seed=42)
 
     agent = PDQNAgent(
-        state_dim=env.state_dim, n_rrh=env.n_rrh, p_max_w=env.p_max_w, config=small_config
+        state_dim=env.state_dim,
+        n_rrh=env.n_rrh,
+        p_max_w=env.p_max_w,
+        config=small_config,
     )
 
     action = agent.select_action(obs, evaluate=False)
@@ -46,7 +49,12 @@ def test_pdqn_action_selection_and_update(small_config):
         action = agent.select_action(obs, evaluate=False)
         next_obs, reward, terminated, truncated, _ = env.step(action)
         agent.memory.push(
-            obs, action["action_idx"], action["continuous"], reward, next_obs, terminated
+            obs,
+            action["action_idx"],
+            action["continuous"],
+            reward,
+            next_obs,
+            terminated,
         )
         obs = next_obs
 
@@ -65,7 +73,10 @@ def test_mpdqn_action_selection_and_update(small_config):
     obs, _ = env.reset(seed=42)
 
     agent = MPDQNAgent(
-        state_dim=env.state_dim, n_rrh=env.n_rrh, p_max_w=env.p_max_w, config=small_config
+        state_dim=env.state_dim,
+        n_rrh=env.n_rrh,
+        p_max_w=env.p_max_w,
+        config=small_config,
     )
 
     action = agent.select_action(obs, evaluate=False)
@@ -76,7 +87,12 @@ def test_mpdqn_action_selection_and_update(small_config):
         action = agent.select_action(obs, evaluate=False)
         next_obs, reward, terminated, truncated, _ = env.step(action)
         agent.memory.push(
-            obs, action["action_idx"], action["continuous"], reward, next_obs, terminated
+            obs,
+            action["action_idx"],
+            action["continuous"],
+            reward,
+            next_obs,
+            terminated,
         )
         obs = next_obs
 
@@ -90,7 +106,10 @@ def test_mpdqn_masks_inactive_rrh_params(small_config):
     env = CRANEnv(small_config)
     obs, _ = env.reset(seed=42)
     agent = MPDQNAgent(
-        state_dim=env.state_dim, n_rrh=env.n_rrh, p_max_w=env.p_max_w, config=small_config
+        state_dim=env.state_dim,
+        n_rrh=env.n_rrh,
+        p_max_w=env.p_max_w,
+        config=small_config,
     )
 
     import torch
@@ -115,7 +134,10 @@ def test_ddpg_action_selection_and_update(small_config):
     obs, _ = env.reset(seed=42)
 
     agent = DDPGAgent(
-        state_dim=env.state_dim, n_rrh=env.n_rrh, p_max_w=env.p_max_w, config=small_config
+        state_dim=env.state_dim,
+        n_rrh=env.n_rrh,
+        p_max_w=env.p_max_w,
+        config=small_config,
     )
 
     action = agent.select_action(obs, evaluate=False)
@@ -135,6 +157,30 @@ def test_ddpg_action_selection_and_update(small_config):
     assert "critic_loss" in metrics
     assert "actor_loss" in metrics
     assert not np.isnan(metrics["critic_loss"])
+
+
+def test_pdqn_reads_algorithm_config_section(small_config):
+    """Regression test: `getattr(cfg, "algorithm", cfg)` does not perform
+    dict key lookup, so for a plain dict config this previously always
+    resolved to the whole cfg object (not cfg["algorithm"]), silently
+    discarding every algorithm: hyperparameter regardless of the YAML."""
+    cfg = deepcopy(small_config)
+    cfg["algorithm"]["buffer_size"] = 777
+
+    agent = PDQNAgent(
+        state_dim=20, n_rrh=cfg["network"]["n_rrh"], p_max_w=1.0, config=cfg
+    )
+    assert agent.memory.buffer.maxlen == 777
+
+
+def test_ddpg_reads_algorithm_config_section(small_config):
+    cfg = deepcopy(small_config)
+    cfg["algorithm"]["buffer_size"] = 777
+
+    agent = DDPGAgent(
+        state_dim=20, n_rrh=cfg["network"]["n_rrh"], p_max_w=1.0, config=cfg
+    )
+    assert agent.memory.buffer.maxlen == 777
 
 
 def test_run_baseline_benchmarks_includes_new_methods(tmp_path):

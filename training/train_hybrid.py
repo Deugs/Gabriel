@@ -122,12 +122,16 @@ def train_hybrid_agent(
     config_path: str,
     seed: int = 42,
     episodes: int = 100,
-    eval_freq: int = 10,
+    eval_freq: Optional[int] = None,
     save_dir: Optional[str] = None,
     use_wandb: Optional[bool] = None,
     config_overrides: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Train Branching MP-DQN + TD3 agent and log training metrics."""
+    """Train Branching MP-DQN + TD3 agent and log training metrics.
+
+    eval_freq=None (the default) reads config's evaluation.eval_freq; passing
+    an explicit int always overrides the config, same pattern as use_wandb.
+    """
     set_seed(seed)
 
     # Load configuration
@@ -135,7 +139,15 @@ def train_hybrid_agent(
         cfg = yaml.safe_load(f)
     cfg = apply_config_overrides(cfg, config_overrides)
 
+    evaluation_cfg = cfg.get("evaluation", {})
+    if eval_freq is None:
+        eval_freq = int(evaluation_cfg.get("eval_freq", 10))
+    n_eval_episodes = int(evaluation_cfg.get("n_eval_episodes", 5))
+    save_checkpoints = bool(evaluation_cfg.get("save_checkpoints", True))
+    checkpoint_freq = int(evaluation_cfg.get("checkpoint_freq", 500))
+
     logging_cfg = cfg.get("logging", {})
+    log_freq = int(logging_cfg.get("log_freq", 10))
     use_wandb_explicit = use_wandb is not None
     if use_wandb is None:
         use_wandb = logging_cfg.get("use_wandb", False)
@@ -273,8 +285,9 @@ def train_hybrid_agent(
             )
 
         # Evaluation phase
-        if ep % eval_freq == 0 or ep == episodes:
-            eval_metrics = evaluate_agent(env, agent, eval_episodes=5)
+        is_eval_ep = ep % eval_freq == 0 or ep == episodes
+        if is_eval_ep:
+            eval_metrics = evaluate_agent(env, agent, eval_episodes=n_eval_episodes)
             eval_metrics["episode"] = ep
             history["eval_history"].append(eval_metrics)
 
@@ -292,6 +305,29 @@ def train_hybrid_agent(
                     {f"eval/{k}": v for k, v in eval_metrics.items() if k != "episode"},
                     step=ep,
                 )
+        elif ep % log_freq == 0:
+            # Lighter console heartbeat between the fuller eval-cadence prints
+            # above (logging.log_freq).
+            print(
+                f"Ep {ep:4d}/{episodes} | Train Reward: {ep_reward:8.2f} | "
+                f"Critic Loss: {mean_loss:.4f} | Epsilon: {agent.epsilon:.3f}"
+            )
+
+        # Intermediate checkpoint (evaluation.save_checkpoints/checkpoint_freq)
+        # — distinct from the always-saved final_model.pt below, which is the
+        # actual deliverable rather than a crash-recovery snapshot.
+        if save_dir is not None and save_checkpoints and ep % checkpoint_freq == 0:
+            ckpt_dir = Path(save_dir) / f"branching_mp_dqn_seed{seed}"
+            ckpt_dir.mkdir(parents=True, exist_ok=True)
+            torch.save(
+                {
+                    "episode": ep,
+                    "encoder": agent.encoder.state_dict(),
+                    "param_net": agent.param_net.state_dict(),
+                    "twin_critic": agent.twin_critic.state_dict(),
+                },
+                ckpt_dir / f"checkpoint_ep{ep}.pt",
+            )
 
         gc.collect()
 
@@ -384,7 +420,10 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--episodes", type=int, default=100, help="Number of episodes")
     parser.add_argument(
-        "--eval-freq", type=int, default=10, help="Evaluation frequency"
+        "--eval-freq",
+        type=int,
+        default=None,
+        help="Evaluation frequency (overrides config's evaluation.eval_freq if set)",
     )
     parser.add_argument(
         "--save-dir", type=str, default="data/results", help="Directory to save results"

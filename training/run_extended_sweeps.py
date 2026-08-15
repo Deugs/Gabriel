@@ -28,14 +28,15 @@ def run_extended_sweeps(
     run_baseline_benchmarks(config_path, seeds=seeds, save_dir=results_dir)
 
     # 2. Run Proposed Branching MP-DQN + TD3 Agent Across Seeds
-    print("\n>>> Step 2/3: Training Proposed Branching MP-DQN + TD3 Agent Across Seeds...")
+    print(
+        "\n>>> Step 2/3: Training Proposed Branching MP-DQN + TD3 Agent Across Seeds..."
+    )
     for s in seeds:
         print(f"\n--- Training Seed {s} ({episodes} Episodes) ---")
         train_hybrid_agent(
             config_path=config_path,
             seed=s,
             episodes=episodes,
-            eval_freq=10,
             save_dir=results_dir,
         )
 

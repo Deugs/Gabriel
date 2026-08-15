@@ -19,19 +19,51 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
+_ACTIVATIONS: Dict[str, Any] = {
+    "relu": nn.ReLU,
+    "leaky_relu": nn.LeakyReLU,
+    "tanh": nn.Tanh,
+    "gelu": nn.GELU,
+}
+
+
+def _resolve_activation(name: str) -> Any:
+    try:
+        return _ACTIVATIONS[name.lower()]
+    except KeyError:
+        raise ValueError(
+            f"Unknown algorithm.activation '{name}'; supported: {sorted(_ACTIVATIONS)}"
+        )
+
 
 class SharedEncoder(nn.Module):
-    """Shared state encoder h(s|theta_h) mapping state s(t) to feature representation."""
+    """Shared state encoder h(s|theta_h) mapping state s(t) to feature representation.
 
-    def __init__(self, state_dim: int, hidden_dims: Optional[List[int]] = None):
+    Widths (`hidden_dims`), the nonlinearity (`activation`), and whether each
+    layer is followed by LayerNorm (`use_layer_norm`) are all config-driven via
+    `config/default.yaml`'s `algorithm:` block (Section 10.3 of the concept
+    note documents the [256, 128] spec value used when a config omits them).
+    """
+
+    def __init__(
+        self,
+        state_dim: int,
+        hidden_dims: Optional[List[int]] = None,
+        activation: str = "relu",
+        use_layer_norm: bool = True,
+    ):
         super().__init__()
         if hidden_dims is None:
             hidden_dims = [256, 128]
+        activation_cls = _resolve_activation(activation)
 
         layers: List[nn.Module] = []
         prev_dim = state_dim
         for dim in hidden_dims:
-            layers.extend([nn.Linear(prev_dim, dim), nn.ReLU(), nn.LayerNorm(dim)])
+            layers.append(nn.Linear(prev_dim, dim))
+            layers.append(activation_cls())
+            if use_layer_norm:
+                layers.append(nn.LayerNorm(dim))
             prev_dim = dim
 
         self.network = nn.Sequential(*layers)
@@ -83,10 +115,17 @@ class ContinuousParameterNetwork(nn.Module):
 class SingleBranchCritic(nn.Module):
     """Single Multi-Pass Branch Critic Q_r(s, k_r, x_r)."""
 
-    def __init__(self, state_dim: int, n_rrh: int):
+    def __init__(
+        self,
+        state_dim: int,
+        n_rrh: int,
+        hidden_dims: Optional[List[int]] = None,
+        activation: str = "relu",
+        use_layer_norm: bool = True,
+    ):
         super().__init__()
         self.n_rrh = n_rrh
-        self.encoder = SharedEncoder(state_dim, [256, 128])
+        self.encoder = SharedEncoder(state_dim, hidden_dims, activation, use_layer_norm)
         self.discrete_heads = BranchingDiscreteHeads(self.encoder.output_dim, n_rrh)
         # Parameter encoder: 2 continuous parameters (power, bandwidth) per RRH
         self.param_encoder = nn.Linear(2, 64)
@@ -123,10 +162,21 @@ class SingleBranchCritic(nn.Module):
 class TwinBranchCritic(nn.Module):
     """Twin Critic Networks (Q^A, Q^B) for TD3 over-estimation mitigation."""
 
-    def __init__(self, state_dim: int, n_rrh: int):
+    def __init__(
+        self,
+        state_dim: int,
+        n_rrh: int,
+        hidden_dims: Optional[List[int]] = None,
+        activation: str = "relu",
+        use_layer_norm: bool = True,
+    ):
         super().__init__()
-        self.q_a = SingleBranchCritic(state_dim, n_rrh)
-        self.q_b = SingleBranchCritic(state_dim, n_rrh)
+        self.q_a = SingleBranchCritic(
+            state_dim, n_rrh, hidden_dims, activation, use_layer_norm
+        )
+        self.q_b = SingleBranchCritic(
+            state_dim, n_rrh, hidden_dims, activation, use_layer_norm
+        )
 
     def forward(
         self,
@@ -193,25 +243,42 @@ class BranchingMPDQN:
         n_rrh: int,
         p_max_w: float = 1.0,
         config: Optional[Union[dict, Any]] = None,
-        device: str = "cpu",
+        device: Optional[str] = None,
     ):
         self.state_dim = state_dim
         self.n_rrh = n_rrh
         self.p_max_w = p_max_w
-        self.device = torch.device(device if torch.cuda.is_available() else "cpu")
 
-        # Extract hyperparameters
+        # Extract hyperparameters. NOTE: getattr(cfg, "algorithm", cfg) does
+        # NOT perform dict key lookup — for a plain dict config (the only
+        # kind this codebase ever actually constructs, via yaml.safe_load),
+        # it silently returns the whole `cfg` object rather than
+        # `cfg["algorithm"]`, so every get_val() below would fall through to
+        # its Python-side default regardless of the YAML. Dict configs must
+        # be indexed with cfg.get(...), not getattr(...).
         cfg = config if config is not None else {}
-        algo_cfg = (
-            getattr(cfg, "algorithm", cfg)
-            if hasattr(cfg, "algorithm") or isinstance(cfg, dict)
-            else cfg
-        )
+        if isinstance(cfg, dict):
+            algo_cfg = cfg.get("algorithm", {})
+            hardware_cfg = cfg.get("hardware", {})
+        else:
+            algo_cfg = getattr(cfg, "algorithm", cfg)
+            hardware_cfg = getattr(cfg, "hardware", cfg)
 
         def get_val(key, default):
             if isinstance(algo_cfg, dict):
                 return algo_cfg.get(key, default)
             return getattr(algo_cfg, key, default)
+
+        def get_hw_val(key, default):
+            if isinstance(hardware_cfg, dict):
+                return hardware_cfg.get(key, default)
+            return getattr(hardware_cfg, key, default)
+
+        # `hardware.device` (config/default.yaml) only supplies a default —
+        # an explicit `device=` argument from the caller always wins.
+        if device is None:
+            device = str(get_hw_val("device", "cpu"))
+        self.device = torch.device(device if torch.cuda.is_available() else "cpu")
 
         self.gamma = float(get_val("gamma", 0.99))
         self.tau = float(get_val("tau", 0.005))
@@ -228,22 +295,38 @@ class BranchingMPDQN:
         # absolute power units. Decays alongside epsilon (same rate, once per
         # update() call) down to a small floor rather than vanishing entirely.
         self.continuous_noise_std = float(get_val("continuous_noise_std", 0.1))
-        self.continuous_noise_std_end = float(
-            get_val("continuous_noise_std_end", 0.01)
-        )
+        self.continuous_noise_std_end = float(get_val("continuous_noise_std_end", 0.01))
 
         lr_branch = float(get_val("lr_discrete", 1e-3))
         lr_param = float(get_val("lr_actor", 1e-4))
         buffer_size = int(get_val("buffer_size", 100000))
 
+        # Training stability (Section 10.3): gradient clipping applied to both
+        # critic and parameter-network updates in update(); reward scaling
+        # applied to sampled rewards before the Bellman target is computed.
+        self.gradient_clip_norm = float(get_val("gradient_clip_norm", 1.0))
+        self.reward_scale = float(get_val("reward_scale", 1.0))
+
+        # Network architecture (Section 10.3): defaults match the [256, 128]
+        # spec value when a config omits these keys.
+        hidden_dims = get_val("hidden_dims", None)
+        if hidden_dims is not None:
+            hidden_dims = list(hidden_dims)
+        activation = str(get_val("activation", "relu"))
+        use_layer_norm = bool(get_val("use_layer_norm", True))
+
         # Shared encoder & continuous parameter network
-        self.encoder = SharedEncoder(state_dim, [256, 128]).to(self.device)
+        self.encoder = SharedEncoder(
+            state_dim, hidden_dims, activation, use_layer_norm
+        ).to(self.device)
         self.param_net = ContinuousParameterNetwork(self.encoder.output_dim, n_rrh).to(
             self.device
         )
 
         # Twin branch critics
-        self.twin_critic = TwinBranchCritic(state_dim, n_rrh).to(self.device)
+        self.twin_critic = TwinBranchCritic(
+            state_dim, n_rrh, hidden_dims, activation, use_layer_norm
+        ).to(self.device)
 
         # Targets
         self.encoder_target = copy.deepcopy(self.encoder).to(self.device)
@@ -344,7 +427,10 @@ class BranchingMPDQN:
         states = states.to(self.device)
         disc_actions = disc_actions.to(self.device)
         cont_params = cont_params.to(self.device)
-        rewards = rewards.to(self.device)
+        # reward_scale (Section 10.3): scales the Bellman target, not the
+        # stored transition, so replay-buffer contents stay in raw reward
+        # units regardless of this hyperparameter.
+        rewards = rewards.to(self.device) * self.reward_scale
         next_states = next_states.to(self.device)
         dones = dones.to(self.device)
 
@@ -387,7 +473,9 @@ class BranchingMPDQN:
 
         self.critic_opt.zero_grad()
         critic_loss.backward()
-        nn.utils.clip_grad_norm_(self.twin_critic.parameters(), max_norm=1.0)
+        nn.utils.clip_grad_norm_(
+            self.twin_critic.parameters(), max_norm=self.gradient_clip_norm
+        )
         self.critic_opt.step()
 
         # --- 3. Delayed Policy & Parameter Network Update ---
@@ -402,7 +490,9 @@ class BranchingMPDQN:
 
             self.param_opt.zero_grad()
             param_loss.backward()
-            nn.utils.clip_grad_norm_(self.param_net.parameters(), max_norm=1.0)
+            nn.utils.clip_grad_norm_(
+                self.param_net.parameters(), max_norm=self.gradient_clip_norm
+            )
             self.param_opt.step()
             param_loss_val = float(param_loss.item())
 
@@ -413,7 +503,8 @@ class BranchingMPDQN:
 
         self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
         self.continuous_noise_std = max(
-            self.continuous_noise_std_end, self.continuous_noise_std * self.epsilon_decay
+            self.continuous_noise_std_end,
+            self.continuous_noise_std * self.epsilon_decay,
         )
 
         return {

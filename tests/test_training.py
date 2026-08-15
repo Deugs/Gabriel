@@ -1,5 +1,6 @@
 """Unit tests for Training Infrastructure (training/)."""
 
+from copy import deepcopy
 from pathlib import Path
 import pytest
 import yaml  # type: ignore[import-untyped]
@@ -26,6 +27,26 @@ def config_path(tmp_path):
     return str(cfg_file)
 
 
+@pytest.fixture
+def make_config_path(tmp_path):
+    """Factory fixture: write config/default.yaml with an `evaluation:`
+    override applied, for tests of eval_freq/n_eval_episodes/save_checkpoints/
+    checkpoint_freq wiring in train_hybrid_agent()."""
+    orig_path = Path(__file__).parent.parent / "config" / "default.yaml"
+    with open(orig_path, "r") as f:
+        base_cfg = yaml.safe_load(f)
+
+    def _make(evaluation_overrides, name="test_config.yaml"):
+        cfg = deepcopy(base_cfg)
+        cfg["evaluation"].update(evaluation_overrides)
+        cfg_file = tmp_path / name
+        with open(cfg_file, "w") as f:
+            yaml.dump(cfg, f)
+        return str(cfg_file)
+
+    return _make
+
+
 def test_train_hybrid_agent_short_run(config_path, tmp_path):
     save_dir = str(tmp_path / "results")
     res = train_hybrid_agent(
@@ -43,6 +64,69 @@ def test_train_hybrid_agent_short_run(config_path, tmp_path):
 
     out_folder = Path(save_dir) / "branching_mp_dqn_seed42"
     assert (out_folder / "summary.json").exists()
+    assert (out_folder / "final_model.pt").exists()
+
+
+def test_train_hybrid_agent_eval_freq_defaults_from_config(make_config_path, tmp_path):
+    """eval_freq=None (the default) must read evaluation.eval_freq from the
+    config, not silently fall back to a hardcoded value that ignores it."""
+    config_path = make_config_path({"eval_freq": 2, "n_eval_episodes": 1})
+    res = train_hybrid_agent(
+        config_path=config_path, seed=42, episodes=4, save_dir=None
+    )
+
+    # eval_freq=2 over 4 episodes -> evaluated at episodes 2 and 4.
+    assert [h["episode"] for h in res["history"]["eval_history"]] == [2, 4]
+
+
+def test_train_hybrid_agent_n_eval_episodes_from_config(make_config_path, tmp_path):
+    config_path = make_config_path({"eval_freq": 1, "n_eval_episodes": 3})
+    res = train_hybrid_agent(
+        config_path=config_path, seed=42, episodes=1, save_dir=None
+    )
+
+    eval_metrics = res["history"]["eval_history"][0]
+    # eval_mean_reward is a mean over n_eval_episodes episodes; just confirm
+    # evaluate_agent ran (no crash) and the config path was actually used.
+    assert "eval_mean_reward" in eval_metrics
+
+
+def test_train_hybrid_agent_writes_intermediate_checkpoints(make_config_path, tmp_path):
+    """evaluation.save_checkpoints/checkpoint_freq must produce intermediate
+    checkpoint files during training, not just the always-saved final_model.pt."""
+    save_dir = str(tmp_path / "results")
+    config_path = make_config_path(
+        {
+            "eval_freq": 4,
+            "n_eval_episodes": 1,
+            "save_checkpoints": True,
+            "checkpoint_freq": 2,
+        }
+    )
+    train_hybrid_agent(config_path=config_path, seed=42, episodes=4, save_dir=save_dir)
+
+    out_folder = Path(save_dir) / "branching_mp_dqn_seed42"
+    assert (out_folder / "checkpoint_ep2.pt").exists()
+    assert (out_folder / "checkpoint_ep4.pt").exists()
+    assert (out_folder / "final_model.pt").exists()
+
+
+def test_train_hybrid_agent_save_checkpoints_false_skips_intermediate_checkpoints(
+    make_config_path, tmp_path
+):
+    save_dir = str(tmp_path / "results")
+    config_path = make_config_path(
+        {
+            "eval_freq": 4,
+            "n_eval_episodes": 1,
+            "save_checkpoints": False,
+            "checkpoint_freq": 1,
+        }
+    )
+    train_hybrid_agent(config_path=config_path, seed=42, episodes=3, save_dir=save_dir)
+
+    out_folder = Path(save_dir) / "branching_mp_dqn_seed42"
+    assert not list(out_folder.glob("checkpoint_ep*.pt"))
     assert (out_folder / "final_model.pt").exists()
 
 

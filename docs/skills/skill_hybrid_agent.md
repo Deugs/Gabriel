@@ -1,336 +1,239 @@
-# Skill: Hybrid SAC-DDQN Agent Design
+# Skill: Branching MP-DQN + TD3 Agent Design
 
 > **Status**: Invokable as the Antigravity `build-hybrid-agent` skill (`.agents/skills/build-hybrid-agent/`), which points back at this file as the spec of record.
+>
+> **v4.0 correction**: this file previously described the superseded v1.0 "Hybrid SAC-DDQN" design (a discrete DDQN actor, a continuous SAC Gaussian actor, and a single shared twin critic). That architecture was abandoned in favor of the branching, multi-pass, twin-critic parameterized DQN below (Concept Note v2.0/v3.0/v4.0 Section 10) well before this file was corrected to match — `agents/hybrid_sac_dqn.py` still exists only as the superseded alternative, kept for comparison, not as the proposed method. Everything below describes the actual implementation, `agents/branching_mp_dqn.py`.
 
 ## Purpose
-Implement a hybrid Deep Reinforcement Learning agent that combines discrete action selection (DDQN) for RRH on/off decisions with continuous policy optimization (SAC) for transmit power allocation, coordinated through a shared critic.
+
+Implement a hybrid Deep Reinforcement Learning agent that couples a true discrete decision per RRH (on/off, via R independent branching heads) with a continuous parameter per RRH (transmit power ratio and bandwidth share), through **one** coupled Q-network family — not two separate actor networks arbitrated by a shared critic. The coupling mechanism is P-DQN (Xiong et al., 2018), corrected for parameter cross-talk by MP-DQN's multi-pass masking (Bester et al., 2019), scaled to R RRHs by branching (Tavakoli et al., 2018), and stabilized by TD3-style twin critics and target-policy smoothing (Fujimoto et al., 2018).
 
 ## Architecture Overview
 
 ```
                     State s(t)
                          |
+                  Shared Encoder h(s|theta_h)
+                  FC(256)-ReLU-LayerNorm
+                  FC(128)-ReLU-LayerNorm
+                         |
           +--------------+--------------+
           |                             |
-    Discrete Actor                Continuous Actor
-    (DDQN-style)                  (SAC Gaussian)
+   Continuous Parameter Net      R Branch Heads
+   x(s|phi): all R RRHs'         (BranchingDiscreteHeads,
+   (p_r, beta_r)                  dueling: V(s)+A_r(s,k_r))
           |                             |
-    Q-values per                 Mean, Log-Std
-    RRH binary                   per RRH power
-          |                             |
-    Epsilon-greedy               Reparameterization
-    sampling                     trick
-          |                             |
-    v(t+1) in {0,1}^R          p(t) ~ N(mu, sigma)
-          |                             |
+   Multi-pass mask (MP-DQN):     Q_r(s, k_r, x_r) for
+   keep x_r, zero x_j (j!=r)     k_r in {0,1}, r=1..R
+   before each branch's                 |
+   Q-value pass                  argmax_k_r per branch
+          |                      (independent, epsilon-greedy)
           +--------------+--------------+
                          |
-                  Shared Critic
-                  (Twin Q-Networks)
+              Twin Critics (Q^A, Q^B)
+              -- two independent copies of the
+                 encoder+branch-heads pipeline above
                          |
-              Q(s, v, p) -> scalar value
+              min(Q^A, Q^B) -> TD3 Bellman target
 ```
+
+Concretely, per RRH branch r (Concept Note Section 10.3):
+
+- **Shared encoder** `h(s|theta_h)`: two FC layers (256, 128 units), ReLU + LayerNorm each — `SharedEncoder`.
+- **Continuous parameter network** `x(s|phi)`: a deterministic sub-network producing `x_r(s) = (p_r, beta_r)` for **all** R RRHs from the shared representation (the P-DQN mechanism) — `ContinuousParameterNetwork`. `p_r` (power ratio) is sigmoid-activated in [0,1]; `beta_r` (bandwidth share) is softmax-normalized across RRHs so shares sum to 1.
+- **Multi-pass mask** (MP-DQN): before branch r's Q-value is computed, only `x_r` is fed into that pass — every other RRH's continuous parameters are excluded from that pass's computation graph, removing the false-gradient cross-talk P-DQN's single-pass design would otherwise introduce (Bester et al., 2019).
+- **R discrete branches** (Tavakoli et al., 2018): each RRH gets a dueling-style head producing `Q_r(s, k_r)` for `k_r in {0,1}` off the shared representation plus its own (masked) `x_r` — `BranchingDiscreteHeads`, output grows as 2R, not 2^R.
+- **Twin critics** (Fujimoto et al., 2018): two independent copies of the branch/critic network (`Q^A`, `Q^B` — `TwinBranchCritic`), each with its own target network; the Bellman target uses `min(Q^A, Q^B)` to counter overestimation bias, with delayed, less-frequent updates to `phi` (`policy_delay`, default 2) and target-policy smoothing noise on `x'` at the target networks.
 
 ## Network Specifications
 
-### Discrete Actor (Q-Network)
-```python
-class DiscreteActor(nn.Module):
-    def __init__(self, state_dim, n_rrh, hidden_dims=[256, 256]):
-        super().__init__()
-        self.n_rrh = n_rrh
+The actual module classes (`agents/branching_mp_dqn.py`) — read that file directly for the current, authoritative implementation; the excerpts below exist to keep this spec in sync with it, not to duplicate it as a separate source of truth.
 
-        layers = []
+### Shared Encoder
+
+```python
+class SharedEncoder(nn.Module):
+    """Shared state encoder h(s|theta_h) mapping state s(t) to feature representation."""
+
+    def __init__(
+        self,
+        state_dim: int,
+        hidden_dims: Optional[List[int]] = None,
+        activation: str = "relu",
+        use_layer_norm: bool = True,
+    ):
+        super().__init__()
+        if hidden_dims is None:
+            hidden_dims = [256, 128]
+        activation_cls = _resolve_activation(activation)
+        layers: List[nn.Module] = []
         prev_dim = state_dim
         for dim in hidden_dims:
-            layers.extend([
-                nn.Linear(prev_dim, dim),
-                nn.ReLU(),
-                nn.LayerNorm(dim)
-            ])
+            layers.append(nn.Linear(prev_dim, dim))
+            layers.append(activation_cls())
+            if use_layer_norm:
+                layers.append(nn.LayerNorm(dim))
             prev_dim = dim
-
-        self.backbone = nn.Sequential(*layers)
-        # Factorized: independent binary decision per RRH
-        self.heads = nn.ModuleList([
-            nn.Linear(prev_dim, 2) for _ in range(n_rrh)
-        ])
-
-    def forward(self, state):
-        features = self.backbone(state)
-        q_values = torch.stack([head(features) for head in self.heads], dim=1)
-        # q_values: (batch, n_rrh, 2) -> Q(s, v_r=0) and Q(s, v_r=1)
-        return q_values
-
-    def select_action(self, state, epsilon=0.0):
-        if np.random.random() < epsilon:
-            return torch.randint(0, 2, (self.n_rrh,))
-
-        with torch.no_grad():
-            q_values = self.forward(state.unsqueeze(0))[0]  # (n_rrh, 2)
-            actions = q_values.argmax(dim=-1)  # (n_rrh,)
-        return actions
+        self.network = nn.Sequential(*layers)
+        self.output_dim = prev_dim
 ```
 
-### Continuous Actor (Gaussian Policy)
+`hidden_dims`, `activation`, and `use_layer_norm` are now genuinely config-driven (`algorithm.hidden_dims`/`activation`/`use_layer_norm` in `config/default.yaml`) — `BranchingMPDQN.__init__` reads all three and threads them into `SharedEncoder` and `SingleBranchCritic`'s internal encoder alike, so a config that omits them still gets the `[256, 128]`/ReLU/LayerNorm spec defaults shown above.
+
+### R Branching Discrete Heads (Dueling)
+
 ```python
-class ContinuousActor(nn.Module):
-    def __init__(self, state_dim, n_rrh, hidden_dims=[256, 256], 
-                 log_std_min=-20, log_std_max=2):
+class BranchingDiscreteHeads(nn.Module):
+    """Factorized Dueling Discrete Branch Heads Q_r(s, k_r) for R RRHs."""
+
+    def __init__(self, feature_dim: int, n_rrh: int):
+        super().__init__()
+        self.value_head = nn.Linear(feature_dim, 1)
+        self.adv_heads = nn.ModuleList(
+            [nn.Linear(feature_dim, 2) for _ in range(n_rrh)]
+        )
+
+    def forward(self, features: torch.Tensor) -> torch.Tensor:
+        v = self.value_head(features).unsqueeze(1)          # (batch, 1, 1)
+        advs = torch.stack([head(features) for head in self.adv_heads], dim=1)
+        # Dueling aggregation: Q_r(s, a) = V(s) + (A_r(s, a) - mean(A_r(s, .)))
+        return v + (advs - advs.mean(dim=-1, keepdim=True))
+```
+
+### Continuous Parameter Network (P-DQN)
+
+```python
+class ContinuousParameterNetwork(nn.Module):
+    """Deterministic continuous parameter network x(s|phi) producing (p_r, beta_r) per RRH."""
+
+    def __init__(self, feature_dim: int, n_rrh: int):
+        super().__init__()
+        self.power_head = nn.Linear(feature_dim, n_rrh)
+        self.bandwidth_head = nn.Linear(feature_dim, n_rrh)
+
+    def forward(self, features):
+        power_ratio = torch.sigmoid(self.power_head(features))       # [0,1] per RRH
+        bandwidth_share = F.softmax(self.bandwidth_head(features), dim=-1)  # sums to 1
+        return power_ratio, bandwidth_share
+```
+
+### Single-Branch Critic with MP-DQN Multi-Pass Masking
+
+```python
+class SingleBranchCritic(nn.Module):
+    """Single Multi-Pass Branch Critic Q_r(s, k_r, x_r)."""
+
+    def __init__(
+        self,
+        state_dim: int,
+        n_rrh: int,
+        hidden_dims: Optional[List[int]] = None,
+        activation: str = "relu",
+        use_layer_norm: bool = True,
+    ):
         super().__init__()
         self.n_rrh = n_rrh
-        self.log_std_min = log_std_min
-        self.log_std_max = log_std_max
+        self.encoder = SharedEncoder(state_dim, hidden_dims, activation, use_layer_norm)
+        self.discrete_heads = BranchingDiscreteHeads(self.encoder.output_dim, n_rrh)
+        self.param_encoder = nn.Linear(2, 64)  # 2 continuous params (power, bandwidth)
+        self.fusion = nn.Linear(self.encoder.output_dim + 64, self.encoder.output_dim)
 
-        layers = []
-        prev_dim = state_dim
-        for dim in hidden_dims:
-            layers.extend([
-                nn.Linear(prev_dim, dim),
-                nn.ReLU(),
-                nn.LayerNorm(dim)
-            ])
-            prev_dim = dim
+    def forward(self, state, continuous_params, branch_mask_idx: Optional[int] = None):
+        feat = self.encoder(state)
+        params_3d = continuous_params.view(-1, self.n_rrh, 2)
 
-        self.backbone = nn.Sequential(*layers)
-        self.mean = nn.Linear(prev_dim, n_rrh)
-        self.log_std = nn.Linear(prev_dim, n_rrh)
+        if branch_mask_idx is not None:
+            # Multi-pass (MP-DQN): only branch_mask_idx's own (p_r, beta_r)
+            # enters this pass's computation graph -- every other RRH's
+            # parameters are excluded, not merely zeroed after the fact.
+            param_feat = F.relu(self.param_encoder(params_3d[:, branch_mask_idx, :]))
+        else:
+            param_feat = F.relu(self.param_encoder(params_3d.mean(dim=1)))
 
-    def forward(self, state):
-        features = self.backbone(state)
-        mean = torch.sigmoid(self.mean(features))  # [0, 1]
-        log_std = torch.clamp(self.log_std(features), self.log_std_min, self.log_std_max)
-        return mean, log_std
-
-    def sample(self, state):
-        mean, log_std = self.forward(state)
-        std = log_std.exp()
-
-        # Reparameterization trick
-        noise = torch.randn_like(mean)
-        action = mean + std * noise
-        action = torch.clamp(action, 0, 1)  # Ensure valid power ratio
-
-        # Log probability
-        log_prob = -0.5 * ((noise ** 2) + 2 * log_std + np.log(2 * np.pi))
-        log_prob = log_prob.sum(dim=-1, keepdim=True)
-
-        return action, log_prob
-
-    def get_action(self, state, deterministic=False):
-        mean, _ = self.forward(state)
-        if deterministic:
-            return mean
-        return self.sample(state)[0]
+        fused = F.relu(self.fusion(torch.cat([feat, param_feat], dim=-1)))
+        return self.discrete_heads(fused)  # (batch, n_rrh, 2)
 ```
 
-### Shared Critic (Twin Q-Networks)
+The `_multi_pass_q()` driver (on `BranchingMPDQN`, not the critic itself) runs this forward pass once **per branch** (R passes total per critic evaluation) and keeps only that pass's branch-r slice of the output — this is what actually implements "multi-pass": R independent, cross-talk-free evaluations, not R simultaneous branch outputs from one pass.
+
+### Twin Critics (TD3)
+
 ```python
-class HybridCritic(nn.Module):
-    def __init__(self, state_dim, n_rrh, hidden_dims=[256, 256]):
+class TwinBranchCritic(nn.Module):
+    """Twin Critic Networks (Q^A, Q^B) for TD3 over-estimation mitigation."""
+
+    def __init__(
+        self,
+        state_dim: int,
+        n_rrh: int,
+        hidden_dims: Optional[List[int]] = None,
+        activation: str = "relu",
+        use_layer_norm: bool = True,
+    ):
         super().__init__()
+        self.q_a = SingleBranchCritic(state_dim, n_rrh, hidden_dims, activation, use_layer_norm)
+        self.q_b = SingleBranchCritic(state_dim, n_rrh, hidden_dims, activation, use_layer_norm)
 
-        # State path
-        state_layers = []
-        prev_dim = state_dim
-        for dim in hidden_dims:
-            state_layers.extend([
-                nn.Linear(prev_dim, dim),
-                nn.ReLU(),
-                nn.LayerNorm(dim)
-            ])
-            prev_dim = dim
-        self.state_encoder = nn.Sequential(*state_layers)
-
-        # Discrete action embedding
-        self.discrete_embed = nn.Embedding(2, 16)  # 2 states (on/off) -> 16-dim
-
-        # Continuous action path
-        self.action_encoder = nn.Sequential(
-            nn.Linear(n_rrh, 128),
-            nn.ReLU(),
-            nn.LayerNorm(128)
-        )
-
-        # Fusion layers
-        fusion_dim = prev_dim + n_rrh * 16 + 128
-        self.fusion = nn.Sequential(
-            nn.Linear(fusion_dim, 256),
-            nn.ReLU(),
-            nn.LayerNorm(256),
-            nn.Linear(256, 1)
-        )
-
-    def forward(self, state, discrete_action, continuous_action):
-        # discrete_action: (batch, n_rrh) in {0, 1}
-        # continuous_action: (batch, n_rrh) in [0, 1]
-
-        state_feat = self.state_encoder(state)
-
-        disc_embed = self.discrete_embed(discrete_action.long())  # (batch, n_rrh, 16)
-        disc_feat = disc_embed.view(disc_embed.size(0), -1)  # (batch, n_rrh*16)
-
-        cont_feat = self.action_encoder(continuous_action)
-
-        fusion = torch.cat([state_feat, disc_feat, cont_feat], dim=-1)
-        q_value = self.fusion(fusion)
-        return q_value
+    def forward(self, state, continuous_params, branch_mask_idx=None):
+        return self.q_a(state, continuous_params, branch_mask_idx), \
+               self.q_b(state, continuous_params, branch_mask_idx)
 ```
 
-## Training Algorithm
+## Training Algorithm (`BranchingMPDQN`)
 
-```python
-class HybridSACDDQN:
-    def __init__(self, state_dim, n_rrh, n_ue, config):
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.n_rrh = n_rrh
-        self.gamma = config.gamma
-        self.tau = config.tau
-        self.alpha = config.alpha  # SAC temperature
-        self.epsilon = config.epsilon_start
+Key points from `agents/branching_mp_dqn.py::update()` (read the actual file for the full, current implementation):
 
-        # Networks
-        self.discrete_actor = DiscreteActor(state_dim, n_rrh).to(self.device)
-        self.continuous_actor = ContinuousActor(state_dim, n_rrh).to(self.device)
-        self.critic1 = HybridCritic(state_dim, n_rrh).to(self.device)
-        self.critic2 = HybridCritic(state_dim, n_rrh).to(self.device)
-
-        # Target networks
-        self.critic1_target = copy.deepcopy(self.critic1)
-        self.critic2_target = copy.deepcopy(self.critic2)
-        self.continuous_actor_target = copy.deepcopy(self.continuous_actor)
-
-        # Optimizers
-        self.disc_opt = optim.Adam(self.discrete_actor.parameters(), lr=config.lr_disc)
-        self.cont_opt = optim.Adam(self.continuous_actor.parameters(), lr=config.lr_actor)
-        self.critic_opt = optim.Adam(
-            list(self.critic1.parameters()) + list(self.critic2.parameters()),
-            lr=config.lr_critic
-        )
-
-        # Replay buffer
-        self.replay_buffer = ReplayBuffer(config.buffer_size)
-
-    def update(self, batch_size):
-        if len(self.replay_buffer) < batch_size:
-            return {}
-
-        batch = self.replay_buffer.sample(batch_size)
-        states = torch.FloatTensor(batch.states).to(self.device)
-        discrete_actions = torch.LongTensor(batch.discrete_actions).to(self.device)
-        continuous_actions = torch.FloatTensor(batch.continuous_actions).to(self.device)
-        rewards = torch.FloatTensor(batch.rewards).to(self.device).unsqueeze(1)
-        next_states = torch.FloatTensor(batch.next_states).to(self.device)
-        dones = torch.FloatTensor(batch.dones).to(self.device).unsqueeze(1)
-
-        # --- Critic Update ---
-        with torch.no_grad():
-            # Next discrete action (target Q-network)
-            next_q_disc = self.discrete_actor(next_states)  # (batch, n_rrh, 2)
-            next_disc_actions = next_q_disc.argmax(dim=-1)  # (batch, n_rrh)
-
-            # Next continuous action (target policy)
-            next_cont_actions, next_log_prob = self.continuous_actor_target.sample(next_states)
-
-            # Target Q-values
-            q1_next = self.critic1_target(next_states, next_disc_actions, next_cont_actions)
-            q2_next = self.critic2_target(next_states, next_disc_actions, next_cont_actions)
-            q_next = torch.min(q1_next, q2_next) - self.alpha * next_log_prob
-
-            y = rewards + self.gamma * (1 - dones) * q_next
-
-        # Current Q-values
-        q1 = self.critic1(states, discrete_actions, continuous_actions)
-        q2 = self.critic2(states, discrete_actions, continuous_actions)
-
-        critic_loss = F.mse_loss(q1, y) + F.mse_loss(q2, y)
-
-        self.critic_opt.zero_grad()
-        critic_loss.backward()
-        torch.nn.utils.clip_grad_norm_(
-            list(self.critic1.parameters()) + list(self.critic2.parameters()), 1.0
-        )
-        self.critic_opt.step()
-
-        # --- Discrete Actor Update ---
-        q_values = self.discrete_actor(states)  # (batch, n_rrh, 2)
-        # Maximize Q for selected actions
-        disc_loss = -(q_values.gather(-1, discrete_actions.unsqueeze(-1)).squeeze(-1).mean())
-
-        self.disc_opt.zero_grad()
-        disc_loss.backward()
-        self.disc_opt.step()
-
-        # --- Continuous Actor Update ---
-        cont_actions, log_prob = self.continuous_actor.sample(states)
-        # Use current discrete actor's best action
-        disc_actions = self.discrete_actor(states).argmax(dim=-1)
-
-        q1_new = self.critic1(states, disc_actions, cont_actions)
-        q2_new = self.critic2(states, disc_actions, cont_actions)
-        q_new = torch.min(q1_new, q2_new)
-
-        actor_loss = -(q_new - self.alpha * log_prob).mean()
-
-        self.cont_opt.zero_grad()
-        actor_loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.continuous_actor.parameters(), 1.0)
-        self.cont_opt.step()
-
-        # --- Soft Update Target Networks ---
-        self._soft_update(self.critic1_target, self.critic1)
-        self._soft_update(self.critic2_target, self.critic2)
-        self._soft_update(self.continuous_actor_target, self.continuous_actor)
-
-        # Decay epsilon
-        self.epsilon = max(config.epsilon_end, self.epsilon * config.epsilon_decay)
-
-        return {
-            "critic_loss": critic_loss.item(),
-            "disc_loss": disc_loss.item(),
-            "actor_loss": actor_loss.item(),
-            "q_value": q1.mean().item(),
-            "epsilon": self.epsilon
-        }
-
-    def _soft_update(self, target, source):
-        for target_param, param in zip(target.parameters(), source.parameters()):
-            target_param.data.copy_(
-                self.tau * param.data + (1 - self.tau) * target_param.data
-            )
-```
+1. **Target computation**: the target encoder/parameter-net produce `next_cont_params`; **target-policy smoothing noise** (`N(0, target_noise_std)`, clamped to `[-0.1, 0.1]`) is added before clamping to `[0,1]` — this is genuinely applied, not omitted.
+2. **Multi-pass target Q-values**: `_multi_pass_q()` evaluates both target critics per branch; **Double-DQN-style action selection** uses `Q^A`'s argmax, then **`torch.min(Q^A, Q^B)` at that selected action** forms the TD3 Bellman target — a true element-wise min of both twin critics, not just one.
+3. **Critic loss**: MSE between each twin critic's Q-value at the *taken* discrete action (from the replay buffer) and the shared target, summed across both critics and all R branches.
+4. **Delayed policy update**: every `policy_delay` (default 2) critic updates, the continuous parameter network (and encoder) are updated to maximize `Q^A`'s multi-pass value, and all three target networks (encoder, param net, twin critic) receive a soft (Polyak) update — TD3's delayed-actor-update pattern, factored here around the shared continuous parameter net rather than a discrete actor.
+5. **Exploration**: independent epsilon-greedy per discrete branch (`self.epsilon`, decayed once per `update()` call) and additive Gaussian noise on the continuous parameters (`self.continuous_noise_std`, decayed alongside epsilon) — both mechanisms present, matching Concept Note Section 10.5.
 
 ## Key Design Decisions
 
 | Decision | Rationale |
 |----------|-----------|
-| Factorized discrete actions | Independent per-RRH decisions avoid exponential action space (2^R) |
-| Twin critics | Reduces overestimation bias (TD3/SAC principle) |
-| LayerNorm vs BatchNorm | LayerNorm more stable with varying batch sizes in RL |
-| Sigmoid output for continuous actor | Natural [0,1] scaling; multiply by P_max in environment |
-| Shared state encoder | Could be added; currently separate for flexibility |
+| Branching (R independent heads) instead of a joint 2^R head | Avoids exponential action-space growth (Section 10.3.1); output scales as 2R |
+| MP-DQN multi-pass masking, not P-DQN's single shared pass | Removes false-gradient cross-talk between unrelated RRHs (Bester et al., 2019); a structural requirement of this design, not optional (Section 10.5) |
+| Twin critics + delayed policy update + target-policy smoothing | TD3's fix for DDPG-style overestimation bias, applied to the branch/critic pipeline |
+| LayerNorm (not BatchNorm) after every FC layer | More stable with the varying/small batch sizes typical of RL |
+| Sigmoid for power ratio, softmax for bandwidth share | Power ratio is an independent [0,1] fraction of P_max per RRH; bandwidth shares must sum to 1 across active RRHs |
+| One shared encoder feeding both the continuous parameter net and every branch's critic | The actual coupling mechanism that makes this "one coupled network" rather than two separate actor networks arbitrated by a shared critic (the superseded v1.0 design this file used to describe) |
 
 ## Hyperparameters
 
+Read from `config/default.yaml`'s `algorithm:` block via `BranchingMPDQN`'s `get_val()` helper (falls back to the defaults below if a key is absent):
+
 ```yaml
-lr_disc: 1e-4        # Discrete actor learning rate
-lr_actor: 3e-4        # Continuous actor learning rate
-lr_critic: 3e-4       # Critic learning rate
-buffer_size: 1000000  # Replay buffer capacity
-batch_size: 256       # Mini-batch size
-gamma: 0.99           # Discount factor
-tau: 0.005            # Soft update rate
-alpha: 0.2            # SAC entropy temperature (auto-tune recommended)
-epsilon_start: 1.0    # Initial exploration rate
-epsilon_end: 0.01     # Final exploration rate
-epsilon_decay: 0.995  # Decay per episode
+lr_discrete: 1.0e-4    # Branch/critic learning rate
+lr_actor: 3.0e-4       # Continuous parameter network learning rate
+buffer_size: 1000000   # Replay buffer capacity
+batch_size: 256        # Mini-batch size (passed to update(), not read from config)
+hidden_dims: [256, 256]  # SharedEncoder/SingleBranchCritic layer widths
+activation: "relu"       # SharedEncoder nonlinearity: relu, leaky_relu, tanh, or gelu
+use_layer_norm: true     # Whether SharedEncoder applies LayerNorm after each layer
+gamma: 0.99            # Discount factor
+tau: 0.005             # Soft update rate
+policy_delay: 2        # TD3 actor/target-update delay (critic updates per policy update)
+target_noise_std: 0.05 # TD3 target-policy smoothing noise std
+epsilon_start: 1.0     # Initial discrete-branch exploration rate
+epsilon_end: 0.01      # Final exploration rate
+epsilon_decay: 0.995   # Decay per update() call
+continuous_noise_std: 0.1       # Initial continuous-parameter exploration noise std
+continuous_noise_std_end: 0.01  # Final continuous-parameter noise std
+gradient_clip_norm: 1.0  # max_norm for both twin-critic and param-net gradient clipping
+reward_scale: 1.0        # Multiplicative scale applied to sampled rewards before the Bellman target
 ```
 
+All of the above are genuinely read via `BranchingMPDQN`'s `get_val()` helper — none are dead. Note `hidden_dims` in `config/default.yaml` is `[256, 256]`, not the `[256, 128]` used in this file's illustrative snippets above; the snippets show the values a config-less construction (or the small/large-network configs, which omit this key) falls back to, matching Concept Note Section 10.3's spec figure. `hardware.device` (in `config/default.yaml`'s `hardware:` block, not `algorithm:`) supplies `BranchingMPDQN`'s device default when the constructor's `device` argument is left as `None`; an explicit `device=` argument always wins over it.
+
 ## Validation Checklist
-- [ ] Critic loss decreases monotonically over first 1000 updates
-- [ ] Q-values are finite (no NaN/Inf)
-- [ ] Discrete actor explores initially (epsilon starts at 1.0)
-- [ ] Continuous actor outputs in [0,1] range
-- [ ] Target networks update slower than main networks (tau << 1)
-- [ ] Gradient norms are reasonable (< 10 after clipping)
-- [ ] Action selection is faster than environment step time
+
+- [ ] Critic loss decreases over the first ~1000 updates
+- [ ] Q-values are finite (no NaN/Inf) across both twin critics
+- [ ] Each discrete branch explores initially (epsilon starts at 1.0) and decays
+- [ ] Continuous parameters stay in valid ranges (power ratio in [0,1], bandwidth shares summing to ~1)
+- [ ] Target networks update slower than main networks (tau << 1); policy/target updates only occur every `policy_delay` critic updates
+- [ ] `_multi_pass_q()` genuinely produces different Q-values for two candidate parameter vectors that differ only in an unrelated RRH's `(p_j, beta_j)` for `j != r` (i.e., cross-talk is actually absent) — see `tests/test_baselines_v2.py`/`agents/branching_mp_dqn.py`'s own tests for a concrete check of this
+- [ ] Gradient norms are reasonable (clipped to `algorithm.gradient_clip_norm`, default 1.0)
+- [ ] Action selection is faster than environment step time (see `evaluation/latency_benchmark.py`)

@@ -155,8 +155,17 @@ class CRANEnv(gym.Env):
         self.prev_power_w: float = 0.0
         self.hour: int = 0
         self.step_count: int = 0
-        algo_cfg = getattr(cfg, "algorithm", cfg)
-        self.max_steps: int = int(getattr(algo_cfg, "max_steps_per_episode", 100))
+        # NOTE: getattr(cfg, "algorithm", cfg) does NOT perform dict key
+        # lookup — for a plain dict config it silently returns the whole
+        # `cfg` object instead of `cfg["algorithm"]`. Dict configs must be
+        # indexed with cfg.get(...); getattr(algo_cfg, ...) below would
+        # otherwise always fall through to its Python-side default.
+        if isinstance(cfg, dict):
+            algo_cfg = cfg.get("algorithm", {})
+            self.max_steps: int = int(algo_cfg.get("max_steps_per_episode", 100))
+        else:
+            algo_cfg = getattr(cfg, "algorithm", cfg)
+            self.max_steps = int(getattr(algo_cfg, "max_steps_per_episode", 100))
 
     def reset(
         self, seed: Optional[int] = None, options: Optional[dict] = None
@@ -261,11 +270,14 @@ class CRANEnv(gym.Env):
             bandwidth_share = rrh_on.astype(np.float32) / n_active
 
         # Each user gets the bandwidth share of the RRH serving it (0 if unserved)
-        user_bandwidth_hz = np.where(
-            serving_rrh >= 0,
-            bandwidth_share[np.clip(serving_rrh, 0, self.n_rrh - 1)],
-            0.0,
-        ) * self.channel.bandwidth
+        user_bandwidth_hz = (
+            np.where(
+                serving_rrh >= 0,
+                bandwidth_share[np.clip(serving_rrh, 0, self.n_rrh - 1)],
+                0.0,
+            )
+            * self.channel.bandwidth
+        )
 
         # Achievable capacity per user across its allocated share of bandwidth B
         achievable_capacity_bps = user_bandwidth_hz * np.log2(1.0 + sinr)
@@ -379,7 +391,5 @@ class CRANEnv(gym.Env):
         serving RRH, signal, and interference terms are derived.
         """
         signal, interference, _ = self._signal_interference(active_mask, power)
-        sinr = np.where(
-            signal > 0.0, signal / (interference + self.noise_power_w), 0.0
-        )
+        sinr = np.where(signal > 0.0, signal / (interference + self.noise_power_w), 0.0)
         return sinr.astype(np.float32)
