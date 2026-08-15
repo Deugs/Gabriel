@@ -84,10 +84,20 @@ def run_baseline_benchmarks(
                         env.n_rrh,
                         env.n_ue,
                         env.p_max_w,
+                        target_sinr_db=float(
+                            cfg.get("reward", {}).get("qos_target_sinr_db", 0.0)
+                        ),
                         noise_power_w=env.noise_power_w,
                     )
                 elif algo == "ddqn":
-                    model = DDQNAgent(env.state_dim, env.n_rrh)
+                    algo_cfg = cfg.get("algorithm", {})
+                    model = DDQNAgent(
+                        env.state_dim,
+                        env.n_rrh,
+                        hidden_dims=algo_cfg.get("hidden_dims"),
+                        activation=algo_cfg.get("activation", "relu"),
+                        use_layer_norm=algo_cfg.get("use_layer_norm", True),
+                    )
                 elif algo == "ann_gsbf":
                     model = ANNGSBFBaseline(
                         env.n_rrh,
@@ -209,6 +219,13 @@ def run_baseline_benchmarks(
 
                     obs = next_obs
                     done = terminated or truncated
+
+                # epsilon_decay (config/default.yaml) is a per-episode rate,
+                # not per environment step.
+                if algo in ("ddqn", "pdqn", "mpdqn"):
+                    model.decay_exploration()
+                elif algo == "ddqn_socp":
+                    model.ddqn.decay_exploration()
 
                 ep_rewards.append(float(total_reward))
                 ep_powers.append(float(np.mean(powers)))

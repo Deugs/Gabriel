@@ -1,12 +1,14 @@
 # Hooks: C-RAN DRL Thesis Development Lifecycle
 
-> **Status**: The pre-commit hook below is live — installed at `.githooks/pre-commit` (tracked in git,
-> not `.git/hooks/`) with `git config core.hooksPath .githooks` pointing at it. It currently runs in
-> lenient mode: each check (black/flake8/mypy/pytest) skips gracefully if there's no code or tests yet,
-> or if the tool isn't installed, so it won't block commits during early scaffolding. As real
-> implementation and tests land in `cran_env/`, `agents/`, etc., it starts enforcing for real — no
-> further action needed. On a fresh clone, run `git config core.hooksPath .githooks` once to activate it
-> (this setting lives in the local `.git/config` and isn't carried automatically by `git clone`).
+> **Status (corrected, sixth audit round)**: the script is committed and executable at
+> `.githooks/pre-commit` (tracked in git, not `.git/hooks/`), but it is **not** active by default in any
+> given checkout — `git config core.hooksPath .githooks` must be run once, locally, per clone (this
+> setting lives in `.git/config`, which `git clone` never copies, so no checkout has it pre-wired; a
+> previous version of this note incorrectly implied it was already active). Run that command once to
+> activate it. It runs in lenient mode: each check (black/flake8/mypy/pytest) skips gracefully if there's
+> no code or tests yet, or if the tool isn't installed, so it won't block commits during early
+> scaffolding. As real implementation and tests land in `cran_env/`, `agents/`, etc., it starts enforcing
+> for real.
 >
 > The remaining hooks (pre-experiment, post-episode, post-training, chapter-completion, pre-submission)
 > are Python/bash callbacks meant to be called from inside `training/`, `thesis/hooks/`, and
@@ -77,8 +79,11 @@ def pre_experiment_hook(config):
     assert config.p_stat == 175.0, "BBU static power must be 175W (EARTH model)"
     assert config.p_dyn == 250.0, "BBU dynamic power must be 250W (EARTH model)"
 
-    # 3. Check algorithm validity
-    valid_algorithms = ["hybrid_sac_dqn", "sac", "td3", "ddpg", "ddqn", 
+    # 3. Check algorithm validity — matches training/train_baselines.py's
+    # `algorithms` list plus the proposed method (branching_mp_dqn);
+    # hybrid_sac_dqn is the superseded alternative, kept for comparison only.
+    valid_algorithms = ["branching_mp_dqn", "hybrid_sac_dqn", "ddpg", "ddqn",
+                        "ddqn_socp", "pdqn", "mpdqn", "ann_gsbf",
                         "all_on", "greedy", "nmbs", "convex"]
     assert config.algorithm in valid_algorithms, f"Unknown algorithm: {config.algorithm}"
 

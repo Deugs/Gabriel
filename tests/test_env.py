@@ -20,10 +20,10 @@ def default_config():
 
 
 def test_cran_env_reads_max_steps_per_episode_from_config(default_config):
-    """Regression test: `getattr(cfg, "algorithm", cfg)` does not perform
-    dict key lookup, so for a plain dict config this previously always
-    resolved to the whole cfg object (not cfg["algorithm"]), silently
-    discarding algorithm.max_steps_per_episode regardless of the YAML."""
+    """CRANEnv wraps dict configs in the internal DictConfig helper before
+    extracting algorithm.max_steps_per_episode, so (unlike the agents' raw-
+    dict configs) this path was never affected by the algo_cfg dict-lookup
+    bug found elsewhere this round — this just guards against a regression."""
     cfg = deepcopy(default_config)
     cfg["algorithm"]["max_steps_per_episode"] = 7
     env = CRANEnv(cfg)
@@ -98,6 +98,40 @@ def test_power_model_earth_constants():
     p_switch = power.compute_switching_cost(prev_mask, curr_mask)
     # Expected: 6 transitions * 3.0 W = 18.0 W
     assert pytest.approx(p_switch, rel=1e-3) == 18.0
+
+
+def test_power_model_fronthaul_line_card_term():
+    """docs/thesis_guide.md's fronthaul equation (P_FH = P_OLT + line cards +
+    ONUs) includes a line-card term that compute_fronthaul_power() previously
+    omitted entirely, silently ignoring power.fronthaul.p_lc_w/
+    wavelength_capacity_gbps. Line cards are wavelength-striped: the active
+    count scales with aggregate throughput demand."""
+    power = PowerModel(
+        n_rrh=4,
+        n_bbu=1,
+        p_olt_w=20.0,
+        p_onu_active_w=5.0,
+        p_onu_sleep_w=0.5,
+        p_lc_w=10.0,
+        wavelength_capacity_gbps=10.0,
+    )
+    active_mask = np.array([True, True, False, False])
+
+    # No RRHs active at all (all 4 sleeping): no line cards needed.
+    p_fh_idle = power.compute_fronthaul_power(
+        np.zeros(4, dtype=bool), total_throughput_mbps=0.0
+    )
+    assert pytest.approx(p_fh_idle, rel=1e-6) == 20.0 + 0.0 + 4 * 0.5
+
+    # Active RRHs but well under one wavelength's capacity: exactly 1 line card.
+    p_fh_low = power.compute_fronthaul_power(active_mask, total_throughput_mbps=100.0)
+    assert pytest.approx(p_fh_low, rel=1e-6) == 20.0 + 1 * 10.0 + 2 * 5.0 + 2 * 0.5
+
+    # Demand exceeding one wavelength's capacity: a second line card activates.
+    p_fh_high = power.compute_fronthaul_power(
+        active_mask, total_throughput_mbps=15000.0
+    )
+    assert pytest.approx(p_fh_high, rel=1e-6) == 20.0 + 2 * 10.0 + 2 * 5.0 + 2 * 0.5
 
 
 def test_cran_env_reset(default_config):

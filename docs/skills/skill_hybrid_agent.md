@@ -32,7 +32,9 @@ Implement a hybrid Deep Reinforcement Learning agent that couples a true discret
                          |
               Twin Critics (Q^A, Q^B)
               -- two independent copies of the
-                 encoder+branch-heads pipeline above
+                 branch-heads pipeline, both fed by
+                 the ONE shared encoder above (not
+                 a separate encoder copy each)
                          |
               min(Q^A, Q^B) -> TD3 Bellman target
 ```
@@ -78,7 +80,7 @@ class SharedEncoder(nn.Module):
         self.output_dim = prev_dim
 ```
 
-`hidden_dims`, `activation`, and `use_layer_norm` are now genuinely config-driven (`algorithm.hidden_dims`/`activation`/`use_layer_norm` in `config/default.yaml`) — `BranchingMPDQN.__init__` reads all three and threads them into `SharedEncoder` and `SingleBranchCritic`'s internal encoder alike, so a config that omits them still gets the `[256, 128]`/ReLU/LayerNorm spec defaults shown above.
+`hidden_dims`, `activation`, and `use_layer_norm` are genuinely config-driven (`algorithm.hidden_dims`/`activation`/`use_layer_norm` in `config/default.yaml`) — `BranchingMPDQN.__init__` reads all three and constructs exactly **one** `SharedEncoder` instance (`self.encoder`), so a config that omits them gets the `[256, 128]`/ReLU/LayerNorm spec defaults shown above. Unlike an earlier version of this design, `SingleBranchCritic`/`TwinBranchCritic` no longer construct their own encoder copies — see below.
 
 ### R Branching Discrete Heads (Dueling)
 
@@ -119,27 +121,21 @@ class ContinuousParameterNetwork(nn.Module):
 
 ### Single-Branch Critic with MP-DQN Multi-Pass Masking
 
+`SingleBranchCritic`/`TwinBranchCritic` take the shared encoder's output feature directly (`feat`) rather than a raw `state` and their own encoder copy — an earlier version of this file (and of the code) had each twin critic construct a private `SharedEncoder`, which meant `theta_h` was silently duplicated three ways (agent's own + one per twin critic) instead of genuinely shared, contradicting the "one coupled network" framing below. `BranchingMPDQN` now computes `feat = self.encoder(state)` once per critic evaluation and passes it in; see `_multi_pass_q()`.
+
 ```python
 class SingleBranchCritic(nn.Module):
     """Single Multi-Pass Branch Critic Q_r(s, k_r, x_r)."""
 
-    def __init__(
-        self,
-        state_dim: int,
-        n_rrh: int,
-        hidden_dims: Optional[List[int]] = None,
-        activation: str = "relu",
-        use_layer_norm: bool = True,
-    ):
+    def __init__(self, feature_dim: int, n_rrh: int):
         super().__init__()
         self.n_rrh = n_rrh
-        self.encoder = SharedEncoder(state_dim, hidden_dims, activation, use_layer_norm)
-        self.discrete_heads = BranchingDiscreteHeads(self.encoder.output_dim, n_rrh)
+        self.discrete_heads = BranchingDiscreteHeads(feature_dim, n_rrh)
         self.param_encoder = nn.Linear(2, 64)  # 2 continuous params (power, bandwidth)
-        self.fusion = nn.Linear(self.encoder.output_dim + 64, self.encoder.output_dim)
+        self.fusion = nn.Linear(feature_dim + 64, feature_dim)
 
-    def forward(self, state, continuous_params, branch_mask_idx: Optional[int] = None):
-        feat = self.encoder(state)
+    def forward(self, feat, continuous_params, branch_mask_idx: Optional[int] = None):
+        # feat: (batch, feature_dim), already produced by the shared encoder
         params_3d = continuous_params.view(-1, self.n_rrh, 2)
 
         if branch_mask_idx is not None:
@@ -154,7 +150,7 @@ class SingleBranchCritic(nn.Module):
         return self.discrete_heads(fused)  # (batch, n_rrh, 2)
 ```
 
-The `_multi_pass_q()` driver (on `BranchingMPDQN`, not the critic itself) runs this forward pass once **per branch** (R passes total per critic evaluation) and keeps only that pass's branch-r slice of the output — this is what actually implements "multi-pass": R independent, cross-talk-free evaluations, not R simultaneous branch outputs from one pass.
+The `_multi_pass_q()` driver (on `BranchingMPDQN`, not the critic itself) runs this forward pass once **per branch** (R passes total per critic evaluation) and keeps only that pass's branch-r slice of the output — this is what actually implements "multi-pass": R independent, cross-talk-free evaluations, not R simultaneous branch outputs from one pass. The encoder computation itself is hoisted outside this per-branch loop (computed once, reused across all R passes), since it depends only on `state`, not on `branch_mask_idx`.
 
 ### Twin Critics (TD3)
 
@@ -162,22 +158,17 @@ The `_multi_pass_q()` driver (on `BranchingMPDQN`, not the critic itself) runs t
 class TwinBranchCritic(nn.Module):
     """Twin Critic Networks (Q^A, Q^B) for TD3 over-estimation mitigation."""
 
-    def __init__(
-        self,
-        state_dim: int,
-        n_rrh: int,
-        hidden_dims: Optional[List[int]] = None,
-        activation: str = "relu",
-        use_layer_norm: bool = True,
-    ):
+    def __init__(self, feature_dim: int, n_rrh: int):
         super().__init__()
-        self.q_a = SingleBranchCritic(state_dim, n_rrh, hidden_dims, activation, use_layer_norm)
-        self.q_b = SingleBranchCritic(state_dim, n_rrh, hidden_dims, activation, use_layer_norm)
+        self.q_a = SingleBranchCritic(feature_dim, n_rrh)
+        self.q_b = SingleBranchCritic(feature_dim, n_rrh)
 
-    def forward(self, state, continuous_params, branch_mask_idx=None):
-        return self.q_a(state, continuous_params, branch_mask_idx), \
-               self.q_b(state, continuous_params, branch_mask_idx)
+    def forward(self, feat, continuous_params, branch_mask_idx=None):
+        return self.q_a(feat, continuous_params, branch_mask_idx), \
+               self.q_b(feat, continuous_params, branch_mask_idx)
 ```
+
+Both twin critics, and the continuous parameter network, are trained through this single shared `self.encoder` — `BranchingMPDQN`'s `critic_opt` includes `list(self.encoder.parameters()) + list(self.twin_critic.parameters())`, and `param_opt` includes `list(self.encoder.parameters()) + list(self.param_net.parameters())`, so the encoder receives a gradient contribution from both the critic loss (every `update()` call) and the delayed parameter-network loss (every `policy_delay`-th call).
 
 ## Training Algorithm (`BranchingMPDQN`)
 
@@ -187,7 +178,7 @@ Key points from `agents/branching_mp_dqn.py::update()` (read the actual file for
 2. **Multi-pass target Q-values**: `_multi_pass_q()` evaluates both target critics per branch; **Double-DQN-style action selection** uses `Q^A`'s argmax, then **`torch.min(Q^A, Q^B)` at that selected action** forms the TD3 Bellman target — a true element-wise min of both twin critics, not just one.
 3. **Critic loss**: MSE between each twin critic's Q-value at the *taken* discrete action (from the replay buffer) and the shared target, summed across both critics and all R branches.
 4. **Delayed policy update**: every `policy_delay` (default 2) critic updates, the continuous parameter network (and encoder) are updated to maximize `Q^A`'s multi-pass value, and all three target networks (encoder, param net, twin critic) receive a soft (Polyak) update — TD3's delayed-actor-update pattern, factored here around the shared continuous parameter net rather than a discrete actor.
-5. **Exploration**: independent epsilon-greedy per discrete branch (`self.epsilon`, decayed once per `update()` call) and additive Gaussian noise on the continuous parameters (`self.continuous_noise_std`, decayed alongside epsilon) — both mechanisms present, matching Concept Note Section 10.5.
+5. **Exploration**: independent epsilon-greedy per discrete branch (`self.epsilon`) and additive Gaussian noise on the continuous parameters (`self.continuous_noise_std`) — both mechanisms present, matching Concept Note Section 10.5. Both decay once per **episode**, via `agent.decay_exploration()` (called by the training loop after each episode's `while not done:` block ends) — not inside `update()` itself, which runs once per environment step; `config/default.yaml`'s `epsilon_decay` is documented as a per-episode rate, and decaying it once per step instead would hit the exploration floor roughly `max_steps_per_episode` times faster than intended.
 
 ## Key Design Decisions
 
@@ -198,7 +189,8 @@ Key points from `agents/branching_mp_dqn.py::update()` (read the actual file for
 | Twin critics + delayed policy update + target-policy smoothing | TD3's fix for DDPG-style overestimation bias, applied to the branch/critic pipeline |
 | LayerNorm (not BatchNorm) after every FC layer | More stable with the varying/small batch sizes typical of RL |
 | Sigmoid for power ratio, softmax for bandwidth share | Power ratio is an independent [0,1] fraction of P_max per RRH; bandwidth shares must sum to 1 across active RRHs |
-| One shared encoder feeding both the continuous parameter net and every branch's critic | The actual coupling mechanism that makes this "one coupled network" rather than two separate actor networks arbitrated by a shared critic (the superseded v1.0 design this file used to describe) |
+| One shared encoder instance feeding both the continuous parameter net and every branch's critic (not a copy per consumer) | The actual coupling mechanism that makes this "one coupled network" rather than two separate actor networks arbitrated by a shared critic (the superseded v1.0 design this file used to describe) |
+| Exploration decay (epsilon, continuous noise) once per episode via `decay_exploration()`, not once per `update()` call | Matches `config/default.yaml`'s documented per-episode `epsilon_decay` rate; decaying per environment step instead reaches the exploration floor far faster than intended |
 
 ## Hyperparameters
 
@@ -209,7 +201,7 @@ lr_discrete: 1.0e-4    # Branch/critic learning rate
 lr_actor: 3.0e-4       # Continuous parameter network learning rate
 buffer_size: 1000000   # Replay buffer capacity
 batch_size: 256        # Mini-batch size (passed to update(), not read from config)
-hidden_dims: [256, 256]  # SharedEncoder/SingleBranchCritic layer widths
+hidden_dims: [256, 128]  # SharedEncoder layer widths (Section 10.3 spec)
 activation: "relu"       # SharedEncoder nonlinearity: relu, leaky_relu, tanh, or gelu
 use_layer_norm: true     # Whether SharedEncoder applies LayerNorm after each layer
 gamma: 0.99            # Discount factor
@@ -218,14 +210,14 @@ policy_delay: 2        # TD3 actor/target-update delay (critic updates per polic
 target_noise_std: 0.05 # TD3 target-policy smoothing noise std
 epsilon_start: 1.0     # Initial discrete-branch exploration rate
 epsilon_end: 0.01      # Final exploration rate
-epsilon_decay: 0.995   # Decay per update() call
+epsilon_decay: 0.995   # Decay per EPISODE (agent.decay_exploration(), not update())
 continuous_noise_std: 0.1       # Initial continuous-parameter exploration noise std
 continuous_noise_std_end: 0.01  # Final continuous-parameter noise std
 gradient_clip_norm: 1.0  # max_norm for both twin-critic and param-net gradient clipping
 reward_scale: 1.0        # Multiplicative scale applied to sampled rewards before the Bellman target
 ```
 
-All of the above are genuinely read via `BranchingMPDQN`'s `get_val()` helper — none are dead. Note `hidden_dims` in `config/default.yaml` is `[256, 256]`, not the `[256, 128]` used in this file's illustrative snippets above; the snippets show the values a config-less construction (or the small/large-network configs, which omit this key) falls back to, matching Concept Note Section 10.3's spec figure. `hardware.device` (in `config/default.yaml`'s `hardware:` block, not `algorithm:`) supplies `BranchingMPDQN`'s device default when the constructor's `device` argument is left as `None`; an explicit `device=` argument always wins over it.
+All of the above are genuinely read via `BranchingMPDQN`'s `get_val()` helper — none are dead, and `config/default.yaml`'s `hidden_dims` now matches this file's `[256, 128]` spec value exactly (it briefly diverged to `[256, 256]`; both are now reconciled to the validated spec). `hardware.device` (in `config/default.yaml`'s `hardware:` block, not `algorithm:`) supplies `BranchingMPDQN`'s device default when the constructor's `device` argument is left as `None`; an explicit `device=` argument always wins over it.
 
 ## Validation Checklist
 

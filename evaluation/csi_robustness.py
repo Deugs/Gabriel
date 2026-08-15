@@ -66,6 +66,7 @@ def _train_branching_mp_dqn(
             agent.update(batch_size=batch_size)
             obs = next_obs
             done = terminated or truncated
+        agent.decay_exploration()
     return agent
 
 
@@ -73,7 +74,10 @@ def _train_ddqn(
     env: CRANEnv, cfg: Dict[str, Any], episodes: int, batch_size: int
 ) -> DDQNAgent:
     agent = DDQNAgent(
-        state_dim=env.state_dim, n_rrh=env.n_rrh, p_max_w=env.p_max_w, batch_size=batch_size
+        state_dim=env.state_dim,
+        n_rrh=env.n_rrh,
+        p_max_w=env.p_max_w,
+        batch_size=batch_size,
     )
     for _ in range(episodes):
         obs, _ = env.reset()
@@ -85,6 +89,7 @@ def _train_ddqn(
             agent.update()
             obs = next_obs
             done = terminated or truncated
+        agent.decay_exploration()
     return agent
 
 
@@ -142,9 +147,9 @@ def _evaluate_under_csi_noise(
 
     return {
         "ee_mbit_per_joule": float(np.mean(ee_values)) if ee_values else 0.0,
-        "qos_violation_rate": float(np.mean(qos_violation_flags))
-        if qos_violation_flags
-        else 0.0,
+        "qos_violation_rate": (
+            float(np.mean(qos_violation_flags)) if qos_violation_flags else 0.0
+        ),
     }
 
 
@@ -172,7 +177,9 @@ def run_csi_robustness_evaluation(
 
     for method in methods:
         if method not in _TRAINERS:
-            raise ValueError(f"Unknown method '{method}'; expected one of {list(_TRAINERS)}")
+            raise ValueError(
+                f"Unknown method '{method}'; expected one of {list(_TRAINERS)}"
+            )
 
         print(f"\n--- CSI Robustness: training {method} under perfect CSI ---")
         env = CRANEnv(deepcopy(cfg))
@@ -187,7 +194,9 @@ def run_csi_robustness_evaluation(
                 f"QoS violation rate={metrics['qos_violation_rate']*100:.1f}%"
             )
 
-    ee_curve = {m: {s: results[m][s]["ee_mbit_per_joule"] for s in sigmas} for m in methods}
+    ee_curve = {
+        m: {s: results[m][s]["ee_mbit_per_joule"] for s in sigmas} for m in methods
+    }
     qos_curve = {
         m: {s: results[m][s]["qos_violation_rate"] for s in sigmas} for m in methods
     }

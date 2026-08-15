@@ -17,6 +17,12 @@ network:
 # Channel Model
 # ============================================================
 channel:
+  # path_loss_model/fading_model: aspirational/reserved. cran_env/channel_model.py
+  # hardcodes exactly one path-loss formula (COST231-Hata) and one fading
+  # process (Rayleigh via complex Gaussian) directly in the equation body,
+  # with no branch/selection logic — there is no second implementation to
+  # switch to. These keys record which model is in effect but do not
+  # currently select between alternatives.
   path_loss_model: "cost231_hata"
   path_loss_exponent: 3.5
   shadowing_std_db: 8.0
@@ -50,15 +56,25 @@ power:
     p_stat_w: 175.0        # Static power per active BBU (EARTH model: Al-Zubaedi 2019 Table 3.1 / Auer et al. 2011)
     p_dyn_w: 250.0         # Dynamic processing power range (EARTH model: Al-Zubaedi 2019)
     delta_p: 0.44          # Load-dependent power slope parameter (EARTH model)
+    # max_capacity_gops: aspirational/reserved. compute_bbu_power() takes a
+    # load *fraction* in [0,1] (derived from the count of active RRHs), not
+    # an absolute GOPS quantity — there is no per-RRH compute-demand model
+    # anywhere in this codebase to sum and compare against a GOPS ceiling
+    # (docs/equation_code_mapping.md tracks that model as "Pending", not
+    # implemented). Not read anywhere today.
     max_capacity_gops: 100   # Max processing capacity per BBU (GOPS)
 
   fronthaul:
+    # pon_type: aspirational/reserved. compute_fronthaul_power() implements
+    # exactly one fronthaul model (TWDM-PON: OLT + line cards + ONUs), with
+    # no branch for epon/aon — there is no alternate implementation to
+    # select. Not read anywhere today.
     pon_type: "twdm"       # twdm, epon, aon
     p_olt_w: 20.0
     p_lc_w: 10.0           # Per active line card
     p_onu_active_w: 5.0
     p_onu_sleep_w: 0.5
-    wavelength_capacity_gbps: 10
+    wavelength_capacity_gbps: 10  # Aggregate demand capacity per active line card
 
 # ============================================================
 # DRL Algorithm
@@ -78,8 +94,8 @@ algorithm:
   lr_actor: 3.0e-4
   lr_critic: 3.0e-4        # Used by the pure-DDPG baseline (agents/ddpg_agent.py)
 
-  # Network architecture
-  hidden_dims: [256, 256]
+  # Network architecture (Concept Note Section 10.3: two FC layers, 256/128 units)
+  hidden_dims: [256, 128]
   activation: "relu"
   use_layer_norm: true
 

@@ -12,23 +12,34 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
+from agents.branching_mp_dqn import _resolve_activation
+
 
 class QNetwork(nn.Module):
     """Deep Q-Network with factorized heads per RRH."""
 
     def __init__(
-        self, state_dim: int, n_rrh: int, hidden_dims: Optional[List[int]] = None
+        self,
+        state_dim: int,
+        n_rrh: int,
+        hidden_dims: Optional[List[int]] = None,
+        activation: str = "relu",
+        use_layer_norm: bool = True,
     ):
         super().__init__()
         if hidden_dims is None:
             hidden_dims = [256, 256]
+        activation_cls = _resolve_activation(activation)
 
         self.n_rrh = n_rrh
 
         layers = []
         prev_dim = state_dim
         for dim in hidden_dims:
-            layers.extend([nn.Linear(prev_dim, dim), nn.ReLU(), nn.LayerNorm(dim)])
+            layers.append(nn.Linear(prev_dim, dim))
+            layers.append(activation_cls())
+            if use_layer_norm:
+                layers.append(nn.LayerNorm(dim))
             prev_dim = dim
 
         self.backbone = nn.Sequential(*layers)
@@ -95,6 +106,9 @@ class DDQNAgent:
         buffer_capacity: int = 100000,
         batch_size: int = 64,
         device: str = "cpu",
+        hidden_dims: Optional[List[int]] = None,
+        activation: str = "relu",
+        use_layer_norm: bool = True,
     ):
         self.state_dim = state_dim
         self.n_rrh = n_rrh
@@ -107,8 +121,14 @@ class DDQNAgent:
         self.batch_size = batch_size
         self.device = torch.device(device if torch.cuda.is_available() else "cpu")
 
-        # Networks
-        self.q_net = QNetwork(state_dim, n_rrh).to(self.device)
+        # Networks. hidden_dims/activation/use_layer_norm match
+        # agents/branching_mp_dqn.py's algorithm.* config keys — a baseline
+        # trained with a different encoder than the proposed method under
+        # the same config would violate docs/rules.md's "Forbidden: Training
+        # proposed method with different hyperparameters than baselines."
+        self.q_net = QNetwork(
+            state_dim, n_rrh, hidden_dims, activation, use_layer_norm
+        ).to(self.device)
         self.target_q_net = copy.deepcopy(self.q_net).to(self.device)
         self.optimizer = optim.Adam(self.q_net.parameters(), lr=lr)
 
@@ -181,7 +201,11 @@ class DDQNAgent:
             ):
                 target_param.data.mul_(1.0 - self.tau).add_(param.data, alpha=self.tau)
 
-        # Decay epsilon
-        self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
-
         return {"loss": float(loss.item()), "epsilon": float(self.epsilon)}
+
+    def decay_exploration(self):
+        """Decay epsilon once per episode (config/default.yaml's
+        epsilon_decay is a per-episode rate; calling this from update(),
+        which runs once per environment step, decayed far faster than
+        intended)."""
+        self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)

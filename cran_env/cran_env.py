@@ -122,6 +122,10 @@ class CRANEnv(gym.Env):
             p_olt_w=float(getattr(fronthaul_cfg, "p_olt_w", 20.0)),
             p_onu_active_w=float(getattr(fronthaul_cfg, "p_onu_active_w", 5.0)),
             p_onu_sleep_w=float(getattr(fronthaul_cfg, "p_onu_sleep_w", 0.5)),
+            p_lc_w=float(getattr(fronthaul_cfg, "p_lc_w", 10.0)),
+            wavelength_capacity_gbps=float(
+                getattr(fronthaul_cfg, "wavelength_capacity_gbps", 10.0)
+            ),
         )
 
         # State dimensions: gains (R*U) + mask (R) + demands (U) + prev_power (1) + hour (1)
@@ -155,17 +159,14 @@ class CRANEnv(gym.Env):
         self.prev_power_w: float = 0.0
         self.hour: int = 0
         self.step_count: int = 0
-        # NOTE: getattr(cfg, "algorithm", cfg) does NOT perform dict key
-        # lookup — for a plain dict config it silently returns the whole
-        # `cfg` object instead of `cfg["algorithm"]`. Dict configs must be
-        # indexed with cfg.get(...); getattr(algo_cfg, ...) below would
-        # otherwise always fall through to its Python-side default.
-        if isinstance(cfg, dict):
-            algo_cfg = cfg.get("algorithm", {})
-            self.max_steps: int = int(algo_cfg.get("max_steps_per_episode", 100))
-        else:
-            algo_cfg = getattr(cfg, "algorithm", cfg)
-            self.max_steps = int(getattr(algo_cfg, "max_steps_per_episode", 100))
+        # cfg is always either a DictConfig (attribute-based) or a non-dict
+        # config object here (see the isinstance(config, dict) check above),
+        # never a plain dict, so getattr() correctly performs the lookup —
+        # unlike agents/branching_mp_dqn.py and its siblings, which receive
+        # the raw dict from yaml.safe_load() directly and therefore need
+        # cfg.get(...) instead (see their extraction logic and its comment).
+        algo_cfg = getattr(cfg, "algorithm", cfg)
+        self.max_steps: int = int(getattr(algo_cfg, "max_steps_per_episode", 100))
 
     def reset(
         self, seed: Optional[int] = None, options: Optional[dict] = None
@@ -294,6 +295,7 @@ class CRANEnv(gym.Env):
             transmit_power=power,
             bbu_loads=bbu_loads,
             prev_active_mask=self.active_mask,
+            total_throughput_mbps=total_throughput_mbps,
         )
 
         p_total = power_dict["total"]
