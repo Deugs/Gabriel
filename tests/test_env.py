@@ -20,10 +20,10 @@ def default_config():
 
 
 def test_cran_env_reads_max_steps_per_episode_from_config(default_config):
-    """Regression test: `getattr(cfg, "algorithm", cfg)` does not perform
-    dict key lookup, so for a plain dict config this previously always
-    resolved to the whole cfg object (not cfg["algorithm"]), silently
-    discarding algorithm.max_steps_per_episode regardless of the YAML."""
+    """CRANEnv wraps dict configs in the internal DictConfig helper before
+    extracting algorithm.max_steps_per_episode, so (unlike the agents' raw-
+    dict configs) this path was never affected by the algo_cfg dict-lookup
+    bug found elsewhere this round — this just guards against a regression."""
     cfg = deepcopy(default_config)
     cfg["algorithm"]["max_steps_per_episode"] = 7
     env = CRANEnv(cfg)
