@@ -14,7 +14,9 @@ def analyze_scalability(
     episodes: int = 20,
     save_dir: str = "thesis/figures",
 ) -> Dict[str, Dict[str, Dict[str, float]]]:
-    """Evaluate network performance and execution time across network topology scales."""
+    """Evaluate power, execution time, QoS satisfaction and switching frequency
+    across network topology scales -- the three-way energy/QoS/switching
+    trade-off RQ5 (Section 6) asks about, not just the power/time half of it."""
     with open(config_path, "r") as f:
         base_cfg = yaml.safe_load(f)
 
@@ -64,6 +66,8 @@ def analyze_scalability(
             "Branching_MP_DQN": {
                 "power": float(res["final_eval_power_w"]),
                 "time": float(step_time_ms),
+                "qos_rate": float(res["final_qos_rate"]),
+                "switching_events": float(res["final_switching_events"]),
             }
         }
 
