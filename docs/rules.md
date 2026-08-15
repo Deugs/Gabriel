@@ -12,7 +12,7 @@
 ```
 Thesis Eq. (3.5): P_total(t) = P_RRH(t) + P_BBU(t) + P_FH(t)
 Code: power_model.py::PowerModel.compute_total_power()
-Test: tests/test_power_model.py::test_total_power_matches_equation
+Test: tests/test_equation_consistency.py::TestEquationConsistency::test_power_model_matches_equation_3_5
 ```
 
 ## 2. Reference Validation Rule

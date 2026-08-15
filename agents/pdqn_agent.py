@@ -179,8 +179,8 @@ class PDQNAgent:
         self.epsilon_end = float(get_val("epsilon_end", 0.01))
         self.epsilon_decay = float(get_val("epsilon_decay", 0.995))
 
-        lr_discrete = float(get_val("lr_discrete", 1e-3))
-        lr_actor = float(get_val("lr_actor", 1e-4))
+        lr_discrete = float(get_val("lr_discrete", 1e-4))
+        lr_actor = float(get_val("lr_actor", 3e-4))
         buffer_size = int(get_val("buffer_size", 100000))
 
         # Same architecture keys as the proposed agent (agents/branching_mp_dqn.py)

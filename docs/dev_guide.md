@@ -280,12 +280,12 @@ def init_wandb(config, group=None):
 
 ## Performance Benchmarks
 
-Target metrics for final thesis:
+Target metrics for final thesis. Per Concept Note v4.0 §5.2/G10, the headline comparison is the margin over DDQN/P-DQN/MP-DQN (RQ4) — the All-ON figure below is a **sanity-check floor** any working method is expected to clear comfortably, not a contribution reported in its own right:
 
 | Metric | Target | Measurement |
 |--------|--------|-------------|
-| Energy reduction vs. All ON | >=25% | Average over 24-hour traffic cycle |
-| Energy reduction vs. Iqbal DDQN | >=5% | Same scenario, same traffic |
+| Energy reduction vs. All ON (sanity-check floor, not a headline result) | >=25% | Average over 24-hour traffic cycle |
+| Energy reduction vs. Iqbal DDQN / P-DQN / MP-DQN (headline comparison) | >=5% | Same scenario, same traffic |
 | QoS violation rate | <=5% | Fraction of UEs below SINR target |
 | Convergence episodes | <=3000 | Reward within 5% of final value |
 | Training time (Medium network) | <=48 hours | Single GPU (RTX 3090 or equivalent) |

@@ -59,7 +59,7 @@
 
 #### 2.4 DRL for C-RAN Energy Optimization (~1,200 words)
 - **Fathy et al. (2021)**: ANN + Bi-Section GSBF — ANN reduces search space, convex solver handles power
-- **Iqbal et al. (2021)**: DDQN for RRH on/off + convex power allocation — 22% power savings, switching costs
+- **Iqbal et al. (2021)**: DDQN for RRH on/off + convex power allocation, switching costs. (A specific reported power-savings % is deliberately not restated here — no primary-source access is available in this environment to verify it; see `tests/test_baseline_paper_scenarios.py`'s disclaimer and `docs/rules.md` §10's Ethical AI Rule.)
 - **Al-Zubaedi (2019)**: Comprehensive power model, NMBS bin-packing, TWDM-PON analysis
 - **Recent advances (2023-2026)**: 
   - Hybrid DRL for ABS-assisted networks (Frontiers 2026)

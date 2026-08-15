@@ -3,10 +3,10 @@
 import os
 from pathlib import Path
 import tempfile
-import pytest
 
 from training.train_hybrid import train_hybrid_agent
 from training.train_baselines import run_baseline_benchmarks
+from training.run_extended_sweeps import run_extended_sweeps
 
 
 def test_train_hybrid_agent_short_run():
@@ -23,8 +23,12 @@ def test_train_hybrid_agent_short_run():
         assert summary["algorithm"] == "Branching_MP_DQN"
         assert summary["episodes"] == 2
         assert len(summary["history"]["episode_rewards"]) == 2
-        assert os.path.exists(Path(tmp_dir) / "branching_mp_dqn_seed42" / "summary.json")
-        assert os.path.exists(Path(tmp_dir) / "branching_mp_dqn_seed42" / "final_model.pt")
+        assert os.path.exists(
+            Path(tmp_dir) / "branching_mp_dqn_seed42" / "summary.json"
+        )
+        assert os.path.exists(
+            Path(tmp_dir) / "branching_mp_dqn_seed42" / "final_model.pt"
+        )
 
 
 def test_run_baseline_benchmarks_short_run():
@@ -34,11 +38,50 @@ def test_run_baseline_benchmarks_short_run():
             config_path="config/small_network.yaml",
             seeds=[42],
             episodes=2,
-            algorithms=["all_on", "greedy", "nmbs", "convex", "ddqn", "ann_gsbf", "ddqn_socp"],
+            algorithms=[
+                "all_on",
+                "greedy",
+                "nmbs",
+                "convex",
+                "ddqn",
+                "ann_gsbf",
+                "ddqn_socp",
+            ],
             save_dir=tmp_dir,
         )
 
         assert len(results) == 7
-        for algo_name in ["all_on", "greedy", "nmbs", "convex", "ddqn", "ann_gsbf", "ddqn_socp"]:
+        for algo_name in [
+            "all_on",
+            "greedy",
+            "nmbs",
+            "convex",
+            "ddqn",
+            "ann_gsbf",
+            "ddqn_socp",
+        ]:
             assert algo_name in results
-            assert os.path.exists(Path(tmp_dir) / f"benchmark_{algo_name}" / "summary.json")
+            assert os.path.exists(
+                Path(tmp_dir) / f"benchmark_{algo_name}" / "summary.json"
+            )
+
+
+def test_run_extended_sweeps_short_run(tmp_path, monkeypatch):
+    """training/run_extended_sweeps.py had no test coverage at all — verify
+    the full orchestration (baselines -> hybrid agent -> convergence
+    analysis) runs end-to-end without error. analyze_convergence() defaults
+    to writing under thesis/figures and thesis/tables (real repo paths), so
+    chdir into tmp_path first to avoid polluting the actual repository."""
+    monkeypatch.chdir(tmp_path)
+    results_dir = str(tmp_path / "results")
+
+    run_extended_sweeps(
+        config_path=str(Path(__file__).parent.parent / "config" / "small_network.yaml"),
+        episodes=2,
+        seeds=[42],
+        results_dir=results_dir,
+    )
+
+    assert (Path(results_dir) / "branching_mp_dqn_seed42" / "summary.json").exists()
+    assert (tmp_path / "thesis" / "figures").exists()
+    assert (tmp_path / "thesis" / "tables").exists()

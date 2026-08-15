@@ -147,9 +147,9 @@ The candidate's original three requests below (24 July 2026) have already been a
 
 > References [2] and [3] were verified directly against the source PDFs held in `references/`. References [1] and [4] were supplied directly by the candidate; no source PDF for either is on file in `references/` — the candidate should confirm both against a source copy before this document or the thesis bibliography is finalized.
 
-> **Status update (05 August 2026)**: reference [2]'s end page, originally left unconfirmed here, is filled in above as 20449 to match the value used consistently in Concept Note v2.0/v3.0/v4.0 §17 — the candidate should still confirm this directly against the source PDF, since no record of an independent page-number verification for this specific reference was found in `docs/supervisor_feedback_log.md`. References [1] and [4] remain unverified as above. The architecture described in Section 3's update note is grounded in four further references, added to the bibliography in Concept Note v4.0 §17 along with 25 others (30 total):
+> **Status update (05 August 2026)**: reference [2]'s end page, originally left unconfirmed here, is filled in above as 20449 to match the value used consistently in Concept Note v2.0/v3.0/v4.0 §17 — the candidate should still confirm this directly against the source PDF, since no record of an independent page-number verification for this specific reference was found in `docs/supervisor_feedback_log.md`. References [1] and [4] remain unverified as above. The architecture described in Section 3's update note is grounded in four further references, added to the bibliography in Concept Note v4.0 §17 along with 29 others (34 total, an exact count of §17):
 >
-> [5] W. Xiong, B. Wang, Z. Yang, et al., "Parametrized Deep Q-Networks Learning: Reinforcement Learning with Discrete-Continuous Hybrid Action Space," arXiv:1810.06394, 2018.
+> [5] J. Xiong, Q. Wang, Z. Yang, et al., "Parametrized Deep Q-Networks Learning: Reinforcement Learning with Discrete-Continuous Hybrid Action Space," arXiv:1810.06394, 2018.
 >
 > [6] C. J. Bester, S. D. James, and G. D. Konidaris, "Multi-Pass Q-Networks for Deep Reinforcement Learning with Parameterised Action Spaces," arXiv:1905.04388, 2019.
 >
@@ -157,7 +157,7 @@ The candidate's original three requests below (24 July 2026) have already been a
 >
 > [8] S. Fujimoto, H. van Hoof, and D. Meger, "Addressing Function Approximation Error in Actor-Critic Methods," in *Proc. Int. Conf. Machine Learning (ICML)*, 2018, pp. 1587–1596.
 >
-> The full, independently-verified 30-reference bibliography — including the O-RAN DRL energy-optimization literature and the 2025 hybrid A3C-Dueling-DQN C-RAN paper cited in Section 5's update note — is maintained in Concept Note v4.0 §17, not duplicated here.
+> The full, independently-verified 34-reference bibliography — including the O-RAN DRL energy-optimization literature and the 2025 hybrid A3C-Dueling-DQN C-RAN paper cited in Section 5's update note — is maintained in Concept Note v4.0 §17, not duplicated here.
 
 ---
 
