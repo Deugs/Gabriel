@@ -62,8 +62,9 @@ for reference only and is no longer what these equations should map to.
 
 ## Validation Tests
 
-Each mapping must have a corresponding test in `tests/test_equation_consistency.py`,
-e.g. for Eq. (3.5):
+**Coverage note (sixth audit round)**: this section previously stated that every mapping above "must have" a corresponding test in `tests/test_equation_consistency.py` — as of this note, only Eq. (3.5) actually does, against ~21 rows marked "Implemented" across the three tables above. Treat this as an aspirational rule this project has not yet fully lived up to, not a claim of current coverage; the remaining equations are exercised indirectly by the broader test suite (`tests/test_env.py`, `tests/test_branching_mp_dqn.py`, etc.) but not via a dedicated equation-specific assertion the way Eq. (3.5) is. Closing this gap (writing a dedicated test per "Implemented" row) is listed as outstanding work, not fabricated here to make the claim true.
+
+Below is the one mapping that does have a dedicated test, for Eq. (3.5):
 
 ```python
 class TestEquationConsistency:
@@ -79,7 +80,10 @@ class TestEquationConsistency:
         _, _, _, _, info = env.step(action)
 
         expected_total = (
-            info["rrh_power_w"] + info["bbu_power_w"] + info["fronthaul_power_w"]
+            info["rrh_power_w"]
+            + info["bbu_power_w"]
+            + info["fronthaul_power_w"]
+            + info["switching_power_w"]
         )
         assert info["total_power_w"] == pytest.approx(expected_total, rel=1e-5)
 ```

@@ -183,7 +183,20 @@ class PDQNAgent:
         lr_actor = float(get_val("lr_actor", 1e-4))
         buffer_size = int(get_val("buffer_size", 100000))
 
-        self.encoder = SharedEncoder(state_dim, [256, 128]).to(self.device)
+        # Same architecture keys as the proposed agent (agents/branching_mp_dqn.py)
+        # — a baseline trained with a different encoder than the proposed
+        # method under the same config would violate docs/rules.md's
+        # "Forbidden: Training proposed method with different hyperparameters
+        # than baselines."
+        hidden_dims = get_val("hidden_dims", None)
+        if hidden_dims is not None:
+            hidden_dims = list(hidden_dims)
+        activation = str(get_val("activation", "relu"))
+        use_layer_norm = bool(get_val("use_layer_norm", True))
+
+        self.encoder = SharedEncoder(
+            state_dim, hidden_dims, activation, use_layer_norm
+        ).to(self.device)
         self.param_net = ContinuousParameterNetwork(self.encoder.output_dim, n_rrh).to(
             self.device
         )
@@ -328,13 +341,18 @@ class PDQNAgent:
         self._soft_update(self.param_net_target, self.param_net)
         self._soft_update(self.q_net_target, self.q_net)
 
-        self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
-
         return {
             "critic_loss": float(critic_loss.item()),
             "param_loss": float(param_loss.item()),
             "epsilon": float(self.epsilon),
         }
+
+    def decay_exploration(self):
+        """Decay epsilon once per episode (config/default.yaml's
+        epsilon_decay is a per-episode rate; calling this from update(),
+        which runs once per environment step, decayed far faster than
+        intended)."""
+        self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
 
     def _soft_update(self, target: nn.Module, source: nn.Module):
         with torch.no_grad():

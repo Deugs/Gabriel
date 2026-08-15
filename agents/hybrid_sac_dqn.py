@@ -458,9 +458,6 @@ class HybridSACDDQN:
         self._soft_update(self.continuous_actor_target, self.continuous_actor)
         self._soft_update(self.discrete_actor_target, self.discrete_actor)
 
-        # Decay epsilon
-        self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
-
         c_loss = float(critic_loss.item())
         d_loss = float(disc_loss.item())
         a_loss = float(actor_loss.item())
@@ -475,6 +472,13 @@ class HybridSACDDQN:
             "alpha": self.alpha,
             "epsilon": float(self.epsilon),
         }
+
+    def decay_exploration(self):
+        """Decay epsilon once per episode (config/default.yaml's
+        epsilon_decay is a per-episode rate; calling this from update(),
+        which runs once per environment step, decayed far faster than
+        intended)."""
+        self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
 
     def _soft_update(self, target: nn.Module, source: nn.Module):
         with torch.no_grad():

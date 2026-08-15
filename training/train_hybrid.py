@@ -250,6 +250,10 @@ def train_hybrid_agent(
             obs = next_obs
             done = terminated or truncated
 
+        # epsilon_decay/continuous noise decay (config/default.yaml) is a
+        # per-episode rate, not per environment step.
+        agent.decay_exploration()
+
         # Log episode metrics
         mean_power = float(np.mean(ep_powers)) if ep_powers else 0.0
         qos_rate = float(np.mean(ep_qos)) if ep_qos else 0.0

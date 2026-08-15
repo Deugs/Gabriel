@@ -1,5 +1,7 @@
 # C-RAN DRL Thesis — Development Guide
 
+> **Status note (sixth audit round)**: this file was written as a week-by-week development *roadmap* before implementation began. Phases 1–4 below are now complete (see `README.md`'s "Immediate Next Steps" for what's actually still outstanding), and Phase 3's architecture spec/Phase 4's config block described the superseded v1.0 "Hybrid SAC-DDQN" design and a flat config schema that never matched the real nested `config/default.yaml`. Both have been corrected below to point at the actual implementation rather than duplicate it (duplication is exactly how this drift happened) — for the authoritative, current architecture spec, read `docs/skills/skill_hybrid_agent.md` and `agents/branching_mp_dqn.py` directly.
+
 ## Environment Setup
 
 ### Prerequisites
@@ -79,179 +81,29 @@ gymnasium.Env
 
 **Validation Checkpoints**:
 - [ ] Convex baseline matches CVXPY reference solution
-- [ ] DDQN reproduces Iqbal's ~22% power savings on comparable scenario
+- [ ] DDQN reproduces Iqbal et al.'s *qualitative* behavior (outperforming All-ON) at their exact studied scenarios — see `tests/test_baseline_paper_scenarios.py`. A specific reported power-savings percentage is deliberately NOT used as a pass/fail gate: no primary-source access to the paper is available in this environment to verify it, and treating an unverifiable number as a checkpoint would itself violate the Ethical AI Rule (`docs/rules.md` §10) this checklist is meant to uphold.
 - [ ] All baselines use identical environment (fair comparison)
 
 ---
 
 ### Phase 3: Proposed Method (Week 4-6)
-**Goal**: Hybrid SAC-DDQN agent
+**Goal**: Branching MP-DQN + TD3 agent (`agents/branching_mp_dqn.py`) — the discrete-actor/continuous-SAC-actor/shared-critic design originally sketched here (`agents/hybrid_sac_dqn.py`) was superseded early in implementation by a branching, multi-pass, twin-critic parameterized DQN; see `docs/skills/skill_hybrid_agent.md` for the current, authoritative architecture spec (network diagrams, class-by-class breakdown, training algorithm, hyperparameters) rather than duplicating it here.
 
-#### Architecture Specification
-
-```python
-# agents/hybrid_sac_dqn.py
-
-class HybridSACDQNAgent:
-    """
-    Hybrid Actor-Critic for C-RAN Energy Optimization
-
-    Discrete Actor (DDQN-style): Selects RRH activation pattern
-    Continuous Actor (SAC): Allocates transmit power per active RRH
-    Shared Critic: Evaluates joint (discrete, continuous) action quality
-    """
-
-    def __init__(self, state_dim, n_rrh, n_ue, config):
-        # Discrete actor: outputs Q-values for each RRH subset
-        self.discrete_actor = QNetwork(state_dim, 2**n_rrh)
-
-        # Continuous actor (SAC): outputs power per RRH
-        self.continuous_actor = GaussianPolicy(state_dim, n_rrh)
-
-        # Shared critic: Q(s, v, p) where v is discrete, p is continuous
-        self.critic1 = HybridQNetwork(state_dim, n_rrh)
-        self.critic2 = HybridQNetwork(state_dim, n_rrh)
-
-        # Target networks
-        self.critic1_target = copy.deepcopy(self.critic1)
-        self.critic2_target = copy.deepcopy(self.critic2)
-        self.continuous_actor_target = copy.deepcopy(self.continuous_actor)
-
-    def select_action(self, state, evaluate=False):
-        # Discrete: epsilon-greedy or argmax Q
-        v = self.discrete_actor.select_action(state, epsilon=self.epsilon)
-        # Continuous: sample from Gaussian policy
-        p, log_prob = self.continuous_actor.sample(state)
-        return {"rrh_on": v, "power": p}
-
-    def update(self, batch):
-        # Critic update: minimize Bellman error
-        # Actor update: maximize Q (discrete) + maximize Q + entropy (continuous)
-        pass
-```
-
-#### Key Design Decisions
-
-| Decision | Choice | Rationale |
-|----------|--------|-----------|
-| Discrete action space | Factorized binary (per-RRH) vs. joint subset | Factorized: tractable for R>10; joint: optimal but exponential |
-| Continuous action space | Per-RRH power [0, P_max] | Natural physical interpretation; matches SAC output |
-| Critic architecture | Concatenate (state, discrete_action, continuous_action) → MLP | Standard hybrid Q-network; alternative: separate paths then fuse |
-| Entropy target | Auto-tuned alpha (SAC) | Better exploration than fixed temperature |
-| Experience replay | Shared buffer for hybrid transitions | (s, v, p, r, s') tuples |
+**Key architectural differences from the original sketch above**: one shared encoder feeding both a coupled continuous-parameter network (P-DQN) and R independent per-RRH dueling discrete branch heads (Tavakoli et al., 2018) — not a separate discrete actor / continuous SAC actor arbitrated by a shared critic; MP-DQN multi-pass masking (Bester et al., 2019) to prevent parameter cross-talk between branches; TD3 twin critics + delayed policy update + target-policy smoothing, not SAC's entropy-regularized objective.
 
 **Validation Checkpoints**:
 - [ ] Agent runs without errors for 100 episodes
-- [ ] Critic loss decreases monotonically (check for bugs if not)
+- [ ] Critic loss decreases over the first ~1000 updates
 - [ ] Reward improves over random policy within 500 episodes
-- [ ] Discrete and continuous components train at comparable rates
+- [ ] Multi-pass masking genuinely produces different Q-values for candidate parameter vectors differing only in an unrelated RRH's parameters (cross-talk absent) — see `docs/skills/skill_hybrid_agent.md`'s Validation Checklist for the complete list
 
 ---
 
 ### Phase 4: Training Infrastructure (Week 6-7)
 
-```python
-# training/train_hybrid.py
+The actual training entrypoint is `training/train_hybrid.py::train_hybrid_agent()` — read that file directly rather than this sketch, which described a `make_vec_env(..., n_envs=...)` vectorized-environment setup that was never built (every training loop in this codebase is a single synchronous `CRANEnv`; `hardware.n_envs`/`num_workers` in `config/default.yaml` are explicitly documented there as aspirational/reserved, not implemented). The real loop is a plain per-episode `for` loop over `env.reset()`/`env.step()`, with `agent.update()` called once per environment step and `agent.decay_exploration()` called once per episode (epsilon/continuous-noise decay is a per-episode rate, not per-step).
 
-def train(config):
-    env = make_vec_env(lambda: CRANEnv(config), n_envs=config.n_envs)
-    agent = HybridSACDQNAgent(env.observation_space.shape[0], 
-                               config.n_rrh, config.n_ue, config)
-
-    # W&B logging
-    wandb.init(project="cran-drl-thesis", config=config)
-
-    for episode in range(config.max_episodes):
-        state = env.reset()
-        episode_reward = 0
-
-        for step in range(config.max_steps_per_episode):
-            action = agent.select_action(state)
-            next_state, reward, done, info = env.step(action)
-            agent.replay_buffer.add(state, action, reward, next_state, done)
-
-            if len(agent.replay_buffer) > config.min_buffer_size:
-                losses = agent.update(agent.replay_buffer.sample(config.batch_size))
-                wandb.log(losses)
-
-            state = next_state
-            episode_reward += reward
-
-            if done:
-                break
-
-        wandb.log({"episode_reward": episode_reward, "episode": episode})
-
-        # Evaluation every N episodes
-        if episode % config.eval_freq == 0:
-            eval_reward = evaluate(agent, config)
-            wandb.log({"eval_reward": eval_reward})
-            save_checkpoint(agent, episode)
-```
-
-**Hyperparameter Configuration** (`config/default.yaml`):
-```yaml
-# Network
-n_rrh: 12
-n_ue: 10
-n_bbu: 3
-bandwidth_ghz: 0.18  # per RB
-n_antennas: 4
-
-# Channel
-path_loss_exp: 3.5
-shadowing_std_db: 8
-fading_model: "rayleigh"
-
-# Traffic
-traffic_model: "tidal"
-peak_hours: [9, 12, 18, 22]
-base_demand_mbps: 50
-
-# Power Model (EARTH-aligned)
-rrh:
-  p_active_w: 6.8
-  p_sleep_w: 4.3
-  p_switch_w: 3.0
-  pa_efficiency: 0.25
-bbu:
-  p_stat_w: 175.0
-  p_dyn_w: 250.0
-  delta_p: 0.44
-fronthaul:
-  pon_type: "twdm"
-  p_olt_w: 20.0
-  p_onu_active_w: 5.0
-  p_onu_sleep_w: 0.5
-
-# DRL
-algorithm: "hybrid_sac_dqn"
-max_episodes: 5000
-max_steps_per_episode: 100
-replay_buffer_size: 1000000
-batch_size: 256
-gamma: 0.99
-tau: 0.005
-lr_actor: 1e-4
-lr_critic: 3e-4
-lr_alpha: 1e-4
-hidden_dims: [256, 256]
-
-# Exploration
-epsilon_start: 1.0
-epsilon_end: 0.01
-epsilon_decay: 0.995
-
-# Reward weights
-alpha_energy: 1.0
-beta_qos: 10.0
-gamma_switch: 0.5
-
-# Evaluation
-eval_freq: 100
-n_eval_episodes: 10
-n_random_seeds: 5
-```
+**Hyperparameter Configuration** (`config/default.yaml`): the real schema is nested by section (`network:`, `channel:`, `traffic:`, `power:` with `rrh:`/`bbu:`/`fronthaul:` sub-sections, `algorithm:`, `reward:`, `evaluation:`, `logging:`, `hardware:`) — read `config/default.yaml` directly rather than this guide's copy, which used a flat, unnested schema (`n_rrh:` at the top level, `bandwidth_ghz`, `n_antennas`, `traffic_model: "tidal"`, `algorithm: "hybrid_sac_dqn"`) that never matched any real config file and would silently fail to configure anything if used as written. Every key under `config/default.yaml`'s `algorithm:`/`evaluation:`/`logging:`/`hardware:` blocks is genuinely read by `BranchingMPDQN`/`training/train_hybrid.py` via a `get_val()`-style helper, except the explicitly aspirational ones noted in that file's own comments.
 
 ---
 

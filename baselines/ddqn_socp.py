@@ -29,6 +29,20 @@ class DDQNSOCPBaseline:
         self.n_ue = n_ue
         self.p_max_w = p_max_w
         self.ddqn = DDQNAgent(state_dim=state_dim, n_rrh=n_rrh, p_max_w=p_max_w)
+
+        # config was previously accepted but never read — reward.qos_target_sinr_db
+        # silently fell back to ConvexPowerBaseline's 0.0 default regardless of
+        # the YAML.
+        target_sinr_db = 0.0
+        if config is not None:
+            reward_cfg = (
+                config.get("reward", {}) if isinstance(config, dict) else config
+            )
+            if isinstance(reward_cfg, dict):
+                target_sinr_db = float(reward_cfg.get("qos_target_sinr_db", 0.0))
+            else:
+                target_sinr_db = float(getattr(reward_cfg, "qos_target_sinr_db", 0.0))
+
         # csi_uncertainty > 0 makes Stage 2 solve a genuine second-order cone
         # program (robust worst-case SINR constraint) rather than a plain
         # LP — see ConvexPowerBaseline.solve_power_allocation(). This is what
@@ -39,6 +53,7 @@ class DDQNSOCPBaseline:
             n_rrh=n_rrh,
             n_ue=n_ue,
             p_max_w=p_max_w,
+            target_sinr_db=target_sinr_db,
             noise_power_w=noise_power_w,
             csi_uncertainty=csi_uncertainty,
         )

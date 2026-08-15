@@ -113,33 +113,29 @@ class ContinuousParameterNetwork(nn.Module):
 
 
 class SingleBranchCritic(nn.Module):
-    """Single Multi-Pass Branch Critic Q_r(s, k_r, x_r)."""
+    """Single Multi-Pass Branch Critic Q_r(s, k_r, x_r).
 
-    def __init__(
-        self,
-        state_dim: int,
-        n_rrh: int,
-        hidden_dims: Optional[List[int]] = None,
-        activation: str = "relu",
-        use_layer_norm: bool = True,
-    ):
+    Takes the SharedEncoder's output feature directly rather than owning its
+    own encoder copy (Section 10.3: theta_h is one set of weights feeding
+    both the continuous parameter network and every branch critic, not a
+    separately-trained copy per critic)."""
+
+    def __init__(self, feature_dim: int, n_rrh: int):
         super().__init__()
         self.n_rrh = n_rrh
-        self.encoder = SharedEncoder(state_dim, hidden_dims, activation, use_layer_norm)
-        self.discrete_heads = BranchingDiscreteHeads(self.encoder.output_dim, n_rrh)
+        self.discrete_heads = BranchingDiscreteHeads(feature_dim, n_rrh)
         # Parameter encoder: 2 continuous parameters (power, bandwidth) per RRH
         self.param_encoder = nn.Linear(2, 64)
-        self.fusion = nn.Linear(self.encoder.output_dim + 64, self.encoder.output_dim)
+        self.fusion = nn.Linear(feature_dim + 64, feature_dim)
 
     def forward(
         self,
-        state: torch.Tensor,
+        feat: torch.Tensor,
         continuous_params: torch.Tensor,
         branch_mask_idx: Optional[int] = None,
     ) -> torch.Tensor:
-        # state: (batch, state_dim)
+        # feat: (batch, feature_dim), already produced by the shared encoder
         # continuous_params: (batch, n_rrh, 2)
-        feat = self.encoder(state)
 
         # Ensure continuous_params is 3D (batch, n_rrh, 2)
         if continuous_params.dim() == 2:
@@ -162,30 +158,19 @@ class SingleBranchCritic(nn.Module):
 class TwinBranchCritic(nn.Module):
     """Twin Critic Networks (Q^A, Q^B) for TD3 over-estimation mitigation."""
 
-    def __init__(
-        self,
-        state_dim: int,
-        n_rrh: int,
-        hidden_dims: Optional[List[int]] = None,
-        activation: str = "relu",
-        use_layer_norm: bool = True,
-    ):
+    def __init__(self, feature_dim: int, n_rrh: int):
         super().__init__()
-        self.q_a = SingleBranchCritic(
-            state_dim, n_rrh, hidden_dims, activation, use_layer_norm
-        )
-        self.q_b = SingleBranchCritic(
-            state_dim, n_rrh, hidden_dims, activation, use_layer_norm
-        )
+        self.q_a = SingleBranchCritic(feature_dim, n_rrh)
+        self.q_b = SingleBranchCritic(feature_dim, n_rrh)
 
     def forward(
         self,
-        state: torch.Tensor,
+        feat: torch.Tensor,
         continuous_params: torch.Tensor,
         branch_mask_idx: Optional[int] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        q_a_vals = self.q_a(state, continuous_params, branch_mask_idx)
-        q_b_vals = self.q_b(state, continuous_params, branch_mask_idx)
+        q_a_vals = self.q_a(feat, continuous_params, branch_mask_idx)
+        q_b_vals = self.q_b(feat, continuous_params, branch_mask_idx)
         return q_a_vals, q_b_vals
 
 
@@ -293,7 +278,8 @@ class BranchingMPDQN:
         # (decayed)"). p_ratio/bw_share are already normalized to [0,1] as a
         # fraction of P_max, so a std of 0.1 there is exactly "0.1*P_max" in
         # absolute power units. Decays alongside epsilon (same rate, once per
-        # update() call) down to a small floor rather than vanishing entirely.
+        # episode via decay_exploration()) down to a small floor rather than
+        # vanishing entirely.
         self.continuous_noise_std = float(get_val("continuous_noise_std", 0.1))
         self.continuous_noise_std_end = float(get_val("continuous_noise_std_end", 0.01))
 
@@ -315,7 +301,10 @@ class BranchingMPDQN:
         activation = str(get_val("activation", "relu"))
         use_layer_norm = bool(get_val("use_layer_norm", True))
 
-        # Shared encoder & continuous parameter network
+        # Shared encoder: ONE instance, feeding both the continuous parameter
+        # network and every branch critic (Section 10.3) — not a separate
+        # copy per consumer, which the pre-refactor code built by accident
+        # (SingleBranchCritic used to construct its own SharedEncoder).
         self.encoder = SharedEncoder(
             state_dim, hidden_dims, activation, use_layer_norm
         ).to(self.device)
@@ -323,18 +312,24 @@ class BranchingMPDQN:
             self.device
         )
 
-        # Twin branch critics
-        self.twin_critic = TwinBranchCritic(
-            state_dim, n_rrh, hidden_dims, activation, use_layer_norm
-        ).to(self.device)
+        # Twin branch critics (operate on the shared encoder's output feature)
+        self.twin_critic = TwinBranchCritic(self.encoder.output_dim, n_rrh).to(
+            self.device
+        )
 
         # Targets
         self.encoder_target = copy.deepcopy(self.encoder).to(self.device)
         self.param_net_target = copy.deepcopy(self.param_net).to(self.device)
         self.twin_critic_target = copy.deepcopy(self.twin_critic).to(self.device)
 
-        # Optimizers
-        self.critic_opt = optim.Adam(self.twin_critic.parameters(), lr=lr_branch)
+        # Optimizers. The shared encoder is trained by BOTH signals: every
+        # critic_opt.step() (via critic_loss) and every param_opt.step()
+        # (via the delayed policy_delay-gated param_loss) update it, since
+        # both losses' computation graphs pass through it.
+        self.critic_opt = optim.Adam(
+            list(self.encoder.parameters()) + list(self.twin_critic.parameters()),
+            lr=lr_branch,
+        )
         self.param_opt = optim.Adam(
             list(self.encoder.parameters()) + list(self.param_net.parameters()),
             lr=lr_param,
@@ -344,9 +339,15 @@ class BranchingMPDQN:
         self.update_counter = 0
 
     def _multi_pass_q(
-        self, critic: TwinBranchCritic, state: torch.Tensor, cont_params: torch.Tensor
+        self, critic: TwinBranchCritic, feat: torch.Tensor, cont_params: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Evaluate every branch's Q-value via its own MP-DQN masked pass.
+
+        `feat` is the shared encoder's output, computed once by the caller
+        (not per branch) — the encoder is state-only and doesn't depend on
+        branch_mask_idx, so hoisting it out of the per-branch loop is both a
+        genuine efficiency win and what "shared" means here (Section 10.3):
+        every branch's masked pass reuses the same state representation.
 
         One forward pass per branch (R total, per critic evaluation): each
         pass masks the critic to branch r's own (p_r, beta_r) only, and only
@@ -357,11 +358,11 @@ class BranchingMPDQN:
         concept note. Compute cost scales with R, as documented in Section
         10.5/14 (the top flagged risk at large R).
         """
-        batch_size = state.shape[0]
+        batch_size = feat.shape[0]
         q_a = torch.zeros(batch_size, self.n_rrh, 2, device=self.device)
         q_b = torch.zeros(batch_size, self.n_rrh, 2, device=self.device)
         for r in range(self.n_rrh):
-            q_a_r, q_b_r = critic(state, cont_params, branch_mask_idx=r)
+            q_a_r, q_b_r = critic(feat, cont_params, branch_mask_idx=r)
             q_a[:, r, :] = q_a_r[:, r, :]
             q_b[:, r, :] = q_b_r[:, r, :]
         return q_a, q_b
@@ -380,7 +381,7 @@ class BranchingMPDQN:
             if not evaluate and random.random() < self.epsilon:
                 rrh_on = np.random.randint(0, 2, size=self.n_rrh)
             else:
-                q_vals_a, _ = self._multi_pass_q(self.twin_critic, state_t, cont_params)
+                q_vals_a, _ = self._multi_pass_q(self.twin_critic, feat, cont_params)
                 rrh_on = q_vals_a[0].argmax(dim=-1).cpu().numpy()
 
             # Continuous exploration noise (decayed; applies to both continuous
@@ -448,7 +449,7 @@ class BranchingMPDQN:
 
             # Evaluate next target discrete actions (multi-pass, per branch)
             next_q1, next_q2 = self._multi_pass_q(
-                self.twin_critic_target, next_states, next_cont_params
+                self.twin_critic_target, next_feat, next_cont_params
             )
             next_disc_actions = next_q1.argmax(dim=-1)  # Double DQN target selection
 
@@ -462,7 +463,8 @@ class BranchingMPDQN:
             )
 
         # --- 2. Critic Loss Computation (multi-pass, per branch) ---
-        q1_curr, q2_curr = self._multi_pass_q(self.twin_critic, states, cont_params)
+        feat = self.encoder(states)
+        q1_curr, q2_curr = self._multi_pass_q(self.twin_critic, feat, cont_params)
         q1_sel = q1_curr.gather(-1, disc_actions.unsqueeze(-1)).squeeze(-1)
         q2_sel = q2_curr.gather(-1, disc_actions.unsqueeze(-1)).squeeze(-1)
 
@@ -474,7 +476,8 @@ class BranchingMPDQN:
         self.critic_opt.zero_grad()
         critic_loss.backward()
         nn.utils.clip_grad_norm_(
-            self.twin_critic.parameters(), max_norm=self.gradient_clip_norm
+            list(self.encoder.parameters()) + list(self.twin_critic.parameters()),
+            max_norm=self.gradient_clip_norm,
         )
         self.critic_opt.step()
 
@@ -485,13 +488,14 @@ class BranchingMPDQN:
             p_ratio, bw_share = self.param_net(feat)
             pred_params = torch.stack([p_ratio, bw_share], dim=-1)
 
-            q1_pred, _ = self._multi_pass_q(self.twin_critic, states, pred_params)
+            q1_pred, _ = self._multi_pass_q(self.twin_critic, feat, pred_params)
             param_loss = -q1_pred.mean()
 
             self.param_opt.zero_grad()
             param_loss.backward()
             nn.utils.clip_grad_norm_(
-                self.param_net.parameters(), max_norm=self.gradient_clip_norm
+                list(self.encoder.parameters()) + list(self.param_net.parameters()),
+                max_norm=self.gradient_clip_norm,
             )
             self.param_opt.step()
             param_loss_val = float(param_loss.item())
@@ -501,18 +505,24 @@ class BranchingMPDQN:
             self._soft_update(self.param_net_target, self.param_net)
             self._soft_update(self.twin_critic_target, self.twin_critic)
 
-        self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
-        self.continuous_noise_std = max(
-            self.continuous_noise_std_end,
-            self.continuous_noise_std * self.epsilon_decay,
-        )
-
         return {
             "critic_loss": float(critic_loss.item()),
             "param_loss": param_loss_val,
             "epsilon": float(self.epsilon),
             "continuous_noise_std": float(self.continuous_noise_std),
         }
+
+    def decay_exploration(self):
+        """Decay epsilon and continuous-action exploration noise once per
+        episode (config/default.yaml's epsilon_decay is documented as a
+        per-episode rate; calling this from update(), which runs once per
+        environment step, decayed ~100x faster than intended at
+        max_steps_per_episode=100)."""
+        self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
+        self.continuous_noise_std = max(
+            self.continuous_noise_std_end,
+            self.continuous_noise_std * self.epsilon_decay,
+        )
 
     def _soft_update(self, target: nn.Module, source: nn.Module):
         with torch.no_grad():

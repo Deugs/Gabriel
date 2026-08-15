@@ -24,6 +24,9 @@ class PowerModel:
         p_olt_w (float): Fronthaul Optical Line Terminal power in Watts (default: 20.0 W).
         p_onu_active_w (float): Optical Network Unit active power in Watts (default: 5.0 W).
         p_onu_sleep_w (float): Optical Network Unit sleep power in Watts (default: 0.5 W).
+        p_lc_w (float): Fronthaul line-card power in Watts (default: 10.0 W).
+        wavelength_capacity_gbps (float): Aggregate throughput capacity per
+            active line card/wavelength in Gbps (default: 10.0).
     """
 
     def __init__(
@@ -40,6 +43,8 @@ class PowerModel:
         p_olt_w: float = 20.0,
         p_onu_active_w: float = 5.0,
         p_onu_sleep_w: float = 0.5,
+        p_lc_w: float = 10.0,
+        wavelength_capacity_gbps: float = 10.0,
     ):
         self.n_rrh = n_rrh
         self.n_bbu = n_bbu
@@ -59,6 +64,8 @@ class PowerModel:
         self.p_olt = p_olt_w
         self.p_onu_active = p_onu_active_w
         self.p_onu_sleep = p_onu_sleep_w
+        self.p_lc = p_lc_w
+        self.wavelength_capacity_gbps = wavelength_capacity_gbps
 
     def compute_rrh_power(
         self, active_mask: np.ndarray, transmit_power: np.ndarray
@@ -95,11 +102,22 @@ class PowerModel:
         p_dynamic = self.delta_p * self.p_dyn * np.sum(loads_clamped)
         return float(p_static + p_dynamic)
 
-    def compute_fronthaul_power(self, active_mask: np.ndarray) -> float:
+    def compute_fronthaul_power(
+        self, active_mask: np.ndarray, total_throughput_mbps: float = 0.0
+    ) -> float:
         """Compute TWDM-PON fronthaul power consumption.
+
+        P_FH(t) = P_OLT + sum_{k in K_active} P_LC,k + P_ONU,active + P_ONU,sleep
+        (docs/thesis_guide.md Eq. 3.7-3.8). Line cards are wavelength-striped:
+        each carries up to `wavelength_capacity_gbps` of aggregate demand, so
+        the number of active line cards scales with total_throughput_mbps
+        rather than being fixed — at least one is active whenever any RRH is
+        active, even below one wavelength's capacity.
 
         Args:
             active_mask (np.ndarray): Binary vector indicating active RRHs (n_rrh,).
+            total_throughput_mbps (float): Aggregate achieved throughput this
+                step, used to size the active line-card count.
 
         Returns:
             float: Total fronthaul power consumption in Watts.
@@ -107,7 +125,16 @@ class PowerModel:
         active_bool = active_mask.astype(bool)
         p_onu_active = np.sum(active_bool) * self.p_onu_active
         p_onu_sleep = np.sum(~active_bool) * self.p_onu_sleep
-        return float(self.p_olt + p_onu_active + p_onu_sleep)
+
+        n_active_lc = 0
+        if np.any(active_bool):
+            demand_gbps = total_throughput_mbps / 1000.0
+            n_active_lc = max(
+                1, int(np.ceil(demand_gbps / self.wavelength_capacity_gbps))
+            )
+        p_lc = n_active_lc * self.p_lc
+
+        return float(self.p_olt + p_lc + p_onu_active + p_onu_sleep)
 
     def compute_switching_cost(
         self, prev_active_mask: np.ndarray, current_active_mask: np.ndarray
@@ -132,6 +159,7 @@ class PowerModel:
         transmit_power: np.ndarray,
         bbu_loads: np.ndarray,
         prev_active_mask: Optional[np.ndarray] = None,
+        total_throughput_mbps: float = 0.0,
     ) -> dict:
         """Compute complete system power breakdown (RRH + BBU + Fronthaul + Switching).
 
@@ -140,13 +168,15 @@ class PowerModel:
             transmit_power (np.ndarray): Continuous transmit power array (n_rrh,).
             bbu_loads (np.ndarray): BBU load array (n_bbu,).
             prev_active_mask (np.ndarray, optional): Previous active mask.
+            total_throughput_mbps (float): Aggregate achieved throughput this
+                step, used to size the active fronthaul line-card count.
 
         Returns:
             dict: Dictionary with keys 'rrh', 'bbu', 'fronthaul', 'switching', 'total'.
         """
         p_rrh = self.compute_rrh_power(active_mask, transmit_power)
         p_bbu = self.compute_bbu_power(bbu_loads)
-        p_fh = self.compute_fronthaul_power(active_mask)
+        p_fh = self.compute_fronthaul_power(active_mask, total_throughput_mbps)
 
         p_sw = 0.0
         if prev_active_mask is not None:

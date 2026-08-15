@@ -122,6 +122,10 @@ class CRANEnv(gym.Env):
             p_olt_w=float(getattr(fronthaul_cfg, "p_olt_w", 20.0)),
             p_onu_active_w=float(getattr(fronthaul_cfg, "p_onu_active_w", 5.0)),
             p_onu_sleep_w=float(getattr(fronthaul_cfg, "p_onu_sleep_w", 0.5)),
+            p_lc_w=float(getattr(fronthaul_cfg, "p_lc_w", 10.0)),
+            wavelength_capacity_gbps=float(
+                getattr(fronthaul_cfg, "wavelength_capacity_gbps", 10.0)
+            ),
         )
 
         # State dimensions: gains (R*U) + mask (R) + demands (U) + prev_power (1) + hour (1)
@@ -291,6 +295,7 @@ class CRANEnv(gym.Env):
             transmit_power=power,
             bbu_loads=bbu_loads,
             prev_active_mask=self.active_mask,
+            total_throughput_mbps=total_throughput_mbps,
         )
 
         p_total = power_dict["total"]

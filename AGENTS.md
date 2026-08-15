@@ -41,7 +41,7 @@
 
 ## Contribution Claim (To Be Defended)
 
-**Primary**: A hybrid Actor-Critic framework combining discrete action selection (DDQN-style) for RRH on/off decisions with continuous policy optimization (SAC) for transmit power allocation, with a fronthaul-aware reward function.
+**Primary**: A branching, multi-pass, twin-critic parameterized DQN (Branching MP-DQN + TD3, `agents/branching_mp_dqn.py`) coupling R independent per-RRH discrete on/off branches with a continuous transmit-power/bandwidth-share parameter network through one shared encoder — not the discrete-DDQN/continuous-SAC hybrid actor-critic design originally proposed (see "Methodological Pivot" below; that design is superseded) — with a fronthaul-aware reward function.
 
 **Secondary**:
 - Validated power model aligned with EARTH/GreenTouch standards
@@ -55,7 +55,7 @@
 | Reference | Role | Key Insight |
 |-----------|------|-------------|
 | Fathy et al. (2021) | Primary | ANN pre-processing + Bi-Section GSBF convex optimization |
-| Iqbal et al. (2021) | Primary | DDQN for RRH on/off + convex power allocation; 22% power savings |
+| Iqbal et al. (2021) | Primary | DDQN for RRH on/off + convex power allocation. A specific reported power-savings % is NOT restated here — no primary-source access is available in this environment to verify it (see `tests/test_baseline_paper_scenarios.py`'s disclaimer); only qualitative behavior is validated |
 | Al-Zubaedi (2019) | Primary | Comprehensive C-RAN power model; NMBS bin-packing; TWDM-PON |
 | Bordin et al. (2025) | Recent | DRL (PPO/DQN) for Open RAN RF-frontend energy saving, via `ns-O-RAN`; arXiv:2410.14021 |
 | Shengren et al. (2022) | Methodology | DRL benchmark: SAC > TD3 > DDPG in stability |
@@ -166,7 +166,7 @@ Before any chapter is considered complete, it must pass:
 2. **Reference Alignment**: Every claim backed by citation; no unsubstantiated novelty claims
 3. **Reproducibility**: All simulation parameters in config files; random seeds fixed
 4. **Baseline Comparison**: Every result compared against at least 2 baselines
-5. **Statistical Significance**: All results averaged over ≥5 random seeds with confidence intervals
+5. **Statistical Significance**: All results averaged over ≥10 random seeds with confidence intervals and Cohen's d (revised from ≥5 per supervisor review S4 — see `docs/rules.md` Rule 3/Rule 7 and the Key Decisions Log in `README.md`)
 6. **Code-Text Consistency**: Equations in thesis match implementation exactly
 
 ---
