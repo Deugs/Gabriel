@@ -134,8 +134,8 @@ def run_proxy_sensitivity_sweep(
     base_cfg["network"]["n_ue"] = 2
 
     algo_cfg = base_cfg.setdefault("algorithm", {})
-    default_lr_discrete = float(algo_cfg.get("lr_discrete", 1e-3))
-    default_lr_actor = float(algo_cfg.get("lr_actor", 1e-4))
+    default_lr_discrete = float(algo_cfg.get("lr_discrete", 1e-4))
+    default_lr_actor = float(algo_cfg.get("lr_actor", 3e-4))
     default_tau = float(algo_cfg.get("tau", 0.005))
 
     variants: Dict[str, Dict[str, float]] = {
@@ -185,7 +185,8 @@ def run_proxy_sensitivity_sweep(
                 )
                 seed_rewards.append(float(res["final_eval_reward"]))
                 critic_losses = res["history"]["critic_losses"]
-                tail = critic_losses[-max(1, len(critic_losses) // 5) :]
+                tail_len = max(1, len(critic_losses) // 5)
+                tail = critic_losses[-tail_len:]
                 seed_tail_critic_losses.append(float(np.mean(tail)) if tail else 0.0)
             except (RuntimeError, ValueError) as exc:
                 crashed = True
@@ -198,7 +199,9 @@ def run_proxy_sensitivity_sweep(
 
         mean_reward = float(np.nanmean(seed_rewards)) if seed_rewards else float("nan")
         mean_tail_loss = (
-            float(np.nanmean(seed_tail_critic_losses)) if seed_tail_critic_losses else float("nan")
+            float(np.nanmean(seed_tail_critic_losses))
+            if seed_tail_critic_losses
+            else float("nan")
         )
         results[variant_name] = {
             "overrides": overrides,
@@ -231,7 +234,10 @@ def run_proxy_sensitivity_sweep(
                 "swept alternatives; kept per Concept Note v4.0 Section 12.11 item 2"
             ),
         }
-        print(f"Decision [{dim}]: default_kept={decisions[dim]['default_kept']} — {decisions[dim]['reason']}")
+        print(
+            f"Decision [{dim}]: default_kept={decisions[dim]['default_kept']} — "
+            f"{decisions[dim]['reason']}"
+        )
 
     summary = {
         "scenario": {"n_rrh": 5, "n_ue": 2, "episodes": episodes, "seeds": seeds},

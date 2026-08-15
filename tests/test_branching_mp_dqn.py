@@ -187,6 +187,10 @@ def test_branching_mp_dqn_reward_scale_affects_update(default_config):
         torch.manual_seed(1)
         cfg = deepcopy(default_config)
         cfg["algorithm"]["reward_scale"] = reward_scale
+        # This test pushes far fewer transitions than the real
+        # min_buffer_size warm-up (10000); override it down so update()
+        # actually trains instead of returning early.
+        cfg["algorithm"]["min_buffer_size"] = 16
         agent = BranchingMPDQN(
             state_dim=env.state_dim, n_rrh=env.n_rrh, p_max_w=env.p_max_w, config=cfg
         )
@@ -227,3 +231,42 @@ def test_branching_mp_dqn_device_defaults_from_hardware_config(default_config):
         device="cpu",
     )
     assert agent_explicit.device.type == "cpu"
+
+
+def test_branching_mp_dqn_min_buffer_size_gates_update(default_config):
+    """algorithm.min_buffer_size must gate update() (a replay-buffer warm-up
+    threshold), not just batch_size — previously unread, so update() started
+    training as soon as the buffer held batch_size transitions regardless of
+    this key."""
+    env = CRANEnv(default_config)
+    cfg = deepcopy(default_config)
+    cfg["algorithm"]["min_buffer_size"] = 50
+    agent = BranchingMPDQN(
+        state_dim=env.state_dim, n_rrh=env.n_rrh, p_max_w=env.p_max_w, config=cfg
+    )
+    assert agent.min_buffer_size == 50
+
+    obs, _ = env.reset(seed=42)
+    for _ in range(20):
+        action = {
+            "rrh_on": np.random.randint(0, 2, size=env.n_rrh),
+            "continuous": np.random.uniform(0.0, 1.0, size=(env.n_rrh, 2)),
+        }
+        next_obs, reward, terminated, truncated, _ = env.step(
+            {
+                "rrh_on": action["rrh_on"],
+                "power": action["continuous"][:, 0] * env.p_max_w,
+                "bandwidth": action["continuous"][:, 1],
+            }
+        )
+        agent.memory.push(
+            obs, action["rrh_on"], action["continuous"], reward, next_obs, terminated
+        )
+        obs = next_obs if not (terminated or truncated) else env.reset(seed=42)[0]
+
+    # Only 20 transitions pushed, below min_buffer_size=50: update() must
+    # return the early zero-metrics dict, even though batch_size (16) alone
+    # would already be satisfied.
+    metrics = agent.update(batch_size=16)
+    assert metrics["critic_loss"] == 0.0
+    assert metrics["param_loss"] == 0.0

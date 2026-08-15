@@ -67,6 +67,27 @@ def test_train_hybrid_agent_short_run(config_path, tmp_path):
     assert (out_folder / "final_model.pt").exists()
 
 
+def test_train_hybrid_agent_enforces_max_episodes_cap(config_path):
+    """algorithm.max_episodes (Concept Note v4.0 Section 12.2) is documented
+    as an upper cap — previously unread anywhere, so nothing actually capped
+    episodes at this value."""
+    cfg = yaml.safe_load(Path(config_path).read_text())
+    cfg["algorithm"]["max_episodes"] = 3
+    capped_path = Path(config_path).parent / "capped_config.yaml"
+    capped_path.write_text(yaml.dump(cfg))
+
+    with pytest.raises(ValueError, match="max_episodes"):
+        train_hybrid_agent(
+            config_path=str(capped_path), seed=42, episodes=4, save_dir=None
+        )
+
+    # Within the cap: runs normally.
+    res = train_hybrid_agent(
+        config_path=str(capped_path), seed=42, episodes=3, save_dir=None
+    )
+    assert res["episodes"] == 3
+
+
 def test_train_hybrid_agent_eval_freq_defaults_from_config(make_config_path, tmp_path):
     """eval_freq=None (the default) must read evaluation.eval_freq from the
     config, not silently fall back to a hardcoded value that ignores it."""
@@ -184,6 +205,26 @@ def test_run_baseline_benchmarks_short_run(config_path, tmp_path):
 
     assert (Path(save_dir) / "benchmark_all_on" / "summary.json").exists()
     assert (Path(save_dir) / "benchmark_greedy" / "summary.json").exists()
+
+
+def test_run_baseline_benchmarks_default_seeds_match_n_random_seeds(
+    config_path, tmp_path
+):
+    """evaluation.n_random_seeds must match the hardcoded default seed
+    list's length — a config drift here was previously unread and would
+    have gone unnoticed."""
+    cfg = yaml.safe_load(Path(config_path).read_text())
+    cfg["evaluation"]["n_random_seeds"] = 3  # actual default list has 10
+    mismatched_path = Path(config_path).parent / "mismatched_config.yaml"
+    mismatched_path.write_text(yaml.dump(cfg))
+
+    with pytest.raises(ValueError, match="n_random_seeds"):
+        run_baseline_benchmarks(
+            config_path=str(mismatched_path),
+            episodes=1,
+            algorithms=["all_on"],
+            save_dir=str(tmp_path / "results"),
+        )
 
 
 def test_hyperparameter_search(config_path, tmp_path):

@@ -2,6 +2,41 @@
 
 > Filled instances of `docs/daily_log_template.md`. Newest entry first.
 
+## Date: 2026-08-15
+
+### What I Did Today
+- [x] Found the actual root cause of the 2026-08-13 entry's lr-pair discrepancy: it wasn't just that `config/default.yaml` drifted from the 2026-08-05 sweep's tested values — three source files (`agents/branching_mp_dqn.py`, `agents/pdqn_agent.py` (inherited by `agents/mpdqn_agent.py`), and `training/hyperparam_search.py::run_proxy_sensitivity_sweep`) still hardcoded the old 1e-3/1e-4 pair as their Python-side fallback default for `get_val("lr_discrete"/"lr_actor", ...)`. Every actual config file (`default.yaml`, `small_network.yaml`, `large_network.yaml`) already explicitly overrides both keys with the real 1e-4/3e-4 values, so this was masked in normal use — but it meant the fallback itself, and any future config that omitted these keys, would silently train at the wrong, unvalidated rates.
+- [x] Corrected all three fallback defaults to 1e-4/3e-4, matching the real config values and Concept Note v4.0 §12.2/§12.11.
+- [ ] The underlying blocker from 2026-08-13 is still open: nothing in this fix constitutes actually running Section 12.11's proxy sweep against 1e-4/3e-4. That requires an actual `training/hyperparam_search.py::run_proxy_sensitivity_sweep()` execution, which was not run today — fixing the code's fallback defaults is a prerequisite for that sweep being meaningful, not a substitute for running it.
+
+### Time Spent
+| Activity | Hours |
+|----------|-------|
+| Coding | 0.1 |
+| Writing | 0.05 |
+| Reading | 0.1 |
+| Debugging | 0 |
+| Running experiments | 0 |
+| **Total** | ~0.25 |
+
+### Decisions Made
+| Decision | Rationale |
+|----------|-----------|
+| Fix the three hardcoded fallback defaults to 1e-4/3e-4 without also running the proxy sweep | The code fix is a correctness bug (a fallback default that would silently activate for any config omitting these keys) independent of whether the sweep has been re-run; fabricating a sweep result to close out the 2026-08-13 blocker would violate the Ethical AI Rule (`docs/rules.md` §10) the same way an unverified citation claim would. |
+
+### Blockers
+| Blocker | Severity | Plan |
+|---------|----------|------|
+| Section 12.11's proxy sweep still has not actually been run against the real lr_discrete/lr_actor (1e-4/3e-4) | Medium — unchanged from 2026-08-13 | Re-run `training/hyperparam_search.py::run_proxy_sensitivity_sweep()` centered on 1e-4/3e-4 before the full 10-seed matrix, and log a fresh keep/change decision here |
+
+### Tomorrow's Plan
+- [ ] Re-run the proxy sweep centered on the actual config defaults (1e-4/3e-4), per the blocker above (carried over from 2026-08-13, still not done)
+
+### Notes
+This closes the code-level half of the 2026-08-13 gap (the fallback defaults now match reality) but not the empirical half (the sweep itself). Left the 2026-08-13 and 2026-08-05 entries below unedited as a historical record.
+
+---
+
 ## Date: 2026-08-13
 
 ### What I Did Today

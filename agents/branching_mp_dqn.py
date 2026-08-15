@@ -283,9 +283,14 @@ class BranchingMPDQN:
         self.continuous_noise_std = float(get_val("continuous_noise_std", 0.1))
         self.continuous_noise_std_end = float(get_val("continuous_noise_std_end", 0.01))
 
-        lr_branch = float(get_val("lr_discrete", 1e-3))
-        lr_param = float(get_val("lr_actor", 1e-4))
+        lr_branch = float(get_val("lr_discrete", 1e-4))
+        lr_param = float(get_val("lr_actor", 3e-4))
         buffer_size = int(get_val("buffer_size", 100000))
+        # Replay-buffer warm-up: don't start training until at least this
+        # many transitions are collected. Distinct from batch_size (how many
+        # transitions a single update() samples) — min_buffer_size can, and
+        # by default does, exceed batch_size for a longer warm-up.
+        self.min_buffer_size = int(get_val("min_buffer_size", 10000))
 
         # Training stability (Section 10.3): gradient clipping applied to both
         # critic and parameter-network updates in update(); reward scaling
@@ -406,7 +411,7 @@ class BranchingMPDQN:
 
     def update(self, batch_size: int = 256) -> Dict[str, float]:
         """Execute one Multi-Pass Branching MP-DQN + TD3 step."""
-        if len(self.memory) < batch_size:
+        if len(self.memory) < max(batch_size, self.min_buffer_size):
             return {
                 "critic_loss": 0.0,
                 "param_loss": 0.0,

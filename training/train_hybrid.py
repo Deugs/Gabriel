@@ -146,6 +146,16 @@ def train_hybrid_agent(
     save_checkpoints = bool(evaluation_cfg.get("save_checkpoints", True))
     checkpoint_freq = int(evaluation_cfg.get("checkpoint_freq", 500))
 
+    # algorithm.max_episodes (Concept Note v4.0 Section 12.2) is documented as
+    # an upper cap, not a target — enforce it as one rather than leaving it
+    # silently unread.
+    max_episodes = cfg.get("algorithm", {}).get("max_episodes")
+    if max_episodes is not None and episodes > int(max_episodes):
+        raise ValueError(
+            f"episodes={episodes} exceeds algorithm.max_episodes={max_episodes} "
+            f"in {config_path}"
+        )
+
     logging_cfg = cfg.get("logging", {})
     log_freq = int(logging_cfg.get("log_freq", 10))
     use_wandb_explicit = use_wandb is not None

@@ -36,8 +36,22 @@ def run_baseline_benchmarks(
     save_dir: str = "data/results",
 ) -> Dict[str, Any]:
     """Run baseline benchmark algorithms over specified random seeds."""
+    with open(config_path, "r") as f:
+        cfg = yaml.safe_load(f)
+
     if seeds is None:
         seeds = [42, 123, 456, 789, 1011, 1337, 2024, 2718, 3141, 4242]
+        # evaluation.n_random_seeds (Concept Note v4.0 Section 12.4) is a
+        # consistency guard on this default list, not a generator for it —
+        # the specific seed values are a deliberate, documented choice
+        # (README.md's Key Decisions Log), not derivable from a count alone.
+        n_random_seeds = cfg.get("evaluation", {}).get("n_random_seeds")
+        if n_random_seeds is not None and len(seeds) != int(n_random_seeds):
+            raise ValueError(
+                f"Default seed list has {len(seeds)} seeds but "
+                f"evaluation.n_random_seeds={n_random_seeds} in {config_path} "
+                "— update one to match the other."
+            )
 
     if algorithms is None:
         algorithms = [
@@ -54,9 +68,6 @@ def run_baseline_benchmarks(
         ]
 
     drl_trained_algorithms = {"ddqn", "ddqn_socp", "ddpg", "pdqn", "mpdqn"}
-
-    with open(config_path, "r") as f:
-        cfg = yaml.safe_load(f)
 
     results: Dict[str, Any] = {}
 

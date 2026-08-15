@@ -30,7 +30,7 @@
 
 **Key Decisions**:
 - Channel model: Rayleigh fading + log-normal shadowing
-- Traffic model: Sinusoidal tidal + log-normal noise
+- Traffic model: dual-Gaussian diurnal factor (business peak 11:00, residential peak 20:00) + log-normal per-user burstiness (`cran_env/traffic_model.py`; corrected from an earlier "sinusoidal + log-normal noise" description, see Concept Note v4.0 §12.8)
 - Power model: EARTH model parameters (Al-Zubaedi validated)
 
 **Validation**:
@@ -59,12 +59,12 @@
 
 **Key Decisions**:
 - CVXPY for convex sub-problems (matches Fathy/Iqbal)
-- DDQN from Stable-Baselines3 (proven implementation)
+- DDQN: hand-rolled PyTorch Double DQN (`agents/ddqn_agent.py`), not Stable-Baselines3 — this codebase has no dependency on `stable_baselines3` anywhere
 - P-DQN/MP-DQN capped at R≤12 by design, not by bug — the resulting scaling failure is itself evidence for the branching architecture (Concept Note v3.0 §12.1)
 - Identical environment for all baselines
 
 **Validation**:
-- DDQN reproduces Iqbal's ~22% savings
+- DDQN reproduces Iqbal et al.'s *qualitative* behavior (outperforming All-ON) at their exact studied scenarios (`tests/test_baseline_paper_scenarios.py`) — a specific reported power-savings % is not used as a pass/fail gate, since no primary-source access is available in this environment to verify it (Ethical AI Rule, `docs/rules.md` §10)
 - Convex baseline matches analytical solution
 - All baselines run without errors
 
