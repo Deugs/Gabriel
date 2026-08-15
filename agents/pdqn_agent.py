@@ -19,7 +19,7 @@ multi-pass masking.
 from collections import deque
 import copy
 import random
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -62,9 +62,13 @@ class JointDiscreteQNetwork(nn.Module):
     ) -> torch.Tensor:
         # features: (batch, feature_dim); continuous_params: (batch, n_rrh, 2) or (batch, 2*n_rrh)
         if continuous_params.dim() == 3:
-            continuous_params = continuous_params.reshape(continuous_params.shape[0], -1)
+            continuous_params = continuous_params.reshape(
+                continuous_params.shape[0], -1
+            )
         param_feat = F.relu(self.param_encoder(continuous_params))
-        return self.trunk(torch.cat([features, param_feat], dim=-1))  # (batch, hidden_dim)
+        return self.trunk(
+            torch.cat([features, param_feat], dim=-1)
+        )  # (batch, hidden_dim)
 
     def forward(
         self, features: torch.Tensor, continuous_params: torch.Tensor
@@ -101,10 +105,13 @@ class JointActionReplayBuffer:
             (state, int(joint_action_idx), continuous_params, reward, next_state, done)
         )
 
-    def sample(
-        self, batch_size: int
-    ) -> Tuple[
-        torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor
+    def sample(self, batch_size: int) -> Tuple[
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
     ]:
         batch = random.sample(self.buffer, batch_size)
         states, action_idxs, cont_params, rewards, next_states, dones = zip(*batch)
@@ -150,11 +157,15 @@ class PDQNAgent:
         self.device = torch.device(device if torch.cuda.is_available() else "cpu")
 
         cfg = config if config is not None else {}
-        algo_cfg = (
-            getattr(cfg, "algorithm", cfg)
-            if hasattr(cfg, "algorithm") or isinstance(cfg, dict)
-            else cfg
-        )
+        # NOTE: getattr(cfg, "algorithm", cfg) does NOT perform dict key
+        # lookup — for a plain dict config it silently returns the whole
+        # `cfg` object instead of `cfg["algorithm"]`, so every get_val()
+        # below would fall through to its Python-side default regardless of
+        # the YAML. Dict configs must be indexed with cfg.get(...).
+        if isinstance(cfg, dict):
+            algo_cfg = cfg.get("algorithm", {})
+        else:
+            algo_cfg = getattr(cfg, "algorithm", cfg)
 
         def get_val(key, default):
             if isinstance(algo_cfg, dict):

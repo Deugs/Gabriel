@@ -267,11 +267,15 @@ class HybridSACDDQN:
 
         # Extract hyperparameters with defaults
         cfg = config if config is not None else {}
-        algo_cfg = (
-            getattr(cfg, "algorithm", cfg)
-            if hasattr(cfg, "algorithm") or isinstance(cfg, dict)
-            else cfg
-        )
+        # NOTE: getattr(cfg, "algorithm", cfg) does NOT perform dict key
+        # lookup — for a plain dict config it silently returns the whole
+        # `cfg` object instead of `cfg["algorithm"]`, so every get_val()
+        # below would fall through to its Python-side default regardless of
+        # the YAML. Dict configs must be indexed with cfg.get(...).
+        if isinstance(cfg, dict):
+            algo_cfg = cfg.get("algorithm", {})
+        else:
+            algo_cfg = getattr(cfg, "algorithm", cfg)
 
         def get_val(key, default):
             if isinstance(algo_cfg, dict):

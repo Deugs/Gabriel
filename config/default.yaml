@@ -125,12 +125,20 @@ evaluation:
 logging:
   use_wandb: true
   wandb_project: "cran-drl-thesis"
-  log_freq: 10              # Log every N steps
+  log_freq: 10              # Console progress heartbeat every N episodes,
+                             # between the fuller evaluation.eval_freq prints
 
 # ============================================================
 # Hardware
 # ============================================================
 hardware:
-  device: "cuda"            # cuda or cpu
-  n_envs: 1                 # Parallel environments (if supported)
-  num_workers: 4            # DataLoader workers
+  device: "cuda"            # cuda or cpu (falls back to cpu automatically if
+                             # no GPU is available; training/*.py read this as
+                             # BranchingMPDQN's device default)
+  # n_envs/num_workers: aspirational/reserved. No vectorized-environment or
+  # DataLoader-worker infrastructure exists in this codebase yet — every
+  # training loop (training/train_hybrid.py, train_baselines.py, etc.) is a
+  # single synchronous CRANEnv. These keys are placeholders for a future
+  # parallel-training implementation and are not read anywhere today.
+  n_envs: 1                 # Parallel environments (not yet implemented)
+  num_workers: 4            # DataLoader workers (not yet implemented)

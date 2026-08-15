@@ -28,7 +28,9 @@ import torch.optim as optim
 class DDPGActor(nn.Module):
     """Deterministic actor producing per-RRH (activation, power, bandwidth)."""
 
-    def __init__(self, state_dim: int, n_rrh: int, hidden_dims: Optional[List[int]] = None):
+    def __init__(
+        self, state_dim: int, n_rrh: int, hidden_dims: Optional[List[int]] = None
+    ):
         super().__init__()
         if hidden_dims is None:
             hidden_dims = [256, 128]
@@ -58,7 +60,9 @@ class DDPGActor(nn.Module):
 class DDPGCritic(nn.Module):
     """Q(s, a) over the full continuous-relaxed action (activation, power, bandwidth)."""
 
-    def __init__(self, state_dim: int, n_rrh: int, hidden_dims: Optional[List[int]] = None):
+    def __init__(
+        self, state_dim: int, n_rrh: int, hidden_dims: Optional[List[int]] = None
+    ):
         super().__init__()
         if hidden_dims is None:
             hidden_dims = [256, 128]
@@ -80,9 +84,9 @@ class ContinuousActionReplayBuffer:
     """Experience Replay Buffer for fully-continuous (s, a, r, s', done) transitions."""
 
     def __init__(self, capacity: int = 100000):
-        self.buffer: deque[
-            Tuple[np.ndarray, np.ndarray, float, np.ndarray, bool]
-        ] = deque(maxlen=capacity)
+        self.buffer: deque[Tuple[np.ndarray, np.ndarray, float, np.ndarray, bool]] = (
+            deque(maxlen=capacity)
+        )
 
     def push(
         self,
@@ -129,11 +133,15 @@ class DDPGAgent:
         self.device = torch.device(device if torch.cuda.is_available() else "cpu")
 
         cfg = config if config is not None else {}
-        algo_cfg = (
-            getattr(cfg, "algorithm", cfg)
-            if hasattr(cfg, "algorithm") or isinstance(cfg, dict)
-            else cfg
-        )
+        # NOTE: getattr(cfg, "algorithm", cfg) does NOT perform dict key
+        # lookup — for a plain dict config it silently returns the whole
+        # `cfg` object instead of `cfg["algorithm"]`, so every get_val()
+        # below would fall through to its Python-side default regardless of
+        # the YAML. Dict configs must be indexed with cfg.get(...).
+        if isinstance(cfg, dict):
+            algo_cfg = cfg.get("algorithm", {})
+        else:
+            algo_cfg = getattr(cfg, "algorithm", cfg)
 
         def get_val(key, default):
             if isinstance(algo_cfg, dict):
@@ -177,7 +185,8 @@ class DDPGAgent:
                 noise = torch.randn_like(activation) * self.exploration_sigma
                 activation = torch.clamp(activation + noise, 0.0, 1.0)
                 power_ratio = torch.clamp(
-                    power_ratio + torch.randn_like(power_ratio) * self.exploration_sigma,
+                    power_ratio
+                    + torch.randn_like(power_ratio) * self.exploration_sigma,
                     0.0,
                     1.0,
                 )
@@ -207,7 +216,9 @@ class DDPGAgent:
 
         with torch.no_grad():
             next_activation, next_power, next_bandwidth = self.actor_target(next_states)
-            next_action = self._to_action_vec(next_activation, next_power, next_bandwidth)
+            next_action = self._to_action_vec(
+                next_activation, next_power, next_bandwidth
+            )
             next_q = self.critic_target(next_states, next_action)
             y_target = rewards + self.gamma * (1.0 - dones) * next_q
 

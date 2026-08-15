@@ -1,5 +1,7 @@
 """Unit tests for C-RAN Gymnasium Environment (cran_env/)."""
 
+from copy import deepcopy
+
 import pytest
 import numpy as np
 import yaml  # type: ignore[import-untyped]
@@ -15,6 +17,17 @@ def default_config():
     with open(config_path, "r") as f:
         cfg = yaml.safe_load(f)
     return cfg
+
+
+def test_cran_env_reads_max_steps_per_episode_from_config(default_config):
+    """Regression test: `getattr(cfg, "algorithm", cfg)` does not perform
+    dict key lookup, so for a plain dict config this previously always
+    resolved to the whole cfg object (not cfg["algorithm"]), silently
+    discarding algorithm.max_steps_per_episode regardless of the YAML."""
+    cfg = deepcopy(default_config)
+    cfg["algorithm"]["max_steps_per_episode"] = 7
+    env = CRANEnv(cfg)
+    assert env.max_steps == 7
 
 
 def test_channel_model():
@@ -137,7 +150,8 @@ def test_sinr_interference_physics(default_config):
     }
     sinr_1_rrh = env._compute_sinr(action_1_rrh["rrh_on"], action_1_rrh["power"])
 
-    # Action 2: ALL RRHs active at full power (creates co-channel interference for users assigned to different RRHs)
+    # Action 2: ALL RRHs active at full power (creates co-channel interference
+    # for users assigned to different RRHs)
     action_all_rrhs = {
         "rrh_on": np.ones(env.n_rrh, dtype=int),
         "power": np.full(env.n_rrh, env.p_max_w, dtype=np.float32),
@@ -146,8 +160,10 @@ def test_sinr_interference_physics(default_config):
         action_all_rrhs["rrh_on"], action_all_rrhs["power"]
     )
 
-    # Under true multi-cell downlink interference, users served by a single RRH receive interference from other active RRHs.
-    # Therefore, the mean SINR per user with all RRHs transmitting full power must experience interference penalty relative to non-interfered signal ratio.
+    # Under true multi-cell downlink interference, users served by a single
+    # RRH receive interference from other active RRHs. Therefore, the mean
+    # SINR per user with all RRHs transmitting full power must experience
+    # interference penalty relative to non-interfered signal ratio.
     assert np.all(sinr_1_rrh >= 0.0)
     assert np.all(sinr_all_rrhs >= 0.0)
     # Check that interference calculation is active (some users suffer interference)

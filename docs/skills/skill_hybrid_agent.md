@@ -55,18 +55,30 @@ The actual module classes (`agents/branching_mp_dqn.py`) — read that file dire
 class SharedEncoder(nn.Module):
     """Shared state encoder h(s|theta_h) mapping state s(t) to feature representation."""
 
-    def __init__(self, state_dim: int, hidden_dims: Optional[List[int]] = None):
+    def __init__(
+        self,
+        state_dim: int,
+        hidden_dims: Optional[List[int]] = None,
+        activation: str = "relu",
+        use_layer_norm: bool = True,
+    ):
         super().__init__()
         if hidden_dims is None:
             hidden_dims = [256, 128]
+        activation_cls = _resolve_activation(activation)
         layers: List[nn.Module] = []
         prev_dim = state_dim
         for dim in hidden_dims:
-            layers.extend([nn.Linear(prev_dim, dim), nn.ReLU(), nn.LayerNorm(dim)])
+            layers.append(nn.Linear(prev_dim, dim))
+            layers.append(activation_cls())
+            if use_layer_norm:
+                layers.append(nn.LayerNorm(dim))
             prev_dim = dim
         self.network = nn.Sequential(*layers)
         self.output_dim = prev_dim
 ```
+
+`hidden_dims`, `activation`, and `use_layer_norm` are now genuinely config-driven (`algorithm.hidden_dims`/`activation`/`use_layer_norm` in `config/default.yaml`) — `BranchingMPDQN.__init__` reads all three and threads them into `SharedEncoder` and `SingleBranchCritic`'s internal encoder alike, so a config that omits them still gets the `[256, 128]`/ReLU/LayerNorm spec defaults shown above.
 
 ### R Branching Discrete Heads (Dueling)
 
@@ -111,10 +123,17 @@ class ContinuousParameterNetwork(nn.Module):
 class SingleBranchCritic(nn.Module):
     """Single Multi-Pass Branch Critic Q_r(s, k_r, x_r)."""
 
-    def __init__(self, state_dim: int, n_rrh: int):
+    def __init__(
+        self,
+        state_dim: int,
+        n_rrh: int,
+        hidden_dims: Optional[List[int]] = None,
+        activation: str = "relu",
+        use_layer_norm: bool = True,
+    ):
         super().__init__()
         self.n_rrh = n_rrh
-        self.encoder = SharedEncoder(state_dim, [256, 128])
+        self.encoder = SharedEncoder(state_dim, hidden_dims, activation, use_layer_norm)
         self.discrete_heads = BranchingDiscreteHeads(self.encoder.output_dim, n_rrh)
         self.param_encoder = nn.Linear(2, 64)  # 2 continuous params (power, bandwidth)
         self.fusion = nn.Linear(self.encoder.output_dim + 64, self.encoder.output_dim)
@@ -143,10 +162,17 @@ The `_multi_pass_q()` driver (on `BranchingMPDQN`, not the critic itself) runs t
 class TwinBranchCritic(nn.Module):
     """Twin Critic Networks (Q^A, Q^B) for TD3 over-estimation mitigation."""
 
-    def __init__(self, state_dim: int, n_rrh: int):
+    def __init__(
+        self,
+        state_dim: int,
+        n_rrh: int,
+        hidden_dims: Optional[List[int]] = None,
+        activation: str = "relu",
+        use_layer_norm: bool = True,
+    ):
         super().__init__()
-        self.q_a = SingleBranchCritic(state_dim, n_rrh)
-        self.q_b = SingleBranchCritic(state_dim, n_rrh)
+        self.q_a = SingleBranchCritic(state_dim, n_rrh, hidden_dims, activation, use_layer_norm)
+        self.q_b = SingleBranchCritic(state_dim, n_rrh, hidden_dims, activation, use_layer_norm)
 
     def forward(self, state, continuous_params, branch_mask_idx=None):
         return self.q_a(state, continuous_params, branch_mask_idx), \
@@ -183,6 +209,9 @@ lr_discrete: 1.0e-4    # Branch/critic learning rate
 lr_actor: 3.0e-4       # Continuous parameter network learning rate
 buffer_size: 1000000   # Replay buffer capacity
 batch_size: 256        # Mini-batch size (passed to update(), not read from config)
+hidden_dims: [256, 256]  # SharedEncoder/SingleBranchCritic layer widths
+activation: "relu"       # SharedEncoder nonlinearity: relu, leaky_relu, tanh, or gelu
+use_layer_norm: true     # Whether SharedEncoder applies LayerNorm after each layer
 gamma: 0.99            # Discount factor
 tau: 0.005             # Soft update rate
 policy_delay: 2        # TD3 actor/target-update delay (critic updates per policy update)
@@ -192,9 +221,11 @@ epsilon_end: 0.01      # Final exploration rate
 epsilon_decay: 0.995   # Decay per update() call
 continuous_noise_std: 0.1       # Initial continuous-parameter exploration noise std
 continuous_noise_std_end: 0.01  # Final continuous-parameter noise std
+gradient_clip_norm: 1.0  # max_norm for both twin-critic and param-net gradient clipping
+reward_scale: 1.0        # Multiplicative scale applied to sampled rewards before the Bellman target
 ```
 
-Note: `config/default.yaml`'s `algorithm.hidden_dims` key does **not** control the encoder's layer widths — `SharedEncoder` and `SingleBranchCritic` hardcode `[256, 128]` directly, matching this spec and Concept Note Section 10.3. See `docs/rules.md`/`AGENTS.md` for the current status of wiring config-driven architecture widths through.
+All of the above are genuinely read via `BranchingMPDQN`'s `get_val()` helper — none are dead. Note `hidden_dims` in `config/default.yaml` is `[256, 256]`, not the `[256, 128]` used in this file's illustrative snippets above; the snippets show the values a config-less construction (or the small/large-network configs, which omit this key) falls back to, matching Concept Note Section 10.3's spec figure. `hardware.device` (in `config/default.yaml`'s `hardware:` block, not `algorithm:`) supplies `BranchingMPDQN`'s device default when the constructor's `device` argument is left as `None`; an explicit `device=` argument always wins over it.
 
 ## Validation Checklist
 
@@ -204,5 +235,5 @@ Note: `config/default.yaml`'s `algorithm.hidden_dims` key does **not** control t
 - [ ] Continuous parameters stay in valid ranges (power ratio in [0,1], bandwidth shares summing to ~1)
 - [ ] Target networks update slower than main networks (tau << 1); policy/target updates only occur every `policy_delay` critic updates
 - [ ] `_multi_pass_q()` genuinely produces different Q-values for two candidate parameter vectors that differ only in an unrelated RRH's `(p_j, beta_j)` for `j != r` (i.e., cross-talk is actually absent) — see `tests/test_baselines_v2.py`/`agents/branching_mp_dqn.py`'s own tests for a concrete check of this
-- [ ] Gradient norms are reasonable (clipped to `max_norm=1.0`)
+- [ ] Gradient norms are reasonable (clipped to `algorithm.gradient_clip_norm`, default 1.0)
 - [ ] Action selection is faster than environment step time (see `evaluation/latency_benchmark.py`)
