@@ -109,6 +109,8 @@ The actual training entrypoint is `training/train_hybrid.py::train_hybrid_agent(
 
 ### Phase 5: Evaluation and Analysis (Week 8-9)
 
+**Status note (sixth/ninth audit rounds)**: the sketches below are illustrative — read `evaluation/convergence.py`, `evaluation/ablation.py`, and `evaluation/scalability.py` directly for the current, authoritative implementation rather than this pseudocode. Two drifts already corrected here: the ablation variants now use the real reward-weight keys (`gamma_switch`, `gamma_fronthaul`, `beta_qos` — all three genuinely wired into `cran_env.py`'s reward computation, per Concept Note v4.0 Section 10.2), not the never-implemented `fronthaul_weight` key this sketch previously used; and the scalability sweep's largest scenario is R=50, **U=30** (`config/large_network.yaml`), not U=50.
+
 ```python
 # evaluation/convergence.py
 
@@ -138,7 +140,7 @@ def ablation_study(base_config):
     variants = [
         ("Full", base_config),
         ("No Switching Cost", {**base_config, "gamma_switch": 0}),
-        ("No Fronthaul Power", {**base_config, "fronthaul_weight": 0}),
+        ("No Fronthaul Power", {**base_config, "gamma_fronthaul": 0}),
         ("No QoS Penalty", {**base_config, "beta_qos": 0}),
     ]
 
@@ -156,7 +158,7 @@ def scalability_analysis():
         {"n_rrh": 5, "n_ue": 2, "label": "Small"},
         {"n_rrh": 12, "n_ue": 10, "label": "Medium"},
         {"n_rrh": 20, "n_ue": 20, "label": "Large"},
-        {"n_rrh": 50, "n_ue": 50, "label": "Very Large"},
+        {"n_rrh": 50, "n_ue": 30, "label": "Very Large"},
     ]
 
     for scenario in scenarios:

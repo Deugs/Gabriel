@@ -343,6 +343,23 @@ class BranchingMPDQN:
         self.memory = ParameterizedReplayBuffer(buffer_size)
         self.update_counter = 0
 
+    def load_checkpoint(self, path: str) -> None:
+        """Load encoder/param_net/twin_critic weights from a checkpoint saved
+        by training/train_hybrid.py (final_model.pt or checkpoint_ep*.pt),
+        syncing the target networks to match. For evaluation-only reuse of
+        an already-trained agent (Concept Note v4.0 Section 14) — e.g.
+        evaluation/csi_robustness.py and evaluation/generalization.py — not
+        for resuming training (the replay buffer and optimizer states are
+        not part of this checkpoint format and are left at their fresh,
+        empty/initialized values)."""
+        checkpoint = torch.load(path, map_location=self.device, weights_only=True)
+        self.encoder.load_state_dict(checkpoint["encoder"])
+        self.param_net.load_state_dict(checkpoint["param_net"])
+        self.twin_critic.load_state_dict(checkpoint["twin_critic"])
+        self.encoder_target.load_state_dict(checkpoint["encoder"])
+        self.param_net_target.load_state_dict(checkpoint["param_net"])
+        self.twin_critic_target.load_state_dict(checkpoint["twin_critic"])
+
     def _multi_pass_q(
         self, critic: TwinBranchCritic, feat: torch.Tensor, cont_params: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:

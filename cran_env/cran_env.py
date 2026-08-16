@@ -82,6 +82,7 @@ class CRANEnv(gym.Env):
         self.alpha_energy = float(getattr(reward_cfg, "alpha_energy", 1.0))
         self.beta_qos = float(getattr(reward_cfg, "beta_qos", 10.0))
         self.gamma_switch = float(getattr(reward_cfg, "gamma_switch", 0.5))
+        self.gamma_fronthaul = float(getattr(reward_cfg, "gamma_fronthaul", 0.1))
 
         # Instantiate physical models
         channel_cfg = getattr(cfg, "channel", cfg)
@@ -300,6 +301,7 @@ class CRANEnv(gym.Env):
 
         p_total = power_dict["total"]
         p_switching = power_dict["switching"]
+        p_fronthaul = power_dict["fronthaul"]
 
         # Exact discrete switching count (Concept Note v2.0 Section 10.2)
         exact_switching_count = np.sum(rrh_on != self.active_mask)
@@ -308,17 +310,26 @@ class CRANEnv(gym.Env):
         ee_mbit_per_joule = total_throughput_mbps / (p_total + 1e-6)
 
         # Scalar Reward: r(t) = EE(t) - lambda1*QoS_penalty - lambda2*switch_penalty
+        #                       - lambda3*fronthaul_penalty
         # (Concept Note v4.0 Section 10.2). alpha_energy scales the EE(t) term
         # itself (default 1.0 recovers the note's literal formula) rather than
         # a raw power penalty, since the objective is to maximize energy
         # efficiency (Mbit/Joule), not merely minimize power consumption.
+        # fronthaul_penalty is a separate, explicitly-weighted term (not just
+        # fronthaul power's implicit presence inside P_total/EE(t)) so it can
+        # genuinely be ablated via gamma_fronthaul=0 — the same pattern
+        # gamma_switch already uses (switching power is also inside P_total,
+        # but switch_penalty additionally penalizes the switch *count*).
         energy_efficiency_term = self.alpha_energy * ee_mbit_per_joule
         qos_penalty = self.beta_qos * (
             np.sum(qos_violations_bps) / 1e6
         )  # QoS shortfall in Mbps
         switch_penalty = self.gamma_switch * exact_switching_count
+        fronthaul_penalty = self.gamma_fronthaul * (p_fronthaul / 1000.0)  # kW
 
-        reward = energy_efficiency_term - qos_penalty - switch_penalty
+        reward = (
+            energy_efficiency_term - qos_penalty - switch_penalty - fronthaul_penalty
+        )
 
         # Update environment state for next step
         self.active_mask = rrh_on

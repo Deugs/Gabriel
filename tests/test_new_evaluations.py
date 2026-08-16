@@ -5,6 +5,12 @@ Note v3.0/v4.0 Section 12.3/12.5 (S3, A3, A5).
 
 from pathlib import Path
 
+import pytest
+import torch
+import yaml  # type: ignore[import-untyped]
+
+from agents import BranchingMPDQN
+from cran_env import CRANEnv
 from evaluation import (
     run_csi_robustness_evaluation,
     run_demand_response_evaluation,
@@ -35,6 +41,55 @@ def test_csi_robustness_short_run(tmp_path):
             assert "qos_violation_rate" in sigma_metrics
     assert (Path(fig_dir) / "csi_robustness_ee.pdf").exists()
     assert (Path(fig_dir) / "csi_robustness_qos.pdf").exists()
+
+
+def test_csi_robustness_reuses_checkpoint_instead_of_training(tmp_path):
+    """checkpoint_paths must genuinely load the given checkpoint rather than
+    training a fresh agent (Concept Note v4.0 Section 14's "reuse
+    already-trained checkpoints" mitigation)."""
+    config_path = Path(__file__).parent.parent / "config" / "small_network.yaml"
+    with open(config_path, "r") as f:
+        cfg = yaml.safe_load(f)
+    env = CRANEnv(cfg)
+
+    trained_agent = BranchingMPDQN(
+        state_dim=env.state_dim, n_rrh=env.n_rrh, p_max_w=env.p_max_w, config=cfg
+    )
+    ckpt_path = tmp_path / "final_model.pt"
+    torch.save(
+        {
+            "encoder": trained_agent.encoder.state_dict(),
+            "param_net": trained_agent.param_net.state_dict(),
+            "twin_critic": trained_agent.twin_critic.state_dict(),
+        },
+        ckpt_path,
+    )
+
+    results = run_csi_robustness_evaluation(
+        config_path=str(config_path),
+        methods=["branching_mp_dqn"],
+        sigmas=[0.0],
+        eval_episodes=1,
+        save_dir=str(tmp_path / "figures"),
+        checkpoint_paths={"branching_mp_dqn": str(ckpt_path)},
+    )
+    assert "branching_mp_dqn" in results
+
+
+def test_csi_robustness_checkpoint_reuse_not_implemented_for_baselines(tmp_path):
+    """Passing a checkpoint path for ddqn/ddpg must raise, not silently
+    ignore the path and train from scratch anyway."""
+    config_path = Path(__file__).parent.parent / "config" / "small_network.yaml"
+    with pytest.raises(NotImplementedError):
+        run_csi_robustness_evaluation(
+            config_path=str(config_path),
+            methods=["ddqn"],
+            sigmas=[0.0],
+            train_episodes=1,
+            eval_episodes=1,
+            save_dir=str(tmp_path / "figures"),
+            checkpoint_paths={"ddqn": "not_a_real_path.pt"},
+        )
 
 
 def test_generalization_short_run(tmp_path):

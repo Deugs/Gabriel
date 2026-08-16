@@ -9,7 +9,7 @@ Systematically evaluate DRL agents, compare against baselines, perform ablation 
 
 ### 1. Convergence Analysis
 ```python
-def evaluate_convergence(results_dir, algorithms, n_seeds=5):
+def evaluate_convergence(results_dir, algorithms, n_seeds=10):
     fig, axes = plt.subplots(2, 2, figsize=(14, 10))
 
     colors = plt.cm.tab10(np.linspace(0, 1, len(algorithms)))
@@ -51,7 +51,7 @@ def evaluate_energy_efficiency(results_dir, algorithms, n_eval_episodes=100):
 
     for algo in algorithms:
         energy_data = []
-        for seed in range(5):
+        for seed in range(10):
             env = CRANEnv(config)
             agent = load_agent(results_dir, algo, seed)
 
@@ -185,7 +185,7 @@ def scalability_analysis(base_config, scenarios):
 from scipy import stats
 
 def compare_algorithms(results_dir, algo1, algo2, metric="episode_reward", 
-                       n_seeds=5, n_episodes=100):
+                       n_seeds=10, n_episodes=100):
     data1 = load_metric(results_dir, algo1, metric, n_seeds, n_episodes)
     data2 = load_metric(results_dir, algo2, metric, n_seeds, n_episodes)
 
