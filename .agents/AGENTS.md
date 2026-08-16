@@ -6,7 +6,7 @@
 
 This workspace defines 3 Antigravity skills in `.agents/skills/`:
 - `build-environment`: Build/extend C-RAN Gymnasium environment (`cran_env/`)
-- `build-hybrid-agent`: Implement Hybrid SAC-DDQN agent (`agents/hybrid_sac_dqn.py`)
+- `build-hybrid-agent`: Implement the proposed Branching MP-DQN + TD3 agent (`agents/branching_mp_dqn.py`); `agents/hybrid_sac_dqn.py` is the superseded v1.0 design, kept only for comparison
 - `run-evaluation`: Run convergence, energy efficiency, ablation, and scalability analysis
 
 It also defines 9 specialized agent roles in `.agents/agents/`:
@@ -26,6 +26,6 @@ It also defines 9 specialized agent roles in `.agents/agents/`:
 
 1. **Equation-to-Code Traceability**: Every mathematical equation implemented in code must be logged in `docs/equation_code_mapping.md`.
 2. **Baseline Fairness**: All algorithms (proposed & baselines) must evaluate on identical environment seeds, traffic profiles, and network configurations.
-3. **Reproducibility**: All experiments must be defined strictly in config files (`config/*.yaml`) with fixed seeds `[42, 123, 456, 789, 1011]`.
-4. **Statistical Significance**: All benchmark claims must be averaged over at least 5 seeds with 95% confidence intervals and paired t-tests.
+3. **Reproducibility**: All experiments must be defined strictly in config files (`config/*.yaml`) with fixed seeds `[42, 123, 456, 789, 1011, 1337, 2024, 2718, 3141, 4242]` (10 seeds, per supervisor review S4).
+4. **Statistical Significance**: All benchmark claims must be averaged over at least 10 seeds with 95% confidence intervals, paired t-tests, and Cohen's d.
 5. **No Ad-Hoc Parameters**: Physical/hardware constants must reference valid sources (e.g. EARTH model parameters from Al-Zubaedi 2019).

@@ -123,6 +123,7 @@ reward:
   alpha_energy: 1.0         # Energy consumption weight
   beta_qos: 10.0           # QoS violation penalty (must be large)
   gamma_switch: 0.5         # Switching cost weight
+  gamma_fronthaul: 0.1      # Fronthaul power penalty weight (applied to P_FH in kW)
   qos_target_sinr_db: 0     # Minimum SINR threshold
 
 # ============================================================

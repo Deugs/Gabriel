@@ -167,6 +167,30 @@ def test_cran_env_step(default_config):
     assert step_info["total_power_w"] > 0.0
 
 
+def test_cran_env_gamma_fronthaul_affects_reward(default_config):
+    """reward.gamma_fronthaul must be a genuine, separately-ablatable reward
+    term (r(t) -= gamma_fronthaul * fronthaul_power_kw), not just fronthaul
+    power's implicit, non-ablatable presence inside P_total/EE(t)."""
+    cfg_off = deepcopy(default_config)
+    cfg_off["reward"]["gamma_fronthaul"] = 0.0
+    env_off = CRANEnv(cfg_off)
+    env_off.reset(seed=42)
+    action = {
+        "rrh_on": np.ones(env_off.n_rrh, dtype=int),
+        "power": np.full(env_off.n_rrh, env_off.p_max_w / 2.0, dtype=np.float32),
+    }
+    _, reward_off, _, _, info_off = env_off.step(action)
+
+    cfg_on = deepcopy(default_config)
+    cfg_on["reward"]["gamma_fronthaul"] = 1.0
+    env_on = CRANEnv(cfg_on)
+    env_on.reset(seed=42)
+    _, reward_on, _, _, info_on = env_on.step(action)
+
+    expected_penalty = 1.0 * (info_on["fronthaul_power_w"] / 1000.0)
+    assert reward_off - reward_on == pytest.approx(expected_penalty, rel=1e-4)
+
+
 def test_gymnasium_compliance(default_config):
     env = CRANEnv(default_config)
     # Verify Gymnasium environment compatibility

@@ -25,7 +25,7 @@
 5. **Significance** (200 words): Why this matters (OPEX, sustainability, 6G extension)
 6. **Scope and Limitations** (200 words): Downlink only, single pool, single agent
 
-**Key Revision**: Replace vague DRL claims with specific hybrid approach. Current text says "DDPG" throughout — must be updated to "Hybrid SAC-DDQN" or similar.
+**Key Revision**: Replace vague DRL claims with the specific proposed approach. Current text says "DDPG" throughout — must be updated to "Branching MP-DQN + TD3" (Concept Note v4.0 Section 10); "Hybrid SAC-DDQN" was an intermediate, now-superseded design and should not appear as the proposed method either.
 
 **Opening Paragraph Template**:
 > The exponential growth of mobile data traffic, projected to reach [X] exabytes monthly by 2026, has intensified the energy consumption crisis in wireless networks. Cloud Radio Access Networks (C-RAN), which centralize baseband processing in BBU pools while distributing low-cost Remote Radio Heads (RRHs), offer a promising architecture for 5G and beyond. However, the continuous operation of densely deployed RRHs and high-capacity fronthaul links significantly increases energy expenditure, with the RAN accounting for 57-80% of total network power consumption [cite]. This thesis proposes a hybrid Deep Reinforcement Learning framework that jointly optimizes discrete RRH activation decisions and continuous transmit power allocation to maximize energy efficiency while guaranteeing Quality of Service.
@@ -171,7 +171,8 @@ where v(t+1)  in {0,1}^R    # Discrete: RRH on/off decisions
 ```
 r_t = alpha * EE(t)
       - beta * sum_{u=1}^U max(0, D_u(t) - C_u(t))
-      - gamma * sum_{r=1}^R |v_r(t) - v_r(t-1)|
+      - gamma_switch * sum_{r=1}^R |v_r(t) - v_r(t-1)|
+      - gamma_fronthaul * P_FH(t)
 
 where EE(t) = C_total(t) / P_total(t)   # Mbit/Joule, C_total(t) = sum_u C_u(t)
 ```
@@ -179,7 +180,8 @@ where EE(t) = C_total(t) / P_total(t)   # Mbit/Joule, C_total(t) = sum_u C_u(t)
 Where:
 - alpha: EE(t) weight (default 1.0 recovers the note's literal formula)
 - beta: QoS violation penalty (must dominate if QoS is hard constraint)
-- gamma: switching cost weight (prevents oscillation)
+- gamma_switch: switching cost weight (prevents oscillation)
+- gamma_fronthaul: fronthaul-power penalty weight, in kW (default 0.1; small and non-dominant by design — exists so fronthaul's reward contribution can be independently ablated in Section 4.5, since it also already reduces EE(t) implicitly via P_total(t))
 
 **Transition Dynamics**:
 ```
@@ -208,61 +210,59 @@ subject to:
 - Optimal policy is time-varying and history-dependent
 - Model-free RL avoids need for explicit transition model
 
-#### 3.7 Proposed Hybrid DRL Algorithm (~1,000 words) — COMPLETE REWRITE
+#### 3.7 Proposed Branching MP-DQN + TD3 Algorithm (~1,000 words) — COMPLETE REWRITE
 
-**Replace generic DDPG description with**:
+**Replace with Section 10 of `manuscript/MPhil_Thesis_Concept_Note_v4.md`** — this subsection previously described an intermediate "Hybrid SAC-DDQN" design (a separate DDQN discrete actor + SAC continuous actor arbitrated by a shared twin critic) that was itself superseded before implementation began; `agents/hybrid_sac_dqn.py` still exists as that superseded alternative, kept only for comparison. The actual proposed method, matching `agents/branching_mp_dqn.py` and `docs/skills/skill_hybrid_agent.md`, is:
 
 1. **Algorithm Selection Justification**:
-   - DDPG: Poor stability, cannot handle discrete actions
-   - TD3: Better than DDPG but still continuous-only
-   - SAC: Superior sample efficiency, entropy regularization, continuous-only
-   - **Our approach**: Hybrid SAC-DDQN with shared critic
+   - DDPG: Poor stability, cannot handle discrete actions without thresholding (destroys gradients)
+   - A separate discrete-DDQN/continuous-SAC hybrid with a shared critic (the superseded v1.0 design): critic architecture for a mixed discrete-continuous action was never concretely specified, and SAC's entropy-regularized exploration and DDQN's epsilon-greedy exploration are driven by incompatible objectives
+   - **Our approach**: a branching, multi-pass, twin-critic parameterized DQN (Branching MP-DQN + TD3) — one coupled Q-network family, not two arbitrated actor networks
 
-2. **Architecture**:
-   - Discrete Actor: DQN-style network outputting Q-values for each RRH binary decision
-   - Continuous Actor: SAC Gaussian policy for power allocation
-   - Shared Critic: Twin Q-networks evaluating joint (discrete, continuous) actions
-   - Target networks for stability
+2. **Architecture** (Concept Note Section 10.3):
+   - Shared Encoder h(s|theta_h): two FC layers (256, 128 units), ReLU + LayerNorm each — one instance, feeding both of the below
+   - Continuous Parameter Network x(s|phi): a deterministic sub-network producing (p_r, beta_r) for all R RRHs from the shared representation (P-DQN, Xiong et al. 2018)
+   - R Branching Discrete Heads: dueling-style Q_r(s, k_r) for k_r in {0,1}, one independent head per RRH (Tavakoli et al. 2018) — output grows as 2R, not 2^R
+   - MP-DQN Multi-Pass Masking (Bester et al. 2019): before branch r's Q-value is computed, only x_r enters that pass's computation graph — every other RRH's continuous parameters are excluded, removing the false-gradient cross-talk P-DQN's original single-pass design would introduce
+   - Twin Critics (Q^A, Q^B) + target networks (Fujimoto et al. 2018, TD3): the Bellman target uses min(Q^A, Q^B) to counter overestimation bias
 
 3. **Training Procedure**:
-   - Experience replay buffer stores (s, v, p, r, s') tuples
-   - Critic minimizes Bellman error
-   - Discrete actor maximizes Q via epsilon-greedy
-   - Continuous actor maximizes Q + entropy via reparameterization trick
+   - Experience replay buffer stores (s, k, x, r, s') tuples
+   - Both twin critics minimize Bellman error against a Double-DQN-style target (argmax via Q^A, evaluated via min(Q^A, Q^B))
+   - The continuous parameter network (and shared encoder) are updated every `policy_delay` critic updates to maximize Q^A's multi-pass value (TD3's delayed-actor-update pattern)
+   - Exploration: independent epsilon-greedy per discrete branch, plus additive Gaussian noise on the continuous parameters — both decayed once per episode, not per gradient step
 
 4. **Pseudocode** (formal algorithm box):
 ```
-Algorithm 1: Hybrid SAC-DDQN for C-RAN Energy Optimization
-Input: Initial network parameters theta_Q1, theta_Q2, theta_pi, theta_v
-       Replay buffer D, target update rate tau
+Algorithm 1: Branching MP-DQN + TD3 for C-RAN Energy Optimization
+Input: Shared encoder theta_h, param net phi, twin critics theta_Q1A/theta_Q1B..theta_QRA/theta_QRB
+       Replay buffer D, target update rate tau, policy delay d
 
 for episode = 1 to N_episodes do
     s_0 <- env.reset()
     for t = 0 to T-1 do
-        # Discrete action selection
-        v_t <- epsilon-greedy(Q_v(s_t, *)) 
-        # Continuous action selection
-        p_t ~ pi(*|s_t) + noise
-        a_t <- (v_t, p_t)
+        feat <- h(s_t | theta_h)
+        x_t <- x(feat | phi)                       # (p_r, beta_r) for all R RRHs
+        for r = 1 to R do
+            k_{r,t} <- epsilon-greedy(Q_r(feat, x_t masked to branch r))
+        end for
+        a_t <- (k_t, x_t)
 
         s_{t+1}, r_t, done <- env.step(a_t)
-        D <- D union {(s_t, v_t, p_t, r_t, s_{t+1})}
+        D <- D union {(s_t, k_t, x_t, r_t, s_{t+1})}
 
-        # Sample minibatch
+        # Sample minibatch, multi-pass per branch (R passes per critic)
         B ~ Uniform(D)
+        for r = 1 to R do
+            y_{i,r} <- r_i + gamma * min(Q_r^A, Q_r^B)(s_{i+1}, x'_{i+1} masked to branch r, k*_r)
+            # k*_r selected via argmax of Q_r^A (Double DQN)
+        end for
+        Update theta_Q1A..theta_QRA, theta_Q1B..theta_QRB to minimize sum_r (y_{i,r} - Q_r(s_i, k_{i,r}, x_i))^2
 
-        # Critic update
-        y_i <- r_i + gamma * min(Q'_1, Q'_2)(s_{i+1}, v_{i+1}, p_{i+1})
-        Update theta_Q1, theta_Q2 to minimize sum (y_i - Q(s_i, v_i, p_i))^2
-
-        # Discrete actor update
-        Update theta_v to maximize Q(s_i, v_i, p_i)
-
-        # Continuous actor update
-        Update theta_pi to maximize Q(s_i, v_i, p_i) + alpha*H(pi(*|s_i))
-
-        # Target network soft update
-        theta' <- tau*theta + (1-tau)*theta'
+        if update_counter mod d == 0 then
+            Update theta_h, phi to maximize sum_r Q_r^A(s_i, x_i masked to branch r)
+            Soft update all target networks: theta' <- tau*theta + (1-tau)*theta'
+        end if
     end for
 end for
 ```
@@ -276,19 +276,20 @@ end for
 #### 4.1 Simulation Setup (~600 words)
 - Hardware: GPU model, CPU, RAM
 - Software: Python version, PyTorch version, key libraries
-- Network scenarios: Small (R=5, U=2), Medium (R=12, U=10), Large (R=20, U=20)
-- Traffic model parameters
+- Network scenarios: the R=5,12,20,35,50 scalability sweep (Concept Note Section 12.2/15; R=50 is a stretch goal), plus the R=12,U=10 primary scenario (`config/default.yaml`)
+- Traffic model parameters (dual-Gaussian diurnal factor + log-normal burstiness, Section 12.8)
 - Hyperparameter table (all values used)
+- The 11-method roster: the proposed Branching MP-DQN + TD3 agent vs. 10 baselines — All-ON/FA, Greedy, NMBS, Convex, DDQN, DDQN+SOCP, ANN+GSBF, pure-DDPG, P-DQN, MP-DQN (Section 12.1)
 
 #### 4.2 Convergence Analysis (~800 words)
-- Learning curves: reward vs. episodes for all algorithms
-- Confidence intervals (shaded regions, n=5 seeds)
-- Discussion: Why does SAC converge faster than DDPG? Why does hybrid outperform pure continuous?
+- Learning curves: reward vs. episodes for all 11 methods
+- Confidence intervals (shaded regions, n=10 seeds, per supervisor review S4)
+- Discussion: why does the proposed method converge to a better operating point than DDQN/P-DQN/MP-DQN? What does the multi-pass masking buy over P-DQN's single-pass coupling?
 
 #### 4.3 Energy Efficiency Comparison (~800 words)
-- Bar chart: Total energy consumption (24-hour average) for all methods
-- Table: Percentage savings vs. All ON baseline
-- Discussion: Impact of switching costs, fronthaul power inclusion
+- Bar chart: Total energy consumption (24-hour average) for all 11 methods
+- Table: Percentage savings vs. DDQN/P-DQN/MP-DQN (the headline comparison, Section 5.2/G10) and, separately, vs. All-ON (reported only as a sanity-check floor any working method should clear, not a contribution in its own right)
+- Discussion: Impact of switching costs, fronthaul power inclusion (Section 10.2's gamma_switch/gamma_fronthaul terms)
 
 #### 4.4 QoS Performance (~600 words)
 - CDF of SINR per UE
@@ -296,30 +297,40 @@ end for
 - Trade-off curve: energy vs. QoS violation rate
 
 #### 4.5 Ablation Study (~600 words)
-- Remove switching cost from reward
-- Remove fronthaul power from reward
-- Remove QoS penalty from reward
-- Discussion: Each component's contribution
+- Remove switching cost from reward (gamma_switch=0)
+- Remove fronthaul power from reward (gamma_fronthaul=0)
+- Remove QoS penalty from reward (beta_qos=0)
+- Discussion: Each component's contribution (`evaluation/ablation.py`)
 
 #### 4.6 Scalability Analysis (~600 words)
-- Performance vs. network size (R = 5, 12, 20, 50)
-- Training time vs. network size
-- Discussion: Computational complexity, real-time feasibility
+- Performance vs. network size (R = 5, 12, 20, 35, 50; R=50 is a stretch goal)
+- Training time vs. network size, and inference latency at each scale (Section 12.3)
+- Discussion: Computational complexity of multi-pass masking (scales with R), real-time feasibility
+
+#### 4.7 CSI-Robustness (~400 words, new per Section 12.5/S3)
+- Degradation curve: EE and QoS-violation rate vs. channel-estimation-error sigma in {0, 0.01, 0.05, 0.1} (`evaluation/csi_robustness.py`)
+- Discussion: sensitivity of the frozen trained policy to CSI error, isolated from retraining
+
+#### 4.8 Cross-Profile Generalization (~400 words, new per Section 12.3/A5)
+- Zero-shot evaluation on the weekend/suburban traffic profile after training only on weekday/urban (`evaluation/generalization.py`)
+- Discussion: EE/QoS degradation relative to the matched (weekday-trained, weekday-evaluated) case
 
 **Required Figures** (minimum):
-1. Fig 4.1: Convergence curves (all algorithms, 5 seeds)
+1. Fig 4.1: Convergence curves (all 11 methods, 10 seeds)
 2. Fig 4.2: 24-hour energy profile comparison
 3. Fig 4.3: CDF of per-UE SINR
 4. Fig 4.4: Ablation study bar chart
-5. Fig 4.5: Scalability: energy vs. network size
-6. Fig 4.6: Scalability: training time vs. network size
+5. Fig 4.5: Scalability: energy vs. network size (R=5..50)
+6. Fig 4.6: Scalability: training time and inference latency vs. network size
+7. Fig 4.7: CSI-robustness degradation curve (EE and QoS-violation rate vs. sigma)
+8. Fig 4.8: Cross-profile generalization bar chart (weekday-matched vs. weekend-generalization)
 
 **Required Tables**:
 1. Table 4.1: Simulation parameters
-2. Table 4.2: Energy savings comparison (all methods)
+2. Table 4.2: Energy savings comparison (all 11 methods, headline margin over DDQN/P-DQN/MP-DQN plus the All-ON sanity-check figure)
 3. Table 4.3: QoS metrics comparison
 4. Table 4.4: Ablation study results
-5. Table 4.5: Scalability results
+5. Table 4.5: Scalability results (R=5..50, including inference latency)
 
 ---
 
@@ -327,20 +338,21 @@ end for
 
 **Structure**:
 1. **Summary of Contributions** (400 words):
-   - Hybrid SAC-DDQN architecture for discrete-continuous C-RAN control
-   - Fronthaul-aware reward function
-   - Comprehensive baseline comparison and scalability analysis
+   - Branching, multi-pass, twin-critic parameterized DQN (Branching MP-DQN + TD3) for discrete-continuous C-RAN control — one coupled network, not two arbitrated actors
+   - Fronthaul-aware reward function (explicit gamma_switch/gamma_fronthaul/beta_qos terms)
+   - Comprehensive 11-method baseline comparison and scalability analysis (R=5..50)
 
 2. **Key Findings** (500 words):
-   - Hybrid approach achieves X% energy savings vs. Y baseline
+   - Proposed method achieves X% energy savings vs. DDQN/P-DQN/MP-DQN (the headline comparison, Section 5.2/G10), clearing the All-ON sanity-check floor by Y%
    - Switching costs account for Z% of total power — cannot be neglected
-   - SAC stability superior to DDPG; converges in W episodes vs. DDPG's V
-   - Scalable to R=50 RRHs with acceptable training time
+   - Branching + multi-pass masking scales linearly (2R) where P-DQN/MP-DQN's flat joint head does not, validated empirically up to R≈12-15 before it becomes intractable (Section 12.1)
+   - Scalable to R=50 RRHs with acceptable training time (R=50 itself a stretch goal, Section 15)
+   - CSI-robustness and cross-profile generalization degrade gracefully but measurably (Section 12.5/12.3) — see Limitations below
 
 3. **Limitations** (300 words):
    - Single-agent, single-pool assumption
-   - Perfect CSI (no uncertainty quantification)
-   - Simulation-only (no real-world validation)
+   - Perfect CSI at training time — the CSI-robustness evaluation (Section 12.5) stress-tests, but does not remove, this assumption; training under imperfect CSI remains future work
+   - Simulation-only (no real-world validation); the O-RAN rApp framing (Section 11) is a simulation-based positioning, not a claim of real O1/E2 interface implementation
    - Downlink only
 
 4. **Future Work** (300 words):

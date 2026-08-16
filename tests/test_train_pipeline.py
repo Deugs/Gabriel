@@ -85,3 +85,28 @@ def test_run_extended_sweeps_short_run(tmp_path, monkeypatch):
     assert (Path(results_dir) / "branching_mp_dqn_seed42" / "summary.json").exists()
     assert (tmp_path / "thesis" / "figures").exists()
     assert (tmp_path / "thesis" / "tables").exists()
+
+
+def test_run_extended_sweeps_reuses_checkpoint_for_csi_and_generalization(
+    tmp_path, monkeypatch
+):
+    """run_csi_and_generalization=True must reuse each seed's just-trained
+    checkpoint (Concept Note v4.0 Section 14), not just be a no-op flag."""
+    monkeypatch.chdir(tmp_path)
+    results_dir = str(tmp_path / "results")
+
+    run_extended_sweeps(
+        config_path=str(Path(__file__).parent.parent / "config" / "small_network.yaml"),
+        episodes=2,
+        seeds=[42],
+        results_dir=results_dir,
+        run_csi_and_generalization=True,
+    )
+
+    assert (Path(results_dir) / "branching_mp_dqn_seed42" / "final_model.pt").exists()
+    assert (
+        Path(results_dir) / "csi_robustness_seed42" / "csi_robustness_ee.pdf"
+    ).exists()
+    assert (
+        Path(results_dir) / "generalization_seed42" / "generalization_ee.pdf"
+    ).exists()

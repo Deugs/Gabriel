@@ -45,11 +45,20 @@ def _perturb_channel_obs(
 
 
 def _train_branching_mp_dqn(
-    env: CRANEnv, cfg: Dict[str, Any], episodes: int, batch_size: int
+    env: CRANEnv,
+    cfg: Dict[str, Any],
+    episodes: int,
+    batch_size: int,
+    checkpoint_path: Optional[str] = None,
 ) -> BranchingMPDQN:
     agent = BranchingMPDQN(
         state_dim=env.state_dim, n_rrh=env.n_rrh, p_max_w=env.p_max_w, config=cfg
     )
+    if checkpoint_path is not None:
+        # Reuse an already-trained checkpoint (Concept Note v4.0 Section 14)
+        # instead of training a fresh agent from scratch.
+        agent.load_checkpoint(checkpoint_path)
+        return agent
     for _ in range(episodes):
         obs, _ = env.reset()
         done = False
@@ -71,8 +80,19 @@ def _train_branching_mp_dqn(
 
 
 def _train_ddqn(
-    env: CRANEnv, cfg: Dict[str, Any], episodes: int, batch_size: int
+    env: CRANEnv,
+    cfg: Dict[str, Any],
+    episodes: int,
+    batch_size: int,
+    checkpoint_path: Optional[str] = None,
 ) -> DDQNAgent:
+    if checkpoint_path is not None:
+        raise NotImplementedError(
+            "Checkpoint reuse is only implemented for branching_mp_dqn — "
+            "training/train_baselines.py does not save DDQN's model weights "
+            "anywhere, so there is no checkpoint format for this agent to "
+            "load from."
+        )
     agent = DDQNAgent(
         state_dim=env.state_dim,
         n_rrh=env.n_rrh,
@@ -94,8 +114,19 @@ def _train_ddqn(
 
 
 def _train_ddpg(
-    env: CRANEnv, cfg: Dict[str, Any], episodes: int, batch_size: int
+    env: CRANEnv,
+    cfg: Dict[str, Any],
+    episodes: int,
+    batch_size: int,
+    checkpoint_path: Optional[str] = None,
 ) -> DDPGAgent:
+    if checkpoint_path is not None:
+        raise NotImplementedError(
+            "Checkpoint reuse is only implemented for branching_mp_dqn — "
+            "training/train_baselines.py does not save DDPG's model weights "
+            "anywhere, so there is no checkpoint format for this agent to "
+            "load from."
+        )
     agent = DDPGAgent(
         state_dim=env.state_dim, n_rrh=env.n_rrh, p_max_w=env.p_max_w, config=cfg
     )
@@ -162,12 +193,24 @@ def run_csi_robustness_evaluation(
     batch_size: int = 64,
     seed: int = 42,
     save_dir: str = "thesis/figures",
+    checkpoint_paths: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Dict[float, Dict[str, float]]]:
-    """Train each method under perfect CSI, then evaluate under CSI noise sweep."""
+    """Train each method under perfect CSI, then evaluate under CSI noise sweep.
+
+    checkpoint_paths, when given, maps a method name to an already-trained
+    checkpoint file to load instead of training that method from scratch
+    (Concept Note v4.0 Section 14's "reuse already-trained checkpoints"
+    mitigation) — e.g. {"branching_mp_dqn": "data/results/branching_mp_dqn_seed42/final_model.pt"}.
+    Only "branching_mp_dqn" currently has a checkpoint format to load from;
+    passing a path for "ddqn"/"ddpg" raises NotImplementedError rather than
+    silently ignoring it and training fresh anyway.
+    """
     if methods is None:
         methods = ["branching_mp_dqn", "ddqn", "ddpg"]
     if sigmas is None:
         sigmas = list(DEFAULT_SIGMAS)
+    if checkpoint_paths is None:
+        checkpoint_paths = {}
 
     with open(config_path, "r") as f:
         cfg = yaml.safe_load(f)
@@ -181,9 +224,15 @@ def run_csi_robustness_evaluation(
                 f"Unknown method '{method}'; expected one of {list(_TRAINERS)}"
             )
 
-        print(f"\n--- CSI Robustness: training {method} under perfect CSI ---")
+        checkpoint_path = checkpoint_paths.get(method)
+        if checkpoint_path is not None:
+            print(f"\n--- CSI Robustness: loading {method} from {checkpoint_path} ---")
+        else:
+            print(f"\n--- CSI Robustness: training {method} under perfect CSI ---")
         env = CRANEnv(deepcopy(cfg))
-        agent = _TRAINERS[method](env, cfg, train_episodes, batch_size)
+        agent = _TRAINERS[method](
+            env, cfg, train_episodes, batch_size, checkpoint_path=checkpoint_path
+        )
 
         results[method] = {}
         for sigma in sigmas:

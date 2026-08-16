@@ -270,3 +270,55 @@ def test_branching_mp_dqn_min_buffer_size_gates_update(default_config):
     metrics = agent.update(batch_size=16)
     assert metrics["critic_loss"] == 0.0
     assert metrics["param_loss"] == 0.0
+
+
+def test_branching_mp_dqn_load_checkpoint(default_config, tmp_path):
+    """load_checkpoint() must genuinely restore encoder/param_net/twin_critic
+    weights from a training/train_hybrid.py-style checkpoint file, for
+    evaluation-only reuse (Concept Note v4.0 Section 14) rather than
+    retraining from scratch."""
+    env = CRANEnv(default_config)
+    trained_agent = BranchingMPDQN(
+        state_dim=env.state_dim,
+        n_rrh=env.n_rrh,
+        p_max_w=env.p_max_w,
+        config=default_config,
+    )
+    # Perturb weights away from a fresh agent's random init so we can prove
+    # loading actually changes the second agent's parameters.
+    with torch.no_grad():
+        for param in trained_agent.encoder.parameters():
+            param.add_(1.0)
+
+    ckpt_path = tmp_path / "final_model.pt"
+    torch.save(
+        {
+            "encoder": trained_agent.encoder.state_dict(),
+            "param_net": trained_agent.param_net.state_dict(),
+            "twin_critic": trained_agent.twin_critic.state_dict(),
+        },
+        ckpt_path,
+    )
+
+    fresh_agent = BranchingMPDQN(
+        state_dim=env.state_dim,
+        n_rrh=env.n_rrh,
+        p_max_w=env.p_max_w,
+        config=default_config,
+    )
+    fresh_before = [p.clone() for p in fresh_agent.encoder.parameters()]
+    fresh_agent.load_checkpoint(str(ckpt_path))
+
+    for before, after, trained in zip(
+        fresh_before,
+        fresh_agent.encoder.parameters(),
+        trained_agent.encoder.parameters(),
+    ):
+        assert not torch.allclose(before, after)
+        assert torch.allclose(after, trained)
+
+    # Target networks are synced to the loaded weights too.
+    for after, target in zip(
+        fresh_agent.encoder.parameters(), fresh_agent.encoder_target.parameters()
+    ):
+        assert torch.allclose(after, target)

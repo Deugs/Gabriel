@@ -34,9 +34,9 @@ def test_run_ablation_study_applies_variant_overrides(monkeypatch, tmp_path):
 
     assert captured_overrides == [
         {},
-        {"lr_actor": 0.0},
-        {"epsilon_start": 0.0, "epsilon_end": 0.0},
-        {"beta_qos": 5.0},
+        {"gamma_switch": 0.0},
+        {"gamma_fronthaul": 0.0},
+        {"beta_qos": 0.0},
     ]
 
 
