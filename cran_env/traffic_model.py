@@ -69,7 +69,12 @@ class TrafficModel:
             business_peak = np.exp(-((t - 11.0) ** 2) / 18.0)
             residential_peak = np.exp(-((t - 20.0) ** 2) / 18.0)
 
-            # Diurnal factor normalized to [0.15, 1.0]
+            # Diurnal factor: 0.15 floor + a weighted sum of the two Gaussian
+            # peaks, each scaled by 0.85. Since the peaks are centered at
+            # different hours, they never both reach 1 simultaneously, so the
+            # achievable range is [0.15, ~0.664] (at t=11: 0.15 + 0.85*(0.6*1
+            # + 0.4*exp(-81/18)) ~= 0.664), not the full [0.15, 1.0] the
+            # weights alone might suggest.
             diurnal_factor = 0.15 + 0.85 * (
                 0.6 * business_peak + 0.4 * residential_peak
             )

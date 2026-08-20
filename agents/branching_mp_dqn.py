@@ -480,9 +480,16 @@ class BranchingMPDQN:
                 next_q2.gather(-1, next_disc_actions.unsqueeze(-1)).squeeze(-1),
             )  # (batch, n_rrh)
 
-            y_target = rewards + self.gamma * (1.0 - dones) * next_q_min.mean(
-                dim=-1, keepdim=True
-            )
+            # Per-branch target y_{i,r} = r_i + gamma*(1-done)*min(Q_r^A',Q_r^B')
+            # (docs/thesis_guide.md Section 3.7): each branch bootstraps off its
+            # own next-state Q-value rather than one target shared/averaged
+            # across all R branches, preserving the branching architecture's
+            # per-RRH independence in the training signal, not just the
+            # forward pass. rewards/dones are (batch, 1) and broadcast against
+            # next_q_min's (batch, n_rrh) to give one target per branch.
+            y_target = (
+                rewards + self.gamma * (1.0 - dones) * next_q_min
+            )  # (batch, n_rrh)
 
         # --- 2. Critic Loss Computation (multi-pass, per branch) ---
         feat = self.encoder(states)
@@ -490,10 +497,7 @@ class BranchingMPDQN:
         q1_sel = q1_curr.gather(-1, disc_actions.unsqueeze(-1)).squeeze(-1)
         q2_sel = q2_curr.gather(-1, disc_actions.unsqueeze(-1)).squeeze(-1)
 
-        y_target_expand = y_target.expand(-1, self.n_rrh)
-        critic_loss = F.mse_loss(q1_sel, y_target_expand) + F.mse_loss(
-            q2_sel, y_target_expand
-        )
+        critic_loss = F.mse_loss(q1_sel, y_target) + F.mse_loss(q2_sel, y_target)
 
         self.critic_opt.zero_grad()
         critic_loss.backward()

@@ -101,7 +101,7 @@
 - Shannon capacity (keep current Eq. 3.3)
 
 #### 3.3 Traffic Model (~400 words) — ADD
-- Tidal traffic pattern: dual-Gaussian diurnal factor, not a sinusoid (`cran_env/traffic_model.py`) — business peak centered at 11:00, residential peak centered at 20:00, each a Gaussian bump in hour-of-day; the diurnal factor is a weighted sum of the two, normalized to [0.15, 1.0]
+- Tidal traffic pattern: dual-Gaussian diurnal factor, not a sinusoid (`cran_env/traffic_model.py`) — business peak centered at 11:00, residential peak centered at 20:00, each a Gaussian bump in hour-of-day; the diurnal factor is `0.15 + 0.85 * (0.6*business_peak + 0.4*residential_peak)`. Since the two peaks are centered at different hours and never both reach 1 simultaneously, the achievable range is [0.15, ~0.664] (at t=11:00), not the full [0.15, 1.0] the 0.85 weight alone might suggest
 - Peak hours: business (centered 11:00), residential (centered 20:00) — see the actual Gaussian centers/widths in `cran_env/traffic_model.py::get_demands`, not the 9-12/14-17/19-23 windows this section previously (incorrectly) described
 - Burstiness: log-normal per-user multiplicative fluctuation (`rng.lognormal`), not Poisson arrivals
 - Second profile: `weekend_suburban` (flatter daytime, no business peak, a later/lower residential peak at 23:00) — used by the cross-profile generalization evaluation, Concept Note v4.0 §12.3/A5
