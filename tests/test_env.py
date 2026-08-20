@@ -38,7 +38,7 @@ def test_channel_model():
     distances = np.full((n_rrh, n_ue), 1000.0)
     path_loss_db = channel.compute_path_loss(distances)
 
-    # Check path loss magnitude (COST231-Hata at 1km is ~125-145 dB)
+    # Check path loss magnitude (this log-distance model at 1km is ~125-145 dB)
     assert np.all(path_loss_db > 100.0)
     assert np.all(path_loss_db < 160.0)
 

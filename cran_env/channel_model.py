@@ -1,7 +1,12 @@
 """Channel Model for 5G C-RAN Simulation.
 
-Implements COST231-Hata urban macro path loss, log-normal shadowing,
-Rayleigh small-scale fading, and Gauss-Markov temporal correlation.
+Implements a log-distance path loss model (PL0 + 10*n*log10(d/d0), per
+docs/thesis_guide.md Section 3.2) with a COST231-Hata-style intercept term,
+log-normal shadowing, Rayleigh small-scale fading, and Gauss-Markov temporal
+correlation. This is not the full COST231-Hata formula: the distance-decay
+coefficient (`path_loss_exponent`) is a configurable generic exponent rather
+than COST231's fixed height-derived slope, and COST231's mobile-antenna-height
+correction a(hm) and city-size correction C_m terms are not implemented.
 """
 
 import numpy as np
@@ -39,7 +44,14 @@ class ChannelModel:
         self.correlation_coeff = correlation_coeff
 
     def compute_path_loss(self, distances: np.ndarray) -> np.ndarray:
-        """Compute COST231-Hata urban macro path loss in dB.
+        """Compute log-distance path loss in dB (PL0 + 10*n*log10(d/d0)).
+
+        PL0 uses a COST231-Hata-style intercept for a 30m base-station
+        height, but the distance-decay term uses `path_loss_exponent` as a
+        configurable generic exponent rather than COST231's fixed
+        height-derived slope, and omits COST231's a(hm)/C_m correction
+        terms -- so this is a log-distance model with a COST231-derived
+        constant, not the full COST231-Hata formula.
 
         Args:
             distances (np.ndarray): Distance matrix in meters (n_rrh, n_ue),
@@ -50,7 +62,7 @@ class ChannelModel:
         """
         # Minimum distance 10m to avoid log(0)
         d_km = np.maximum(distances, 10.0) / 1000.0
-        # COST-231 Hata base path loss for 30m base station height
+        # COST231-Hata-style intercept (PL0) for a 30m base-station height
         fc_mhz = self.fc / 1e6
         pl0 = 46.3 + 33.9 * np.log10(fc_mhz) - 13.82 * np.log10(30.0)
         path_loss_db = pl0 + 10.0 * self.path_loss_exponent * np.log10(d_km)

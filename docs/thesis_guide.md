@@ -181,7 +181,7 @@ Where:
 - alpha: EE(t) weight (default 1.0 recovers the note's literal formula)
 - beta: QoS violation penalty (must dominate if QoS is hard constraint)
 - gamma_switch: switching cost weight (prevents oscillation)
-- gamma_fronthaul: fronthaul-power penalty weight, in kW (default 0.1; small and non-dominant by design — exists so fronthaul's reward contribution can be independently ablated in Section 4.5, since it also already reduces EE(t) implicitly via P_total(t))
+- gamma_fronthaul: fronthaul-power penalty weight, in kW (default 1.0, chosen to keep the penalty on the same order of magnitude as EE(t) itself given P_FH's typical ~0.05-0.15 kW range at this thesis's scenario sizes — small and non-dominant relative to beta/gamma_switch by design, but not negligible; exists so fronthaul's reward contribution can be independently ablated in Section 4.5, since it also already reduces EE(t) implicitly via P_total(t))
 
 **Transition Dynamics**:
 ```

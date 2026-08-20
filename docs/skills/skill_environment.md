@@ -29,7 +29,9 @@ class ChannelModel:
         self.B = bandwidth_mhz * 1e6
 
     def compute_path_loss(self, distances):
-        # COST-231 Hata model for urban macro
+        # Log-distance model with a COST-231 Hata-style intercept (not the
+        # full COST-231 formula -- the 3.5 slope is a tunable exponent, not
+        # COST-231's fixed height-derived slope, and a(hm)/C_m are omitted)
         PL0 = 46.3 + 33.9 * np.log10(self.fc / 1e6) - 13.82 * np.log10(30)
         PL = PL0 + 3.5 * np.log10(distances / 1000)  # d in km
         return PL

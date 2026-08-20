@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, Tuple
 
 import numpy as np
 from scipy import stats
@@ -71,11 +71,16 @@ def analyze_convergence(
     summary_files = list(results_path.rglob("summary.json"))
     print(f"Found {len(summary_files)} result summary files under {results_dir}")
 
-    # Parse and organize algorithm scores
-    algo_scores: Dict[str, List[float]] = {}
-    algo_powers: Dict[str, List[float]] = {}
-    algo_qos: Dict[str, List[float]] = {}
-    algo_switching: Dict[str, List[float]] = {}
+    # Parse and organize algorithm scores, keyed by seed so paired
+    # comparisons genuinely pair the same seed's runs against each other —
+    # not by list position, which previously depended on filesystem
+    # traversal order and could silently mismatch seeds between the
+    # proposed method (one summary.json per seed directory) and baselines
+    # (all seeds in one summary.json list, in a different order).
+    algo_scores: Dict[str, Dict[int, float]] = {}
+    algo_powers: Dict[str, Dict[int, float]] = {}
+    algo_qos: Dict[str, Dict[int, float]] = {}
+    algo_switching: Dict[str, Dict[int, float]] = {}
 
     for s_file in summary_files:
         try:
@@ -84,27 +89,29 @@ def analyze_convergence(
 
             if isinstance(data, dict):
                 algo = str(data.get("algorithm", "unknown"))
+                seed = int(data.get("seed", -1))
                 reward = float(data.get("final_eval_reward", 0.0))
                 power = float(data.get("final_eval_power_w", 0.0))
                 qos = float(data.get("final_qos_rate", 0.0))
                 switching = float(data.get("final_switching_events", 0.0))
 
-                algo_scores.setdefault(algo, []).append(reward)
-                algo_powers.setdefault(algo, []).append(power)
-                algo_qos.setdefault(algo, []).append(qos)
-                algo_switching.setdefault(algo, []).append(switching)
+                algo_scores.setdefault(algo, {})[seed] = reward
+                algo_powers.setdefault(algo, {})[seed] = power
+                algo_qos.setdefault(algo, {})[seed] = qos
+                algo_switching.setdefault(algo, {})[seed] = switching
             elif isinstance(data, list):
                 for item in data:
                     algo = str(item.get("algorithm", "unknown"))
+                    seed = int(item.get("seed", -1))
                     reward = float(item.get("mean_reward", 0.0))
                     power = float(item.get("mean_power_w", 0.0))
                     qos = float(item.get("qos_satisfaction_rate", 0.0))
                     switching = float(item.get("mean_switching_events", 0.0))
 
-                    algo_scores.setdefault(algo, []).append(reward)
-                    algo_powers.setdefault(algo, []).append(power)
-                    algo_qos.setdefault(algo, []).append(qos)
-                    algo_switching.setdefault(algo, []).append(switching)
+                    algo_scores.setdefault(algo, {})[seed] = reward
+                    algo_powers.setdefault(algo, {})[seed] = power
+                    algo_qos.setdefault(algo, {})[seed] = qos
+                    algo_switching.setdefault(algo, {})[seed] = switching
         except Exception as e:
             print(f"Warning: Failed to parse {s_file}: {e}")
 
@@ -114,34 +121,50 @@ def analyze_convergence(
     }
 
     proposed_algo = "Branching_MP_DQN"
-    proposed_arr = np.array(algo_scores.get(proposed_algo, [0.0]))
+    proposed_by_seed = algo_scores.get(proposed_algo, {})
 
-    for algo, scores in algo_scores.items():
-        arr = np.array(scores)
+    for algo, scores_by_seed in algo_scores.items():
+        arr = (
+            np.array(list(scores_by_seed.values()))
+            if scores_by_seed
+            else np.array([0.0])
+        )
         mean, lower, upper = compute_confidence_interval(arr)
 
         analysis_report["algorithms"][algo] = {
             "mean_reward": float(mean),
             "ci_95_lower": float(lower),
             "ci_95_upper": float(upper),
-            "mean_power_w": float(np.mean(algo_powers.get(algo, [0.0]))),
-            "mean_qos_rate": float(np.mean(algo_qos.get(algo, [0.0]))),
-            "mean_switching_events": float(np.mean(algo_switching.get(algo, [0.0]))),
+            "mean_power_w": float(
+                np.mean(list(algo_powers.get(algo, {}).values()) or [0.0])
+            ),
+            "mean_qos_rate": float(
+                np.mean(list(algo_qos.get(algo, {}).values()) or [0.0])
+            ),
+            "mean_switching_events": float(
+                np.mean(list(algo_switching.get(algo, {}).values()) or [0.0])
+            ),
         }
 
-        if (
-            algo != proposed_algo
-            and len(proposed_arr) > 1
-            and len(arr) == len(proposed_arr)
-        ):
-            t_stat, p_val, is_sig = perform_paired_ttest(proposed_arr, arr)
-            cohens_d = compute_cohens_d(proposed_arr, arr)
-            analysis_report["paired_ttests"][algo] = {
-                "t_statistic": t_stat,
-                "p_value": p_val,
-                "statistically_significant_0_05": is_sig,
-                "cohens_d": cohens_d,
-            }
+        if algo != proposed_algo:
+            # Align by seed, not list position -- a baseline and the
+            # proposed method may have runs for different (or
+            # differently-ordered) seeds.
+            common_seeds = sorted(set(proposed_by_seed) & set(scores_by_seed))
+            if len(common_seeds) > 1:
+                proposed_paired = np.array([proposed_by_seed[s] for s in common_seeds])
+                baseline_paired = np.array([scores_by_seed[s] for s in common_seeds])
+                t_stat, p_val, is_sig = perform_paired_ttest(
+                    proposed_paired, baseline_paired
+                )
+                cohens_d = compute_cohens_d(proposed_paired, baseline_paired)
+                analysis_report["paired_ttests"][algo] = {
+                    "t_statistic": t_stat,
+                    "p_value": p_val,
+                    "statistically_significant_0_05": is_sig,
+                    "cohens_d": cohens_d,
+                    "n_paired_seeds": len(common_seeds),
+                }
 
     # Export LaTeX table
     latex_content = (

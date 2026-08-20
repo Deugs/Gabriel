@@ -54,17 +54,25 @@ class TrafficModel:
 
         if self.profile == "weekend_suburban":
             # Flatter daytime profile (no distinct business peak), later and
-            # lower residential peak (23:00 instead of 20:00, half the weight).
+            # lower residential peak (23:00 instead of 20:00). Baseline 0.25
+            # is above weekday_urban's 0.15 floor (flatter), but the 0.20
+            # swing keeps the peak (0.45) below weekday_urban's residential
+            # peak alone (~0.50) and well below its overall business-hour
+            # peak (~0.66) -- previously 0.25 + 0.45 * residential_peak
+            # gave a peak of 0.70, higher than weekday_urban's peak, which
+            # contradicted the "lower residential peak" description above.
             business_peak = 0.0
             residential_peak = np.exp(-((t - 23.0) ** 2) / 30.0)
-            diurnal_factor = 0.25 + 0.45 * residential_peak
+            diurnal_factor = 0.25 + 0.20 * residential_peak
         else:
             # Dual Gaussian peaks: Business peak at 11:00, Residential peak at 20:00
             business_peak = np.exp(-((t - 11.0) ** 2) / 18.0)
             residential_peak = np.exp(-((t - 20.0) ** 2) / 18.0)
 
             # Diurnal factor normalized to [0.15, 1.0]
-            diurnal_factor = 0.15 + 0.85 * (0.6 * business_peak + 0.4 * residential_peak)
+            diurnal_factor = 0.15 + 0.85 * (
+                0.6 * business_peak + 0.4 * residential_peak
+            )
 
         # Base rate scaled by diurnal profile and peak multiplier
         effective_base = (

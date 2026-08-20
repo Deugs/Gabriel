@@ -82,7 +82,7 @@ class CRANEnv(gym.Env):
         self.alpha_energy = float(getattr(reward_cfg, "alpha_energy", 1.0))
         self.beta_qos = float(getattr(reward_cfg, "beta_qos", 10.0))
         self.gamma_switch = float(getattr(reward_cfg, "gamma_switch", 0.5))
-        self.gamma_fronthaul = float(getattr(reward_cfg, "gamma_fronthaul", 0.1))
+        self.gamma_fronthaul = float(getattr(reward_cfg, "gamma_fronthaul", 1.0))
 
         # Instantiate physical models
         channel_cfg = getattr(cfg, "channel", cfg)
