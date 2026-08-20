@@ -18,12 +18,13 @@ network:
 # ============================================================
 channel:
   # path_loss_model/fading_model: aspirational/reserved. cran_env/channel_model.py
-  # hardcodes exactly one path-loss formula (COST231-Hata) and one fading
-  # process (Rayleigh via complex Gaussian) directly in the equation body,
-  # with no branch/selection logic — there is no second implementation to
-  # switch to. These keys record which model is in effect but do not
-  # currently select between alternatives.
-  path_loss_model: "cost231_hata"
+  # hardcodes exactly one path-loss formula (log-distance PL0 + 10*n*log10(d/d0),
+  # with a COST231-Hata-style intercept but a tunable exponent rather than the
+  # full COST231-Hata formula) and one fading process (Rayleigh via complex
+  # Gaussian) directly in the equation body, with no branch/selection logic —
+  # there is no second implementation to switch to. These keys record which
+  # model is in effect but do not currently select between alternatives.
+  path_loss_model: "log_distance_cost231_intercept"
   path_loss_exponent: 3.5
   shadowing_std_db: 8.0
   fading_model: "rayleigh"
@@ -123,7 +124,10 @@ reward:
   alpha_energy: 1.0         # Energy consumption weight
   beta_qos: 10.0           # QoS violation penalty (must be large)
   gamma_switch: 0.5         # Switching cost weight
-  gamma_fronthaul: 0.1      # Fronthaul power penalty weight (applied to P_FH in kW)
+  gamma_fronthaul: 1.0      # Fronthaul power penalty weight (applied to P_FH in kW;
+                            # P_FH is typically ~0.05-0.15 kW at this scenario's size,
+                            # so this weight keeps the penalty on the same order of
+                            # magnitude as EE(t) -- 0.1 made it numerically negligible)
   qos_target_sinr_db: 0     # Minimum SINR threshold
 
 # ============================================================

@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import numpy as np
+import pytest
 
 from evaluation import (
     analyze_convergence,
@@ -12,7 +13,7 @@ from evaluation import (
     plot_learning_curves,
     run_ablation_study,
 )
-from evaluation.convergence import perform_paired_ttest
+from evaluation.convergence import compute_cohens_d, perform_paired_ttest
 
 
 def test_run_ablation_study_applies_variant_overrides(monkeypatch, tmp_path):
@@ -100,6 +101,7 @@ def test_analyze_convergence_with_mock_results(tmp_path):
         algo_dir.mkdir(parents=True, exist_ok=True)
         summary = {
             "algorithm": algo,
+            "seed": seed,
             "final_eval_reward": reward,
             "final_eval_power_w": 420.0,
             "final_qos_rate": 0.98,
@@ -116,7 +118,91 @@ def test_analyze_convergence_with_mock_results(tmp_path):
     assert "Branching_MP_DQN" in report["algorithms"]
     assert "DDQN" in report["paired_ttests"]
     assert "cohens_d" in report["paired_ttests"]["DDQN"]
+    assert report["paired_ttests"]["DDQN"]["n_paired_seeds"] == 2
     assert (table_dir / "convergence_summary.tex").exists()
+
+
+def test_analyze_convergence_pairs_by_seed_not_list_position(tmp_path):
+    """The paired t-test/Cohen's d must pair by seed, not by the order
+    Path.rglob() happens to discover summary.json files in — the proposed
+    method saves one summary.json per seed directory (discovered in
+    filesystem order) while baselines save all seeds in one list (in
+    numeric seed order), so list-position pairing can silently compare
+    different seeds against each other."""
+    res_dir = tmp_path / "results"
+    import json
+
+    # Proposed method: one file per seed, written in an order that would
+    # NOT match ascending numeric seed order if paired by list position.
+    for seed, reward in [(123, 100.0), (42, 200.0)]:
+        algo_dir = res_dir / f"branching_mp_dqn_seed{seed}"
+        algo_dir.mkdir(parents=True, exist_ok=True)
+        with open(algo_dir / "summary.json", "w") as f:
+            json.dump(
+                {
+                    "algorithm": "Branching_MP_DQN",
+                    "seed": seed,
+                    "final_eval_reward": reward,
+                    "final_eval_power_w": 0.0,
+                    "final_qos_rate": 1.0,
+                },
+                f,
+            )
+
+    # Baseline: a single list, seeds in ascending numeric order.
+    ddqn_dir = res_dir / "benchmark_ddqn"
+    ddqn_dir.mkdir(parents=True, exist_ok=True)
+    with open(ddqn_dir / "summary.json", "w") as f:
+        json.dump(
+            [
+                {
+                    "algorithm": "DDQN",
+                    "seed": 42,
+                    "mean_reward": 10.0,
+                    "mean_power_w": 0.0,
+                    "qos_satisfaction_rate": 1.0,
+                },
+                {
+                    "algorithm": "DDQN",
+                    "seed": 123,
+                    "mean_reward": 20.0,
+                    "mean_power_w": 0.0,
+                    "qos_satisfaction_rate": 1.0,
+                },
+            ],
+            f,
+        )
+
+    report = analyze_convergence(
+        results_dir=str(res_dir),
+        save_dir=str(tmp_path / "figures"),
+        table_save_dir=str(tmp_path / "tables"),
+    )
+
+    ttest_info = report["paired_ttests"]["DDQN"]
+    assert ttest_info["n_paired_seeds"] == 2
+
+    # Correctly paired by seed: seed 42 -> (proposed=200.0, ddqn=10.0),
+    # seed 123 -> (proposed=100.0, ddqn=20.0). Compute the expected result
+    # from those seed-aligned arrays directly (rather than hand-deriving the
+    # t-stat/Cohen's-d arithmetic) so the test can't itself encode an
+    # arithmetic mistake.
+    expected_t, expected_p, _ = perform_paired_ttest(
+        np.array([200.0, 100.0]), np.array([10.0, 20.0])
+    )
+    expected_d = compute_cohens_d(np.array([200.0, 100.0]), np.array([10.0, 20.0]))
+    assert ttest_info["t_statistic"] == pytest.approx(expected_t)
+    assert ttest_info["p_value"] == pytest.approx(expected_p)
+    assert ttest_info["cohens_d"] == pytest.approx(expected_d)
+
+    # If pairing were done by list/write position instead of by seed --
+    # proposed=[100.0, 200.0] (write order: seed123, seed42) against
+    # ddqn=[10.0, 20.0] (list order: seed42, seed123) -- seed 123's proposed
+    # score would be wrongly compared against seed 42's ddqn score and vice
+    # versa, giving a different result. Guard against the fix silently
+    # regressing to that wrong pairing.
+    wrong_d = compute_cohens_d(np.array([100.0, 200.0]), np.array([10.0, 20.0]))
+    assert ttest_info["cohens_d"] != pytest.approx(wrong_d)
 
 
 def test_ablation_short_run(tmp_path):
