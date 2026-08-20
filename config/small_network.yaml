@@ -31,3 +31,10 @@ algorithm:
   batch_size: 64
   lr_discrete: 1.0e-4
   lr_actor: 3.0e-4
+
+reward:
+  alpha_energy: 1.0
+  beta_qos: 10.0
+  gamma_switch: 0.5
+  gamma_fronthaul: 0.1
+  qos_target_sinr_db: 0

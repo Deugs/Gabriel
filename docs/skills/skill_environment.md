@@ -1,6 +1,8 @@
 # Skill: C-RAN Environment Design
 
 > **Status**: Invokable as the Antigravity `build-environment` skill (`.agents/skills/build-environment/`), which points back at this file as the spec of record.
+>
+> **Note (tenth audit round)**: the code sketch below is illustrative, written before `cran_env/cran_env.py` existed, and has drifted from the real implementation in some details (e.g. `compute_fronthaul_power()` now also takes `total_throughput_mbps`; config access is `cfg["reward"]["..."]`-style, not `self.cfg.alpha_energy`-style attribute access). The reward formula specifically has been corrected below to include the `gamma_fronthaul` term added in round 9 (`config/default.yaml`'s `reward.gamma_fronthaul`) — read `cran_env/cran_env.py::step()` directly for the current, authoritative reward computation rather than this sketch.
 
 ## Purpose
 Design, implement, and validate a Gymnasium-compatible C-RAN simulation environment for DRL training.
@@ -199,7 +201,8 @@ class CRANEnv(gym.Env):
 
         reward = -(self.cfg.alpha_energy * p_total / 1000 +
                    self.cfg.beta_qos * np.sum(qos_violations) / 1e6 +
-                   self.cfg.gamma_switch * switching_cost / 10)
+                   self.cfg.gamma_switch * switching_cost / 10 +
+                   self.cfg.gamma_fronthaul * p_fh / 1000)
 
         # Update state
         self.active_mask = rrh_on

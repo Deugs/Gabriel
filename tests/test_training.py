@@ -188,6 +188,27 @@ def test_train_hybrid_agent_rejects_unknown_override_key(config_path):
         )
 
 
+@pytest.mark.parametrize("config_name", ["small_network.yaml", "large_network.yaml"])
+def test_scenario_configs_have_reward_section_for_ablation_overrides(config_name):
+    """small_network.yaml/large_network.yaml previously had no reward:
+    section at all, so evaluation/ablation.py's gamma_switch/gamma_fronthaul/
+    beta_qos overrides would raise ValueError (apply_config_overrides only
+    finds a key that already exists in some top-level section) if ever
+    pointed at either file — both are the concept note's own canonical
+    R=5/R=50 scenario definitions, so this is a real landmine, not just a
+    hypothetical one."""
+    config_path = Path(__file__).parent.parent / "config" / config_name
+    with open(config_path, "r") as f:
+        cfg = yaml.safe_load(f)
+
+    updated = apply_config_overrides(
+        cfg, {"gamma_switch": 0.0, "gamma_fronthaul": 0.0, "beta_qos": 0.0}
+    )
+    assert updated["reward"]["gamma_switch"] == 0.0
+    assert updated["reward"]["gamma_fronthaul"] == 0.0
+    assert updated["reward"]["beta_qos"] == 0.0
+
+
 def test_run_baseline_benchmarks_short_run(config_path, tmp_path):
     save_dir = str(tmp_path / "results")
     res = run_baseline_benchmarks(
