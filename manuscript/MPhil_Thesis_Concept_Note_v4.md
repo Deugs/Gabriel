@@ -249,11 +249,13 @@ No part of the adopted design needs to be taken on faith — each piece has its 
 
 State space
 
-s(t) = [ D1(t),…,DU(t),  k1(t−1),…,kR(t−1),  g1,1(t),…,gR,U(t),  Ptotal(t−1),  τ(t) ]T
+s(t) = [ g1,1(t),…,gR,U(t),  k1(t−1),…,kR(t−1),  D1(t),…,DU(t),  Ptotal(t−1),  τ(t) ]T
 
 k_r(t−1) is RRH r's true binary activation state (0/1) from the previous slot. P_total(t−1) is the previous slot's realized total network power (Section 9), giving the policy a scalar summary of recent load without re-deriving it from the raw channel/demand terms every step. τ(t)∈[0,1) is the time-of-day, normalized (hour of the 24-hour cycle divided by 24) — a direct, low-dimensional signal of where the agent is in the tidal traffic pattern (Section 12.8), which the raw per-UE demands D_u(t) alone do not make explicit.
 
 **Correction (v4.0):** an earlier draft of this formula used a BBU-pool load term ρ_BBU(t) and a generic energy term E(t) for these two trailing scalars. The actual implementation (`cran_env/cran_env.py`) instead uses P_total(t−1) and τ(t) as just described; this is the accurate, current state-space definition, not the ρ_BBU(t)/E(t) placeholder. P_total(t−1) is closely related to ρ_BBU(t) in spirit (BBU-pool power is itself load-dependent, Section 9), and τ(t) is a more direct, already-implemented substitute for a bespoke energy-state term, since it lets the policy anticipate the demand shifts that drive energy consumption rather than only reacting to them after the fact. No dimensionality change results from this correction (still two trailing scalars; Section 12.9's O(R·U) dimensionality count is unaffected).
+
+**Correction (round-12 audit):** the leading three blocks above were also previously ordered [D, k, g] (demands, then activation, then channel gains); the actual implementation's `_get_obs()` orders them [g, k, D] (channel gains first, then activation, then demands), matching `docs/thesis_guide.md` Section 3.5's independently-stated order and confirmed by every downstream observation-slicing consumer (`evaluation/csi_robustness.py`, `baselines/convex_power.py`). The formula above now reflects the actual order; this is a documentation-only correction, no behavior change.
 
 Action space — a parameterized (hybrid) action
 
@@ -351,13 +353,17 @@ For each i: k_r,i' = argmax_k Q_r^A(s_i+1,k,x'|phi')
 
 per branch (multi-pass); x' smoothed with noise.
 
-Set y_i = r_i + gamma * min(Q^A',Q^B')(s_i+1,
+Set y_i,r = r_i + gamma * min(Q_r^A',Q_r^B')(s_i+1,
 
-{k_r,i'}, x').
+k_r,i', x') for each branch r (per-branch bootstrap,
+
+not one target shared across branches).
 
 Update Q^A, Q^B by minimizing
 
-L = (1/N) sum_i sum_r (y_i - Q_r(s_i,k_r,i,x_i))^2.
+L = (1/N) sum_i sum_r (y_i,r - Q_r(s_i,k_r,i,x_i))^2.
+
+**Correction:** an earlier draft of this formula (and the matching implementation) used one shared scalar target y_i -- the per-branch next-state Q-values averaged into a single value before being broadcast to every branch's loss -- rather than a genuinely per-branch target y_i,r. That averaging reintroduced cross-branch coupling in the training signal even though the multi-pass masking already removes it from the forward pass, undermining the "R independent per-RRH decisions" independence the branching architecture (Section 10.1/10.3/10.3.1) is justified on. Both the formula above and `agents/branching_mp_dqn.py`'s `update()` now use the per-branch target, matching `docs/thesis_guide.md` Section 3.7's pseudocode, which already specified it correctly.
 
 every d steps:
 

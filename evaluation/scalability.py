@@ -51,6 +51,10 @@ def analyze_scalability(
         with open(temp_cfg, "w") as f:
             yaml.dump(trial_cfg, f)
 
+        steps_per_episode = trial_cfg.get("algorithm", {}).get(
+            "max_steps_per_episode", 100
+        )
+
         t_start = time.time()
         res = train_hybrid_agent(
             config_path=str(temp_cfg),
@@ -60,7 +64,7 @@ def analyze_scalability(
             save_dir=None,
         )
         t_elapsed = time.time() - t_start
-        step_time_ms = (t_elapsed / (episodes * 24)) * 1000.0  # 24 steps per episode
+        step_time_ms = (t_elapsed / (episodes * steps_per_episode)) * 1000.0
 
         scalability_results[scale_name] = {
             "Branching_MP_DQN": {
