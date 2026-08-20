@@ -253,9 +253,13 @@ def run_proxy_sensitivity_sweep(
 
 if __name__ == "__main__":
     searcher = HyperparameterSearch()
+    # BranchingMPDQN reads algorithm.lr_discrete (critic) and algorithm.lr_actor
+    # (continuous param net) -- there is no "lr_critic" key; a grid entry
+    # under that name would be silently written into the config and never
+    # read by the agent.
     grid: Dict[str, List[Any]] = {
         "lr_actor": [1e-4, 3e-4],
-        "lr_critic": [1e-4, 3e-4],
+        "lr_discrete": [1e-4, 3e-4],
         "batch_size": [128, 256],
     }
     searcher.run_grid_search(grid, episodes_per_trial=20, seeds=[42])

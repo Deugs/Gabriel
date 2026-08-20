@@ -201,14 +201,18 @@ class CRANEnv(gym.Env):
         self.active_mask = np.ones(self.n_rrh, dtype=bool)
         self.prev_power_w = 0.0
 
+        # Sample this hour's demand once; _get_obs() embeds it in the initial
+        # observation and step()'s first call reuses this same realization
+        # for its QoS/reward computation (see step()'s comment).
+        self.current_demands_bps = self.traffic.get_demands(self.hour, self.rng)
+
         obs = self._get_obs()
         info = {"hour": self.hour, "active_rrhs": int(np.sum(self.active_mask))}
         return obs, info
 
     def _get_obs(self) -> np.ndarray:
         """Construct state observation vector."""
-        demands_bps = self.traffic.get_demands(self.hour, self.rng)
-        demands_mbps = demands_bps / 1e6
+        demands_mbps = self.current_demands_bps / 1e6
 
         # Channel magnitude |H|
         gains_mag = np.abs(self.channel_gains).flatten()
@@ -285,9 +289,15 @@ class CRANEnv(gym.Env):
         achievable_capacity_bps = user_bandwidth_hz * np.log2(1.0 + sinr)
         total_throughput_mbps = np.sum(achievable_capacity_bps) / 1e6
 
-        # Traffic demands
-        demands_bps = self.traffic.get_demands(self.hour, self.rng)
-        qos_violations_bps = np.maximum(0.0, demands_bps - achievable_capacity_bps)
+        # Traffic demands: reuse the exact realization already embedded in
+        # the observation the agent acted on (self.current_demands_bps),
+        # rather than drawing a fresh independent sample here -- otherwise
+        # the state's D_u(t) and the reward's D_u(t) would be two different
+        # stochastic realizations for the same hour, breaking the Markov
+        # state-sufficiency the state-space design assumes.
+        qos_violations_bps = np.maximum(
+            0.0, self.current_demands_bps - achievable_capacity_bps
+        )
 
         # Power breakdown
         bbu_loads = np.ones(self.n_bbu) * (np.sum(rrh_on) / max(1, self.n_bbu))
@@ -340,6 +350,11 @@ class CRANEnv(gym.Env):
         self.channel_gains = self.channel.step_channel(
             self.channel_gains, self.distances, self.rng
         )
+
+        # Sample the new hour's demand once; this is the realization
+        # _get_obs() embeds below, and the *next* step() call reuses it
+        # (rather than resampling) for its own reward/QoS computation.
+        self.current_demands_bps = self.traffic.get_demands(self.hour, self.rng)
 
         obs = self._get_obs()
 

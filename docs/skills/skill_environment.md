@@ -163,11 +163,17 @@ class CRANEnv(gym.Env):
         self.active_mask = np.ones(self.n_rrh, dtype=bool)
         self.prev_power = 0.0
 
+        # Sample this hour's demand once; _get_obs() and the following
+        # step() call's reward both reuse self.current_demands (sampling it
+        # twice independently would let the state's demand and the reward's
+        # demand silently disagree for the same hour).
+        self.current_demands = self.traffic.get_demands(self.hour, self.rng)
+
         self.state = self._get_obs()
         return self.state, {}
 
     def _get_obs(self):
-        demands = self.traffic.get_demands(self.hour, self.rng)
+        demands = self.current_demands
         obs = np.concatenate([
             self.channel_gains.flatten().real,  # Simplified: use magnitude
             self.active_mask.astype(float),
@@ -196,8 +202,9 @@ class CRANEnv(gym.Env):
         p_fh = self.power.compute_fronthaul_power(rrh_on)
         p_total = p_rrh + p_bbu + p_fh
 
-        # Compute reward
-        demands = self.traffic.get_demands(self.hour, self.rng)
+        # Compute reward -- reuse this hour's already-sampled demand
+        # (self.current_demands), not a fresh independent sample
+        demands = self.current_demands
         qos_violations = np.maximum(0, demands - capacity)
         switching_cost = np.sum(np.abs(rrh_on.astype(int) - self.active_mask.astype(int))) * self.power.p_switch
 
@@ -216,6 +223,10 @@ class CRANEnv(gym.Env):
         new_fading = (self.rng.standard_normal(self.distances.shape) + 
                       1j * self.rng.standard_normal(self.distances.shape)) / np.sqrt(2)
         self.channel_gains = rho * self.channel_gains + np.sqrt(1 - rho**2) * new_fading
+
+        # Sample the new hour's demand once, for _get_obs() below and reuse
+        # by the next step() call
+        self.current_demands = self.traffic.get_demands(self.hour, self.rng)
 
         self.state = self._get_obs()
 

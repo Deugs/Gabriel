@@ -100,7 +100,13 @@ def generate_labelled_dataset(
     for _ in range(n_samples):
         env.reset(seed=int(rng.integers(0, 2**31 - 1)))
         channel_gains = env.channel_gains.copy()
-        demands_bps = env.traffic.get_demands(env.hour, env.rng)
+        # Reuse the exact demand realization reset() already sampled and
+        # embedded in the environment's state, rather than independently
+        # resampling here -- otherwise this scenario's scored demand would
+        # not match the one env.current_demands_bps (and any subsequent
+        # env.step()) actually uses (cran_env/cran_env.py's fixed
+        # single-sample-per-hour behavior).
+        demands_bps = env.current_demands_bps.copy()
         gains_mag = np.abs(channel_gains)
         rrh_scores = np.mean(gains_mag, axis=1)
 
