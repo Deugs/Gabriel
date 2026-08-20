@@ -44,8 +44,8 @@
 | 2026-07-22 | Switch from DDPG to Hybrid SAC-DDQN | DDPG cannot handle discrete actions; SAC has better stability | Decided |
 | 2026-07-22 | Use factorized discrete actions | Avoids exponential action space (2^R) | Decided |
 | 2026-07-22 | Fix power model to EARTH standards | Al-Zubaedi validation required | Pending implementation |
-| 2026-07-22 | Include fronthaul power in reward | 41% savings potential (TWDM-PON) | Decided |
-| 2026-07-22 | Add switching cost to reward | 22% of savings (Iqbal) | Decided |
+| 2026-07-22 | Include fronthaul power in reward | TWDM-PON fronthaul is a material share of C-RAN power (Al-Zubaedi, 2019); a specific savings % is not restated here — no primary-source access is available in this environment to verify one (Ethical AI Rule, `docs/rules.md` §10) | Decided |
+| 2026-07-22 | Add switching cost to reward | RRH mode transitions carry a real power cost (Iqbal et al., 2021); a specific reported % is not restated here for the same reason as above | Decided |
 | 2026-08-05 | Add P-DQN and MP-DQN as baselines, capped at R≤12 | Supervisor review S2/B3 — isolates branching's contribution and empirically demonstrates why it's needed at scale | Decided |
 | 2026-08-05 | Increase seeds 5→10; report Cohen's d alongside p-values | Supervisor review S4 — statistical power was a concern at the modest 5% target margin | Decided (docs/rules.md updated) |
 | 2026-08-05 | Add CSI-robustness (σ∈{0.01,0.05,0.1}) and cross-profile generalization evaluations, evaluation-only | Supervisor review S3/A5 — addresses the perfect-CSI limitation without expanding scope | Decided |

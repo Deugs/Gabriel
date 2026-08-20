@@ -58,7 +58,7 @@ Most items below correspond to weaknesses in the *earlier* SAC-DDQN architecture
 | G7 | Multi-objective reward-weighting methodology | Already resolved in v3.0 | §12.6 |
 | G8 | Reproducibility commitment | Already resolved in v3.0 | §12.10 |
 | G9 | No hyperparameter tuning protocol | Added — new subsection | §12.11 |
-| G10 | Primary baseline (≥25% vs. All-ON) is a weak floor, not a contribution | Re-ranked: the DDQN/P-DQN/MP-DQN margins (Objective 3) are now stated as the headline comparison; the All-ON figure is explicitly relabeled a sanity-check floor | §5.2 |
+| G10 | Primary baseline (≥25% vs. All-ON) is a weak floor, not a contribution | Re-ranked: the DDQN/P-DQN/MP-DQN margins (Objective 4) are now stated as the headline comparison; the All-ON figure is explicitly relabeled a sanity-check floor | §5.2 |
 | G11 | Modest 5% DDQN margin, statistical power | Already resolved in v3.0 (10 seeds + Cohen's d) | §12.4 |
 | G12 | QoS threshold needs 3GPP/ITU context | Already resolved in v3.0 | §12.7 |
 | G13 | No generalization evaluation | Already resolved in v3.0 | §12.3 |
