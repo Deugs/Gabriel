@@ -169,10 +169,9 @@ class DDQNAgent:
 
         # Current Q-values for taken actions
         q_values = self.q_net(states)  # (batch, n_rrh, 2)
-        q_selected = q_values.gather(-1, actions.unsqueeze(-1)).squeeze(
+        q_current = q_values.gather(-1, actions.unsqueeze(-1)).squeeze(
             -1
-        )  # (batch, n_rrh)
-        q_current = q_selected.mean(dim=-1, keepdim=True)  # Average Q across RRHs
+        )  # (batch, n_rrh), per-branch
 
         # Double DQN Target: select best action using online net, evaluate using target net
         with torch.no_grad():
@@ -182,10 +181,18 @@ class DDQNAgent:
             next_q_target = self.target_q_net(next_states)
             next_q_eval = next_q_target.gather(-1, next_actions.unsqueeze(-1)).squeeze(
                 -1
-            )
-            q_next = next_q_eval.mean(dim=-1, keepdim=True)
+            )  # (batch, n_rrh), per-branch
 
-            target = rewards + self.gamma * (1.0 - dones) * q_next
+            # Per-branch target: each RRH branch bootstraps off its own
+            # next-state Q-value rather than one target averaged across all
+            # branches -- averaging would reintroduce cross-branch coupling
+            # in the training signal despite the branches being factorized
+            # (the same bug already fixed in agents/branching_mp_dqn.py's
+            # critic update; DDQN's Q-network is equally factorized per RRH
+            # via QNetwork's per-branch heads, so it needs the same fix).
+            # rewards/dones are (batch, 1) and broadcast against
+            # next_q_eval's (batch, n_rrh).
+            target = rewards + self.gamma * (1.0 - dones) * next_q_eval
 
         loss = nn.MSELoss()(q_current, target)
 
