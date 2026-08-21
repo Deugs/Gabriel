@@ -515,7 +515,15 @@ class BranchingMPDQN:
             pred_params = torch.stack([p_ratio, bw_share], dim=-1)
 
             q1_pred, _ = self._multi_pass_q(self.twin_critic, feat, pred_params)
-            param_loss = -q1_pred.mean()
+            # Gather each branch's Q-value at its own greedy (argmax) discrete
+            # action before averaging (matching agents/pdqn_agent.py's P-DQN
+            # policy gradient) -- q1_pred is (batch, n_rrh, 2) for k_r in
+            # {0, 1}; averaging over the raw tensor blends in the non-greedy
+            # action's Q-value too, diluting the gradient with a value that
+            # isn't the policy's actual choice at this branch.
+            greedy_disc_idx = q1_pred.argmax(dim=-1, keepdim=True).detach()
+            q1_pred_greedy = q1_pred.gather(-1, greedy_disc_idx).squeeze(-1)
+            param_loss = -q1_pred_greedy.mean()
 
             self.param_opt.zero_grad()
             param_loss.backward()

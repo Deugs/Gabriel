@@ -260,7 +260,9 @@ for episode = 1 to N_episodes do
         Update theta_Q1A..theta_QRA, theta_Q1B..theta_QRB to minimize sum_r (y_{i,r} - Q_r(s_i, k_{i,r}, x_i))^2
 
         if update_counter mod d == 0 then
-            Update theta_h, phi to maximize sum_r Q_r^A(s_i, x_i masked to branch r)
+            Update theta_h, phi to maximize sum_r Q_r^A(s_i, k*_r, x_i masked to branch r),
+                where k*_r = argmax_k Q_r^A(s_i, k, x_i) (greedy action per branch,
+                not the replayed action -- standard P-DQN/MP-DQN practice)
             Soft update all target networks: theta' <- tau*theta + (1-tau)*theta'
         end if
     end for

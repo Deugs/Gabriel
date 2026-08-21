@@ -45,7 +45,7 @@ def compute_confidence_interval(
         Tuple[np.ndarray, np.ndarray, np.ndarray]: Mean, lower bound, upper bound.
     """
     mean = np.mean(data, axis=0)
-    if data.ndim == 1 or data.shape[0] <= 1:
+    if data.shape[0] <= 1:
         return mean, mean, mean
 
     n = data.shape[0]
