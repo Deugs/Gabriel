@@ -133,6 +133,35 @@ def test_latency_benchmark_short_run(tmp_path):
     assert (Path(fig_dir) / "latency_benchmark.pdf").exists()
 
 
+def test_latency_benchmark_uses_scalability_sweep_n_ue_pairing(tmp_path, monkeypatch):
+    """At an R that evaluation/scalability.py's own sweep table covers, the
+    latency benchmark must use that same n_ue -- not max(2, n_rrh) -- so
+    results at a given R are comparable to the scalability sweep at that R
+    (same state/action dimensionality)."""
+    import evaluation.latency_benchmark as latency_benchmark_module
+
+    seen_n_ue = {}
+    real_cran_env = latency_benchmark_module.CRANEnv
+
+    def spy_cran_env(cfg):
+        seen_n_ue[cfg["network"]["n_rrh"]] = cfg["network"]["n_ue"]
+        return real_cran_env(cfg)
+
+    monkeypatch.setattr(latency_benchmark_module, "CRANEnv", spy_cran_env)
+
+    latency_benchmark_module.run_latency_benchmark(
+        config_path="config/small_network.yaml",
+        methods=["branching_mp_dqn"],
+        n_rrh_values=[12],
+        n_repeats=1,
+        save_dir=str(tmp_path / "figures"),
+    )
+
+    # evaluation/scalability.py's own table pairs R=12 with U=10, not
+    # max(2, 12) = 12.
+    assert seen_n_ue[12] == 10
+
+
 def test_demand_response_short_run(tmp_path):
     fig_dir = str(tmp_path / "figures")
 

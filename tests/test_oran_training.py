@@ -119,6 +119,52 @@ def test_run_oran_baseline_benchmarks_short_run(make_config_path, tmp_path):
     assert (Path(save_dir) / "oran_benchmark_ddpg" / "summary.json").exists()
 
 
+def test_run_oran_baseline_benchmarks_trains_with_exploration_enabled(
+    make_config_path, tmp_path, monkeypatch
+):
+    """Guards against training rollout calling select_action(evaluate=True)
+    for baselines, which would silently disable exploration for the entire
+    training run."""
+    import oran_agents.dqn_agent as dqn_module
+
+    seen_evaluate_flags = []
+    original_select_action = dqn_module.ORANDQNAgent.select_action
+
+    def spy_select_action(self, obs, evaluate=False):
+        seen_evaluate_flags.append(evaluate)
+        return original_select_action(self, obs, evaluate=evaluate)
+
+    monkeypatch.setattr(dqn_module.ORANDQNAgent, "select_action", spy_select_action)
+
+    config_path = make_config_path()
+    run_oran_baseline_benchmarks(
+        config_path=config_path,
+        seeds=[42],
+        episodes=2,
+        algorithms=["dqn"],
+        save_dir=str(tmp_path / "results"),
+    )
+
+    assert False in seen_evaluate_flags
+    assert True in seen_evaluate_flags
+
+
+def test_run_oran_baseline_benchmarks_reports_held_out_eval_separately(
+    make_config_path, tmp_path
+):
+    config_path = make_config_path()
+    res = run_oran_baseline_benchmarks(
+        config_path=config_path,
+        seeds=[42],
+        episodes=2,
+        algorithms=["dqn"],
+        save_dir=str(tmp_path / "results"),
+    )
+    seed_summary = res["dqn"][0]
+    assert "mean_reward" in seed_summary
+    assert "train_mean_reward" in seed_summary
+
+
 def test_run_oran_baseline_benchmarks_skips_mpdqn_above_tractability_cap(
     make_config_path, tmp_path
 ):

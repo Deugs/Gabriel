@@ -47,3 +47,18 @@ def test_ddqn_socp_baseline(default_config):
     assert action["rrh_on"].shape == (env.n_rrh,)
     assert action["power"].shape == (env.n_rrh,)
     assert np.all(action["power"] >= 0.0)
+
+
+def test_ddqn_socp_defaults_to_nominal_csi_matching_convex_baseline(default_config):
+    """The main benchmark's "identical simulation conditions" framing
+    (Concept Note v4.0 Section 12.2) requires nominal (perfect) CSI by
+    default, matching sibling ConvexPowerBaseline's csi_uncertainty=0.0
+    default -- not a baked-in robust-SOCP assumption no other baseline
+    shares."""
+    model = DDQNSOCPBaseline(
+        state_dim=10,
+        n_rrh=5,
+        n_ue=2,
+        p_max_w=1.0,
+    )
+    assert model.convex_solver.csi_uncertainty == 0.0

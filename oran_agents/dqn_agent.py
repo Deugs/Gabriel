@@ -126,17 +126,24 @@ class ORANDQNAgent:
         self.n_ru = n_ru
         self.n_splits = n_splits
         self.p_max_w = p_max_w
-        self.device = torch.device(
-            device
-            if device is not None
-            else ("cuda" if torch.cuda.is_available() else "cpu")
-        )
 
         cfg = config if config is not None else {}
         algo_cfg = cfg.get("algorithm", {}) if isinstance(cfg, dict) else {}
+        hardware_cfg = cfg.get("hardware", {}) if isinstance(cfg, dict) else {}
 
         def get_val(key: str, default: Any) -> Any:
             return algo_cfg.get(key, default) if isinstance(algo_cfg, dict) else default
+
+        # `hardware.device` (config/oran_default.yaml) only supplies a
+        # default -- an explicit `device=` argument from the caller always
+        # wins (mirrors agents/branching_mp_dqn.py's convention).
+        if device is None:
+            device = str(
+                hardware_cfg.get("device", "cpu")
+                if isinstance(hardware_cfg, dict)
+                else "cpu"
+            )
+        self.device = torch.device(device if torch.cuda.is_available() else "cpu")
 
         self.gamma = float(get_val("gamma", 0.99))
         self.tau = float(get_val("tau", 0.005))

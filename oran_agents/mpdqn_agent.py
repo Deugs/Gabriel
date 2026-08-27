@@ -131,38 +131,53 @@ class ORANMPDQNAgent:
         config: Optional[Union[dict, Any]] = None,
         device: Optional[str] = None,
     ):
-        if n_ru > MAX_N_RU_FOR_FLAT_JOINT_ORAN_ACTION:
+        cfg = config if config is not None else {}
+        algo_cfg = cfg.get("algorithm", {}) if isinstance(cfg, dict) else {}
+        hardware_cfg = cfg.get("hardware", {}) if isinstance(cfg, dict) else {}
+
+        def get_val(key: str, default: Any) -> Any:
+            return algo_cfg.get(key, default) if isinstance(algo_cfg, dict) else default
+
+        max_n_ru = int(
+            get_val(
+                "max_n_ru_for_flat_joint_action", MAX_N_RU_FOR_FLAT_JOINT_ORAN_ACTION
+            )
+        )
+        if n_ru > max_n_ru:
             raise ValueError(
-                f"n_ru={n_ru} exceeds MAX_N_RU_FOR_FLAT_JOINT_ORAN_ACTION="
-                f"{MAX_N_RU_FOR_FLAT_JOINT_ORAN_ACTION}; the flat joint action "
-                f"space (2^n_ru * n_splits^n_ru) is intractable beyond this."
+                f"n_ru={n_ru} exceeds algorithm.max_n_ru_for_flat_joint_action="
+                f"{max_n_ru} (MAX_N_RU_FOR_FLAT_JOINT_ORAN_ACTION default); the "
+                f"flat joint action space (2^n_ru * n_splits^n_ru) is "
+                f"intractable beyond this."
             )
 
         self.state_dim = state_dim
         self.n_ru = n_ru
         self.n_splits = n_splits
         self.p_max_w = p_max_w
-        self.device = torch.device(
-            device
-            if device is not None
-            else ("cuda" if torch.cuda.is_available() else "cpu")
-        )
+
+        # `hardware.device` (config/oran_default.yaml) only supplies a
+        # default -- an explicit `device=` argument from the caller always
+        # wins (mirrors agents/branching_mp_dqn.py's convention).
+        if device is None:
+            device = str(
+                hardware_cfg.get("device", "cpu")
+                if isinstance(hardware_cfg, dict)
+                else "cpu"
+            )
+        self.device = torch.device(device if torch.cuda.is_available() else "cpu")
 
         self.n_ru_combos = 2**n_ru
         self.n_split_combos = n_splits**n_ru
         self.n_joint_actions = self.n_ru_combos * self.n_split_combos
-
-        cfg = config if config is not None else {}
-        algo_cfg = cfg.get("algorithm", {}) if isinstance(cfg, dict) else {}
-
-        def get_val(key: str, default: Any) -> Any:
-            return algo_cfg.get(key, default) if isinstance(algo_cfg, dict) else default
 
         self.gamma = float(get_val("gamma", 0.99))
         self.tau = float(get_val("tau", 0.005))
         self.epsilon = float(get_val("epsilon_start", 1.0))
         self.epsilon_end = float(get_val("epsilon_end", 0.01))
         self.epsilon_decay = float(get_val("epsilon_decay", 0.995))
+        self.continuous_noise_std = float(get_val("continuous_noise_std", 0.1))
+        self.continuous_noise_std_end = float(get_val("continuous_noise_std_end", 0.01))
         self.gradient_clip_norm = float(get_val("gradient_clip_norm", 1.0))
         lr = float(get_val("lr_discrete", 1.0e-4))
         lr_actor = float(get_val("lr_actor", 3.0e-4))
@@ -249,7 +264,7 @@ class ORANMPDQNAgent:
             feat = self.encoder(state_t)
             power_ratio, prb_share = self.param_net(feat)
             if not evaluate:
-                noise = torch.randn_like(power_ratio) * 0.1
+                noise = torch.randn_like(power_ratio) * self.continuous_noise_std
                 power_ratio = torch.clamp(power_ratio + noise, 0.0, 1.0)
             cont_params = torch.stack([power_ratio, prb_share], dim=-1)
 
@@ -337,3 +352,7 @@ class ORANMPDQNAgent:
 
     def decay_exploration(self):
         self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
+        self.continuous_noise_std = max(
+            self.continuous_noise_std_end,
+            self.continuous_noise_std * self.epsilon_decay,
+        )

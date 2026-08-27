@@ -1,7 +1,13 @@
 """Normalized Minimum Bin Slot (NMBS) Bin-Packing Baseline for C-RAN Simulation.
 
-Implements Al-Zubaedi (2019) NMBS bin-packing heuristic that packs user traffic demands
-into minimum number of RRHs/BBUs using First-Fit Decreasing (FFD).
+A thesis-invented per-slot First-Fit Decreasing (FFD) bin-packing heuristic,
+named after Al-Zubaedi (2019)'s NMBS metaheuristic but NOT a reproduction of
+it: Al-Zubaedi's actual NMBS operates at the deployment/planning timescale
+(BBU-pool placement and RRH-to-BBU clustering), not the slot-by-slot
+energy-efficiency resource-allocation problem this baseline addresses
+(Concept Note v4.0 Section 4's literature table). This baseline instead packs
+each slot's user traffic demands into the minimum number of RRHs/BBUs using
+FFD, applying the "minimum bin" framing to this thesis's own timescale.
 """
 
 from typing import Dict
@@ -9,7 +15,8 @@ import numpy as np
 
 
 class NMBSBinPackingBaseline:
-    """NMBS Bin-Packing Baseline (Al-Zubaedi 2019).
+    """Per-slot NMBS-style FFD Bin-Packing Baseline (named after, not a
+    reproduction of, Al-Zubaedi 2019 -- see module docstring).
 
     Attributes:
         n_rrh (int): Number of Remote Radio Heads.

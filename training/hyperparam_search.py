@@ -13,6 +13,11 @@ from training.train_hybrid import train_hybrid_agent
 PROXY_SWEEP_SCALE_UP = 10.0**0.5
 PROXY_SWEEP_SCALE_DOWN = 10.0**-0.5
 
+# The default is judged "visibly unstable relative to the swept alternatives"
+# (Section 12.11, item 2) if its tail critic loss exceeds this multiple of
+# the worse of the two swept alternatives' tail critic loss.
+PROXY_SWEEP_DIVERGENCE_FACTOR = 3.0
+
 
 class HyperparameterSearch:
     """Grid/Random hyperparameter search runner for the Branching MP-DQN + TD3 agent."""
@@ -220,19 +225,52 @@ def run_proxy_sensitivity_sweep(
         ("lr_pair", ["lr_pair_down", "lr_pair_default", "lr_pair_up"]),
         ("tau", ["tau_down", "tau_default", "tau_up"]),
     ]:
-        default_result = results[keys[1]]
-        default_unstable = default_result["crashed"] or not np.isfinite(
-            default_result["mean_final_eval_reward"]
+        down_result, default_result, up_result = (results[k] for k in keys)
+        default_crashed_or_nonfinite = (
+            default_result["crashed"]
+            or not np.isfinite(default_result["mean_final_eval_reward"])
+            or not np.isfinite(default_result["mean_tail_critic_loss"])
         )
+
+        # Compare the default's tail critic loss against whichever swept
+        # alternative is itself stable -- this is the actual "relative to
+        # the swept alternatives" comparison Section 12.11 item 2 calls for.
+        alt_tail_losses = [
+            r["mean_tail_critic_loss"]
+            for r in (down_result, up_result)
+            if not r["crashed"] and np.isfinite(r["mean_tail_critic_loss"])
+        ]
+        default_diverges_vs_alternatives = (
+            not default_crashed_or_nonfinite
+            and bool(alt_tail_losses)
+            and default_result["mean_tail_critic_loss"]
+            > PROXY_SWEEP_DIVERGENCE_FACTOR * max(alt_tail_losses)
+        )
+        default_unstable = (
+            default_crashed_or_nonfinite or default_diverges_vs_alternatives
+        )
+
+        if default_crashed_or_nonfinite:
+            reason = (
+                "default operating point crashed or produced a non-finite reward/critic "
+                "loss; recommend using the more stable swept alternative instead"
+            )
+        elif default_diverges_vs_alternatives:
+            reason = (
+                f"default operating point's tail critic loss is more than "
+                f"{PROXY_SWEEP_DIVERGENCE_FACTOR:.0f}x the swept alternatives' tail "
+                f"critic loss, i.e. visibly unstable relative to them; recommend "
+                f"using the more stable swept alternative instead"
+            )
+        else:
+            reason = (
+                "default operating point not visibly unstable relative to the "
+                "swept alternatives; kept per Concept Note v4.0 Section 12.11 item 2"
+            )
+
         decisions[dim] = {
             "default_kept": not default_unstable,
-            "reason": (
-                "default operating point crashed or produced a non-finite reward; "
-                "recommend using the more stable swept alternative instead"
-                if default_unstable
-                else "default operating point not visibly unstable relative to the "
-                "swept alternatives; kept per Concept Note v4.0 Section 12.11 item 2"
-            ),
+            "reason": reason,
         }
         print(
             f"Decision [{dim}]: default_kept={decisions[dim]['default_kept']} — "
