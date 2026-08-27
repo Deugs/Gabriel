@@ -237,11 +237,6 @@ class BMPPDQNAgent:
         self.n_ru = n_ru
         self.n_splits = n_splits
         self.p_max_w = p_max_w
-        self.device = torch.device(
-            device
-            if device is not None
-            else ("cuda" if torch.cuda.is_available() else "cpu")
-        )
 
         # config is the raw dict from yaml.safe_load() (this package never
         # wraps it in an attribute-accessor helper, unlike oran_env.ORANEnv
@@ -249,9 +244,21 @@ class BMPPDQNAgent:
         # own dict.get()-based convention).
         cfg = config if config is not None else {}
         algo_cfg = cfg.get("algorithm", {}) if isinstance(cfg, dict) else {}
+        hardware_cfg = cfg.get("hardware", {}) if isinstance(cfg, dict) else {}
 
         def get_val(key: str, default: Any) -> Any:
             return algo_cfg.get(key, default) if isinstance(algo_cfg, dict) else default
+
+        # `hardware.device` (config/oran_default.yaml) only supplies a
+        # default -- an explicit `device=` argument from the caller always
+        # wins (mirrors agents/branching_mp_dqn.py's convention).
+        if device is None:
+            device = str(
+                hardware_cfg.get("device", "cpu")
+                if isinstance(hardware_cfg, dict)
+                else "cpu"
+            )
+        self.device = torch.device(device if torch.cuda.is_available() else "cpu")
 
         hidden_dims = get_val("hidden_dims", [128, 64])
         activation = get_val("activation", "relu")
@@ -262,6 +269,8 @@ class BMPPDQNAgent:
         self.epsilon = float(get_val("epsilon_start", 1.0))
         self.epsilon_end = float(get_val("epsilon_end", 0.01))
         self.epsilon_decay = float(get_val("epsilon_decay", 0.995))
+        self.continuous_noise_std = float(get_val("continuous_noise_std", 0.1))
+        self.continuous_noise_std_end = float(get_val("continuous_noise_std_end", 0.01))
         self.batch_size_default = int(get_val("batch_size", 128))
         self.min_buffer_size = int(get_val("min_buffer_size", 2000))
         self.gradient_clip_norm = float(get_val("gradient_clip_norm", 1.0))
@@ -346,7 +355,7 @@ class BMPPDQNAgent:
             power_ratio, prb_share = self.param_net(lower_feat)
 
             if not evaluate:
-                p_noise = torch.randn_like(power_ratio) * 0.1
+                p_noise = torch.randn_like(power_ratio) * self.continuous_noise_std
                 power_ratio = torch.clamp(power_ratio + p_noise, 0.0, 1.0)
 
             self.last_action_was_decision = self._steps_since_decision == 0
@@ -408,8 +417,18 @@ class BMPPDQNAgent:
         else:
             self._pending_upper_reward_sum += reward
 
+        # Flush the pending upper-level transition either when its full
+        # window has elapsed, OR when the episode ends mid-window (e.g.
+        # max_steps_per_episode isn't an exact multiple of
+        # upper_level_period_steps) -- otherwise the partial window's
+        # accumulated reward would be silently discarded by the next
+        # episode's reset_decision_cadence() call, with no error or signal
+        # that data was lost.
         window_complete = self._steps_since_decision == 0
-        if window_complete and self._pending_upper_state is not None:
+        episode_ended_mid_window = done and not window_complete
+        if (
+            window_complete or episode_ended_mid_window
+        ) and self._pending_upper_state is not None:
             self.upper_memory.push(
                 self._pending_upper_state,
                 self._pending_ru_on,
@@ -553,11 +572,19 @@ class BMPPDQNAgent:
 
     def decay_exploration(self):
         self.epsilon = max(self.epsilon_end, self.epsilon * self.epsilon_decay)
+        self.continuous_noise_std = max(
+            self.continuous_noise_std_end,
+            self.continuous_noise_std * self.epsilon_decay,
+        )
 
     def reset_decision_cadence(self):
         """Force the next select_action() call to make a fresh discrete
         decision. Call this at the start of each evaluation episode so
         eval runs don't inherit leftover cadence state from wherever
-        training happened to leave it."""
+        training happened to leave it. Any pending partial upper-level
+        window from the previous episode has already been flushed by
+        remember()'s end-of-episode handling, so clearing
+        `_pending_upper_state` here is just cadence bookkeeping, not a
+        data-loss risk."""
         self._steps_since_decision = 0
         self._pending_upper_state = None

@@ -228,6 +228,58 @@ def test_run_baseline_benchmarks_short_run(config_path, tmp_path):
     assert (Path(save_dir) / "benchmark_greedy" / "summary.json").exists()
 
 
+def test_run_baseline_benchmarks_trains_drl_agents_with_exploration_enabled(
+    config_path, tmp_path, monkeypatch
+):
+    """Guards against training rollout calling select_action(evaluate=True)
+    for DRL-trained baselines, which would silently disable epsilon-greedy
+    exploration for the entire training run (every DRL baseline would then
+    only ever exploit its randomly-initialized network's greedy output)."""
+    import agents.ddqn_agent as ddqn_module
+
+    seen_evaluate_flags = []
+    original_select_action = ddqn_module.DDQNAgent.select_action
+
+    def spy_select_action(self, obs, evaluate=False):
+        seen_evaluate_flags.append(evaluate)
+        return original_select_action(self, obs, evaluate=evaluate)
+
+    monkeypatch.setattr(ddqn_module.DDQNAgent, "select_action", spy_select_action)
+
+    run_baseline_benchmarks(
+        config_path=config_path,
+        seeds=[42],
+        episodes=2,
+        algorithms=["ddqn"],
+        save_dir=str(tmp_path / "results"),
+    )
+
+    # The training rollout must call select_action with evaluate=False at
+    # least once (the held-out eval phase afterward legitimately uses
+    # evaluate=True, so both values are expected to appear overall).
+    assert False in seen_evaluate_flags
+    assert True in seen_evaluate_flags
+
+
+def test_run_baseline_benchmarks_reports_held_out_eval_separately_from_training(
+    config_path, tmp_path
+):
+    """mean_reward (the metric compared against the proposed method's
+    final_eval_reward in evaluation/convergence.py) must come from a
+    held-out deterministic evaluation phase, not the training-time
+    running average -- these are now tracked as separate keys."""
+    res = run_baseline_benchmarks(
+        config_path=config_path,
+        seeds=[42],
+        episodes=2,
+        algorithms=["ddqn"],
+        save_dir=str(tmp_path / "results"),
+    )
+    seed_summary = res["ddqn"][0]
+    assert "mean_reward" in seed_summary
+    assert "train_mean_reward" in seed_summary
+
+
 def test_run_baseline_benchmarks_default_seeds_match_n_random_seeds(
     config_path, tmp_path
 ):
@@ -297,3 +349,39 @@ def test_proxy_sensitivity_sweep_short_run(config_path, tmp_path):
         assert "default_kept" in decision and "reason" in decision
 
     assert (Path(save_dir) / "proxy_sweep_summary.json").exists()
+
+
+def test_proxy_sensitivity_sweep_decision_compares_default_against_alternatives(
+    config_path, tmp_path, monkeypatch
+):
+    """The default_kept decision must genuinely compare the default variant's
+    tail critic loss against the swept up/down alternatives' -- not merely
+    check whether the default itself crashed (the bug this test guards
+    against: a default that trains "successfully" but with a visibly
+    diverging critic loss relative to both alternatives must NOT be reported
+    as kept)."""
+    import training.hyperparam_search as hyperparam_search_module
+
+    def fake_train_hybrid_agent(config_path, seed, episodes, eval_freq, save_dir):
+        variant_name = Path(config_path).stem.replace("temp_", "")
+        # lr_pair_default's critic loss visibly diverges relative to both
+        # swept lr_pair alternatives; every tau variant stays stable.
+        tail_loss = 100.0 if variant_name == "lr_pair_default" else 1.0
+        return {
+            "final_eval_reward": 10.0,
+            "history": {"critic_losses": [tail_loss] * 10},
+        }
+
+    monkeypatch.setattr(
+        hyperparam_search_module, "train_hybrid_agent", fake_train_hybrid_agent
+    )
+
+    summary = hyperparam_search_module.run_proxy_sensitivity_sweep(
+        base_config_path=config_path,
+        episodes=2,
+        seeds=[42],
+        save_dir=str(tmp_path / "proxy_sweep_decision"),
+    )
+
+    assert summary["decisions"]["lr_pair"]["default_kept"] is False
+    assert summary["decisions"]["tau"]["default_kept"] is True

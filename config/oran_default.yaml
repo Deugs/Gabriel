@@ -86,6 +86,7 @@ algorithm:
 
   lr_discrete: 1.0e-4
   lr_actor: 3.0e-4
+  lr_critic: 3.0e-4        # Used by the DDPG baseline (oran_agents/ddpg_agent.py)
 
   # Smaller than the C-RAN track's [256, 128] -- matches this track's
   # smaller single-gNB scope (Concept Note Section 5.1)

@@ -28,6 +28,58 @@ def set_seed(seed: int):
     np.random.seed(seed)
 
 
+def _evaluate_baseline(
+    env: CRANEnv,
+    algo: str,
+    model: Any,
+    drl_trained_algorithms: set,
+    eval_episodes: int = 5,
+) -> Dict[str, float]:
+    """Deterministic held-out evaluation, mirroring training/train_hybrid.py's
+    evaluate_agent(): dedicated eval seeds, no training/no memory writes.
+
+    Comparing a baseline's training-time running-average reward against the
+    proposed method's held-out final_eval_reward (as this module previously
+    did) is not a fair comparison -- this gives every baseline the same
+    held-out-eval treatment the proposed method already gets."""
+    eval_rewards, eval_powers, eval_qos, eval_active, eval_switch = [], [], [], [], []
+
+    for ep in range(eval_episodes):
+        obs, _ = env.reset(seed=1000 + ep)
+        total_reward = 0.0
+        powers, qos_flags, actives, switches = [], [], [], []
+
+        done = False
+        while not done:
+            if algo in drl_trained_algorithms:
+                action = model.select_action(obs, evaluate=True)
+            else:
+                action = model.select_action(obs)
+            obs, reward, terminated, truncated, info = env.step(action)
+
+            total_reward += reward
+            powers.append(info.get("total_power_w", 0.0))
+            qos_flags.append(1.0 if info.get("qos_violations_count", 0) == 0 else 0.0)
+            actives.append(info.get("active_rrhs", 0))
+            switches.append(info.get("switching_events", 0))
+            done = terminated or truncated
+
+        eval_rewards.append(float(total_reward))
+        eval_powers.append(float(np.mean(powers)))
+        eval_qos.append(float(np.mean(qos_flags)))
+        eval_active.append(float(np.mean(actives)))
+        eval_switch.append(float(np.mean(switches)))
+
+    return {
+        "mean_reward": float(np.mean(eval_rewards)),
+        "std_reward": float(np.std(eval_rewards)),
+        "mean_power_w": float(np.mean(eval_powers)),
+        "qos_satisfaction_rate": float(np.mean(eval_qos)),
+        "mean_active_rrhs": float(np.mean(eval_active)),
+        "mean_switching_events": float(np.mean(eval_switch)),
+    }
+
+
 def run_baseline_benchmarks(
     config_path: str = "config/default.yaml",
     seeds: Optional[List[int]] = None,
@@ -38,6 +90,8 @@ def run_baseline_benchmarks(
     """Run baseline benchmark algorithms over specified random seeds."""
     with open(config_path, "r") as f:
         cfg = yaml.safe_load(f)
+
+    n_eval_episodes = int(cfg.get("evaluation", {}).get("n_eval_episodes", 5))
 
     if seeds is None:
         seeds = [42, 123, 456, 789, 1011, 1337, 2024, 2718, 3141, 4242]
@@ -180,7 +234,13 @@ def run_baseline_benchmarks(
                 done = False
                 while not done:
                     if algo in drl_trained_algorithms:
-                        action = model.select_action(obs, evaluate=True)
+                        # evaluate=False: exploration (epsilon-greedy /
+                        # continuous noise) must stay on during training
+                        # rollout -- evaluate=True here previously trained
+                        # every DRL baseline with exploration permanently
+                        # disabled, so each agent only ever exploited
+                        # whatever its randomly-initialized network produced.
+                        action = model.select_action(obs, evaluate=False)
                     else:
                         action = model.select_action(obs)
 
@@ -244,15 +304,29 @@ def run_baseline_benchmarks(
                 ep_active_rrhs.append(float(np.mean(actives)))
                 ep_switching_events.append(float(np.mean(switches)))
 
+            # Held-out deterministic evaluation, same treatment
+            # training/train_hybrid.py already gives the proposed method —
+            # the training-time ep_rewards/etc. above are not a fair
+            # like-for-like comparison against final_eval_reward (dragged
+            # down by early exploration, not the converged policy).
+            eval_metrics = _evaluate_baseline(
+                env, algo, model, drl_trained_algorithms, eval_episodes=n_eval_episodes
+            )
+
             seed_summary: Dict[str, Any] = {
                 "algorithm": algo,
                 "seed": seed,
-                "mean_reward": float(np.mean(ep_rewards)),
-                "std_reward": float(np.std(ep_rewards)),
-                "mean_power_w": float(np.mean(ep_powers)),
-                "qos_satisfaction_rate": float(np.mean(ep_qos_rates)),
-                "mean_active_rrhs": float(np.mean(ep_active_rrhs)),
-                "mean_switching_events": float(np.mean(ep_switching_events)),
+                "mean_reward": eval_metrics["mean_reward"],
+                "std_reward": eval_metrics["std_reward"],
+                "mean_power_w": eval_metrics["mean_power_w"],
+                "qos_satisfaction_rate": eval_metrics["qos_satisfaction_rate"],
+                "mean_active_rrhs": eval_metrics["mean_active_rrhs"],
+                "mean_switching_events": eval_metrics["mean_switching_events"],
+                "train_mean_reward": float(np.mean(ep_rewards)),
+                "train_mean_power_w": float(np.mean(ep_powers)),
+                "train_qos_satisfaction_rate": float(np.mean(ep_qos_rates)),
+                "train_mean_active_rrhs": float(np.mean(ep_active_rrhs)),
+                "train_mean_switching_events": float(np.mean(ep_switching_events)),
             }
             algo_results.append(seed_summary)
 

@@ -73,6 +73,18 @@ def test_nmbs_binpack_baseline(default_config):
     assert not np.isnan(reward)
 
 
+def test_nmbs_binpack_docstring_does_not_overclaim_reproduction():
+    """Guards against re-introducing the mischaracterization that this
+    per-slot FFD heuristic is a reproduction of Al-Zubaedi (2019)'s actual
+    NMBS algorithm, which Concept Note v4.0's own literature table (Section 4)
+    describes as a deployment/planning-timescale metaheuristic, not a
+    slot-by-slot resource-allocation heuristic."""
+    import baselines.nmbs_binpack as nmbs_binpack_module
+
+    docstring = nmbs_binpack_module.__doc__ or ""
+    assert "NOT a reproduction" in docstring
+
+
 def test_convex_power_baseline(default_config):
     env = CRANEnv(default_config)
     obs, _ = env.reset(seed=42)

@@ -22,7 +22,7 @@ class DDQNSOCPBaseline:
         n_ue: int,
         p_max_w: float = 1.0,
         config: Optional[Union[dict, Any]] = None,
-        csi_uncertainty: float = 0.05,
+        csi_uncertainty: float = 0.0,
         noise_power_w: float = 6.309573e-14,  # -102 dBm, Iqbal et al. (2021) Table 2
     ):
         self.n_rrh = n_rrh
@@ -45,10 +45,15 @@ class DDQNSOCPBaseline:
 
         # csi_uncertainty > 0 makes Stage 2 solve a genuine second-order cone
         # program (robust worst-case SINR constraint) rather than a plain
-        # LP — see ConvexPowerBaseline.solve_power_allocation(). This is what
-        # distinguishes this baseline (labeled "SOCP") from the plain
-        # ConvexPowerBaseline used standalone as the "Convex" baseline, which
-        # stays LP-based (nominal channel, csi_uncertainty=0.0 default).
+        # LP — see ConvexPowerBaseline.solve_power_allocation(). Defaulting
+        # to 0.0 (nominal channel, LP-based) matches ConvexPowerBaseline's
+        # own default and the main benchmark's "identical simulation
+        # conditions" framing (Concept Note v4.0 Section 12.2); the CSI
+        # perturbation actually used by the CSI-robustness protocol
+        # (Section 12.5, evaluation/csi_robustness.py) is applied externally
+        # to a frozen trained policy's observed channel, and is orthogonal
+        # to this constructor argument. A caller may still pass
+        # csi_uncertainty > 0 explicitly to exercise the robust-SOCP path.
         self.convex_solver = ConvexPowerBaseline(
             n_rrh=n_rrh,
             n_ue=n_ue,

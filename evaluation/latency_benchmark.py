@@ -28,11 +28,18 @@ from evaluation.plot_utils import plot_degradation_curve
 
 SCALABILITY_SWEEP_N_RRH = (5, 12, 20, 35, 50)
 
+# Same R->U pairing as evaluation/scalability.py's `scales` table, so latency
+# results at a given R are measured under the identical n_ue that method's
+# scalability-sweep result at that R used (comparable state/action dims).
+_SCALABILITY_SWEEP_N_UE_BY_N_RRH = {5: 2, 12: 10, 20: 20, 35: 25, 50: 30}
+
 _AGENT_FACTORIES = {
     "branching_mp_dqn": lambda env, cfg: BranchingMPDQN(
         state_dim=env.state_dim, n_rrh=env.n_rrh, p_max_w=env.p_max_w, config=cfg
     ),
-    "ddqn": lambda env, cfg: DDQNAgent(state_dim=env.state_dim, n_rrh=env.n_rrh, p_max_w=env.p_max_w),
+    "ddqn": lambda env, cfg: DDQNAgent(
+        state_dim=env.state_dim, n_rrh=env.n_rrh, p_max_w=env.p_max_w
+    ),
     "pdqn": lambda env, cfg: PDQNAgent(
         state_dim=env.state_dim, n_rrh=env.n_rrh, p_max_w=env.p_max_w, config=cfg
     ),
@@ -77,8 +84,11 @@ def run_latency_benchmark(
         cfg = dict(base_cfg)
         cfg["network"] = dict(base_cfg.get("network", {}))
         cfg["network"]["n_rrh"] = n_rrh
-        # Keep n_ue proportionate so the state dimension scales realistically.
-        cfg["network"]["n_ue"] = max(2, n_rrh)
+        # Same n_ue as evaluation/scalability.py's sweep at this R, falling
+        # back to max(2, n_rrh) only for an R outside that table's five sizes.
+        cfg["network"]["n_ue"] = _SCALABILITY_SWEEP_N_UE_BY_N_RRH.get(
+            n_rrh, max(2, n_rrh)
+        )
 
         env = CRANEnv(cfg)
         obs, _ = env.reset(seed=42)
@@ -95,9 +105,7 @@ def run_latency_benchmark(
             results[method][n_rrh] = latency_ms
             print(f"  R={n_rrh:3d} | {method:16s} | {latency_ms:8.3f} ms/decision")
 
-    curve = {
-        m: {r: v for r, v in results[m].items() if v is not None} for m in methods
-    }
+    curve = {m: {r: v for r, v in results[m].items() if v is not None} for m in methods}
     save_path = Path(save_dir)
     plot_degradation_curve(
         curve,

@@ -8,6 +8,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import torch
 import yaml  # type: ignore[import-untyped]
 
 from oran_agents import (
@@ -57,6 +58,76 @@ def test_select_action_returns_expected_keys_and_shapes(default_config):
     assert np.all(eval_action["power"] >= 0.0)
 
 
+def test_hardware_device_config_key_is_read_by_all_four_agents(
+    default_config, monkeypatch
+):
+    """`hardware.device` (config/oran_default.yaml) must actually supply the
+    default device -- previously it was parsed nowhere, so every O-RAN agent
+    silently ignored it regardless of the YAML. Force torch.cuda.is_available()
+    to True so the final availability gate doesn't mask the config value with
+    a forced cpu fallback, then confirm an explicit hardware.device: "cpu"
+    override in config is genuinely honored (would be "cuda" if the config
+    value were still being ignored)."""
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+
+    cfg = dict(default_config)
+    cfg["hardware"] = {"device": "cpu"}
+    env = ORANEnv(cfg)
+
+    agents = [
+        BMPPDQNAgent(
+            state_dim=env.state_dim,
+            n_ru=env.n_ru,
+            n_splits=env.n_splits,
+            p_max_w=env.p_max_w,
+            config=cfg,
+        ),
+        ORANDQNAgent(
+            state_dim=env.state_dim,
+            n_ru=env.n_ru,
+            n_splits=env.n_splits,
+            p_max_w=env.p_max_w,
+            config=cfg,
+        ),
+        ORANDDPGAgent(
+            state_dim=env.state_dim,
+            n_ru=env.n_ru,
+            n_splits=env.n_splits,
+            p_max_w=env.p_max_w,
+            config=cfg,
+        ),
+        ORANMPDQNAgent(
+            state_dim=env.state_dim,
+            n_ru=env.n_ru,
+            n_splits=env.n_splits,
+            p_max_w=env.p_max_w,
+            config=cfg,
+        ),
+    ]
+    for agent in agents:
+        assert agent.device == torch.device("cpu")
+
+
+def test_ddpg_lr_critic_config_key_resolves_from_oran_default_yaml(default_config):
+    """config/oran_default.yaml previously had no algorithm.lr_critic key, so
+    ORANDDPGAgent's own read of it always silently fell back to its Python
+    default regardless of the YAML. A custom override must now actually
+    reach the critic optimizer."""
+    cfg = dict(default_config)
+    cfg["algorithm"] = dict(default_config["algorithm"])
+    cfg["algorithm"]["lr_critic"] = 1.0e-2
+
+    env = ORANEnv(cfg)
+    agent = ORANDDPGAgent(
+        state_dim=env.state_dim,
+        n_ru=env.n_ru,
+        n_splits=env.n_splits,
+        p_max_w=env.p_max_w,
+        config=cfg,
+    )
+    assert agent.critic_opt.param_groups[0]["lr"] == pytest.approx(1.0e-2)
+
+
 def test_discrete_decision_held_constant_across_upper_level_period(default_config):
     """The discrete (ru_on, split) choice must be replayed unchanged for
     `upper_level_period_steps` consecutive select_action() calls, while
@@ -89,6 +160,37 @@ def test_discrete_decision_held_constant_across_upper_level_period(default_confi
     # prove select_action() genuinely recomputes them each time rather than
     # also caching them.
     assert any(not np.array_equal(p, power_choices[0]) for p in power_choices[1:])
+
+
+def test_remember_flushes_pending_upper_transition_at_episode_end(default_config):
+    """Guards against silently losing the trailing partial upper-level
+    window when max_steps_per_episode isn't an exact multiple of
+    upper_level_period_steps -- the episode-end done=True step must flush
+    whatever's pending into upper_memory, not discard it."""
+    cfg = dict(default_config)
+    cfg["algorithm"] = dict(default_config["algorithm"])
+    cfg["algorithm"]["upper_level_period_steps"] = 3
+
+    env = ORANEnv(cfg)
+    obs, _ = env.reset(seed=42)
+    agent = _make_agent(env, cfg)
+
+    assert len(agent.upper_memory) == 0
+
+    # Step 1: fresh decision, starts a new pending window.
+    action = agent.select_action(obs, evaluate=True)
+    next_obs, reward, _, _, _ = env.step(action)
+    agent.remember(obs, action, reward, next_obs, done=False)
+    assert len(agent.upper_memory) == 0  # window not complete yet
+    obs = next_obs
+
+    # Step 2: episode ends here (done=True) before the 3-step window
+    # completes -- the pending transition must still be flushed.
+    action = agent.select_action(obs, evaluate=True)
+    next_obs, reward, _, _, _ = env.step(action)
+    agent.remember(obs, action, reward, next_obs, done=True)
+
+    assert len(agent.upper_memory) == 1
 
 
 def test_no_twin_critic_attribute(default_config):
@@ -329,6 +431,35 @@ def test_mpdqn_baseline_raises_above_tractability_cap():
             n_ru=MAX_N_RU_FOR_FLAT_JOINT_ORAN_ACTION + 1,
             n_splits=3,
         )
+
+
+def test_mpdqn_baseline_tractability_cap_reads_config_override():
+    """algorithm.max_n_ru_for_flat_joint_action must actually override the
+    module-level default, not be silently ignored (it previously was)."""
+    # A config cap lower than the module default must reject an n_ru the
+    # module default alone would have allowed.
+    with pytest.raises(ValueError, match="algorithm.max_n_ru_for_flat_joint_action"):
+        ORANMPDQNAgent(
+            state_dim=100,
+            n_ru=3,
+            n_splits=3,
+            config={"algorithm": {"max_n_ru_for_flat_joint_action": 2}},
+        )
+
+    # A config cap higher than the module default must permit an n_ru the
+    # module default alone would have rejected.
+    agent = ORANMPDQNAgent(
+        state_dim=100,
+        n_ru=MAX_N_RU_FOR_FLAT_JOINT_ORAN_ACTION + 1,
+        n_splits=2,
+        config={
+            "algorithm": {
+                "max_n_ru_for_flat_joint_action": MAX_N_RU_FOR_FLAT_JOINT_ORAN_ACTION
+                + 1
+            }
+        },
+    )
+    assert agent.n_ru == MAX_N_RU_FOR_FLAT_JOINT_ORAN_ACTION + 1
 
 
 def test_mpdqn_baseline_runs_and_updates(default_config):
