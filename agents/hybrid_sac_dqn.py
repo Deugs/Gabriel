@@ -405,15 +405,31 @@ class HybridSACDDQN:
         nn.utils.clip_grad_norm_(self.critic.parameters(), max_norm=1.0)
         self.critic_opt.step()
 
-        # --- 2. Discrete Actor Update (DDQN loss against Bellman target y) ---
+        # --- 2. Discrete Actor Update (DDQN loss, own per-branch target) ---
         q_disc_vals = self.discrete_actor(states)  # (batch, n_rrh, 2)
         disc_selected = q_disc_vals.gather(-1, disc_actions.unsqueeze(-1)).squeeze(
             -1
         )  # (batch, n_rrh)
 
-        # Target Q-value for discrete action evaluation (expanded across RRHs)
-        y_disc_target = y.expand(-1, self.n_rrh)
-        disc_loss = F.mse_loss(disc_selected, y_disc_target.detach())
+        # discrete_actor is its own per-RRH-branch Q-network (distinct from
+        # the joint SAC critic above), so it needs its own per-branch
+        # Double-DQN target -- broadcasting the joint critic's single scalar
+        # y to every branch would train all R branches toward one shared
+        # value, the same cross-branch-coupling bug already fixed in
+        # agents/branching_mp_dqn.py's and agents/ddqn_agent.py's critic
+        # updates. discrete_actor_target already exists (soft-updated below)
+        # for exactly this: online net already selected next_disc_actions
+        # (Double DQN selection, above); the target net evaluates them here.
+        with torch.no_grad():
+            next_q_disc_target = self.discrete_actor_target(next_states)
+            next_disc_eval = next_q_disc_target.gather(
+                -1, next_disc_actions.unsqueeze(-1)
+            ).squeeze(
+                -1
+            )  # (batch, n_rrh)
+            y_disc_target = rewards + self.gamma * (1.0 - dones) * next_disc_eval
+
+        disc_loss = F.mse_loss(disc_selected, y_disc_target)
 
         self.disc_opt.zero_grad()
         disc_loss.backward()

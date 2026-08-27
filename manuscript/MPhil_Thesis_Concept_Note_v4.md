@@ -371,9 +371,11 @@ Update phi via the multi-pass policy gradient:
 
 grad_phi J ~= (1/N) sum_i sum_r
 
-  grad_x Q_r^A(s_i,k_r,i,x)|x=x(s_i|phi)
+  grad_x Q_r^A(s_i,k_r,i*,x)|x=x(s_i|phi)
 
-  . grad_phi x_r(s_i|phi).
+  . grad_phi x_r(s_i|phi), where k_r,i* = argmax_k Q_r^A(s_i,k,x).
+
+**Correction:** an earlier draft of this formula (and the matching implementation) reused the plain `k_r,i` notation here, which elsewhere in this section denotes the replayed/stored discrete action from the transition -- and the implementation correspondingly averaged Q_r^A over *both* discrete actions {0,1} rather than gathering either action's value, diluting the gradient with the non-greedy action's Q-value at every branch. The policy gradient is standard P-DQN/MP-DQN practice (Xiong et al., 2018; Bester et al., 2019): push the continuous parameters toward maximizing Q at the *greedy* discrete action k_r,i* = argmax_k Q_r^A(s_i,k,x), not the replayed one -- matching `agents/pdqn_agent.py`'s existing implementation of the same P-DQN gradient. `agents/branching_mp_dqn.py`'s `update()` now gathers each branch's greedy action before averaging, matching the corrected formula above.
 
 Soft-update targets: theta' <- tau*theta +
 

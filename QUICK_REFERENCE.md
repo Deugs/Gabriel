@@ -47,6 +47,16 @@ cd thesis && pdflatex main.tex && bibtex main && pdflatex main.tex
 
 # Pre-submission check (planned — scripts/pre_submission.sh not yet implemented)
 bash scripts/pre_submission.sh
+
+# --- O-RAN / BMPP-DQN track (secondary, additive) ---
+# Test environment
+pytest tests/test_oran_env.py -v
+
+# Train proposed method
+python -c "from oran_training.train_bmpp_dqn import train_bmpp_dqn_agent; train_bmpp_dqn_agent(config_path='config/oran_default.yaml', seed=42)"
+
+# Run all baselines
+python -m oran_training.train_oran_baselines
 ```
 
 ## File Quick Access
@@ -63,6 +73,9 @@ bash scripts/pre_submission.sh
 | Plan schedule | `docs/workflow.md` |
 | Trace equations | `docs/equation_code_mapping.md` |
 | Configure experiment | `config/default.yaml` |
+| Build O-RAN env (secondary track) | `docs/skills/skill_oran_env.md` |
+| Build BMPP-DQN agent (secondary track) | `docs/skills/skill_oran_bmpp_dqn.md` |
+| O-RAN track overview | `docs/oran_thesis_guide.md` |
 
 ## Emergency Contacts
 

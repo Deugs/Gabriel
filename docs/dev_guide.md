@@ -292,3 +292,35 @@ Target metrics for final thesis. Per Concept Note v4.0 §5.2/G10, the headline c
 | Convergence episodes | <=3000 | Reward within 5% of final value |
 | Training time (Medium network) | <=48 hours | Single GPU (RTX 3090 or equivalent) |
 | Inference latency | <=10ms | Per-decision time on CPU |
+
+## O-RAN / BMPP-DQN Track (Secondary, Additive)
+
+A second, supervisor-approved research concept
+(`manuscript/ORAN_BMPP_DQN_Concept_Note_v1.md`) governs the actual MPhil
+thesis submission: an O-RAN energy-optimization study using a
+two-timescale "BMPP-DQN" agent against 3 baselines (DQN, DDPG, MP-DQN).
+This lives in `oran_env/`, `oran_agents/`, `oran_training/`,
+`oran_evaluation/`, `config/oran_default.yaml` — a fully separate,
+additive codebase with zero imports from the C-RAN track above (which
+continues under Concept Note v4.0 for publications).
+
+For the authoritative technical spec, read directly rather than
+duplicating it here (this guide's own established convention):
+- Environment design: `docs/skills/skill_oran_env.md`
+- BMPP-DQN agent design: `docs/skills/skill_oran_bmpp_dqn.md`
+- Full concept note: `manuscript/ORAN_BMPP_DQN_Concept_Note_v1.md`
+
+Quick commands:
+```bash
+# Test environment
+pytest tests/test_oran_env.py tests/test_oran_agents.py -v
+
+# Train proposed method (single seed)
+python -c "from oran_training.train_bmpp_dqn import train_bmpp_dqn_agent; train_bmpp_dqn_agent(config_path='config/oran_default.yaml', seed=42, save_dir='data/results_oran')"
+
+# Run all 3 baselines
+python -m oran_training.train_oran_baselines
+
+# Aggregate results (95% CIs, paired t-test, Cohen's d)
+python -m oran_evaluation.convergence
+```
