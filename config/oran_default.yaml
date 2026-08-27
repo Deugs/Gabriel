@@ -133,4 +133,6 @@ evaluation:
 # Hardware
 # ============================================================
 hardware:
-  device: "cuda"   # falls back to cpu automatically if no GPU is available
+  device: "cuda"   # cuda or cpu (falls back to cpu automatically if no GPU
+                    # is available; oran_agents/*.py read this as each
+                    # agent's device default)
