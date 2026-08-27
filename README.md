@@ -14,6 +14,7 @@
 | [docs/agents.md](docs/agents.md) | Agent role definitions | When delegating tasks |
 | [docs/hooks.md](docs/hooks.md) | Lifecycle automation hooks | When setting up CI/CD |
 | [docs/workflow.md](docs/workflow.md) | Development phases and milestones | When planning |
+| [docs/oran_thesis_guide.md](docs/oran_thesis_guide.md) | O-RAN/BMPP-DQN track guide (secondary, additive) | When working on the O-RAN track |
 
 ---
 
@@ -98,8 +99,29 @@ Gabriel/
 ├── config/                    # Experiment configurations
 ├── data/                       # Traffic traces, results
 ├── tests/                      # Unit tests
-└── thesis/                     # LaTeX source (future)
+├── thesis/                     # LaTeX source (future)
+├── oran_env/                   # O-RAN Gymnasium environment (secondary, additive track)
+├── oran_agents/                 # BMPP-DQN + DQN/DDPG/MP-DQN baselines (O-RAN track)
+├── oran_training/                # Training loops (O-RAN track)
+└── oran_evaluation/               # Analysis and plotting (O-RAN track)
 ```
+
+---
+
+## O-RAN / BMPP-DQN Track (Secondary, Additive)
+
+A second, supervisor-approved research concept
+(`manuscript/ORAN_BMPP_DQN_Concept_Note_v1.md`) drives the actual MPhil
+thesis submission: an O-RAN (disaggregated RU/DU/CU) energy-optimization
+study using a two-timescale "BMPP-DQN" agent, compared against 3 baselines
+(DQN, DDPG, MP-DQN). This is a **fully separate, additive** codebase
+(`oran_env/`, `oran_agents/`, `oran_training/`, `oran_evaluation/`,
+`config/oran_default.yaml`) — it shares no code with, and does not modify,
+the C-RAN/Branching-MP-DQN+TD3 track above, which continues under
+`manuscript/MPhil_Thesis_Concept_Note_v4.md` for publications. See
+`docs/oran_thesis_guide.md` for the writing/implementation guide and
+`docs/skills/skill_oran_env.md` / `docs/skills/skill_oran_bmpp_dqn.md` for
+the authoritative technical specs.
 
 ---
 

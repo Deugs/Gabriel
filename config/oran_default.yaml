@@ -1,0 +1,135 @@
+# Default Configuration for O-RAN / BMPP-DQN Experiments
+# ORAN_BMPP_DQN_Concept_Note_v1.md -- a separate, additive research track
+# alongside config/default.yaml's C-RAN track. No keys/sections here are
+# read by cran_env/agents/training/evaluation, and vice versa.
+
+# ============================================================
+# Network Topology (Concept Note Section 10.3: single-gNB, focused scope)
+# ============================================================
+network:
+  n_ru: 4
+  n_du: 1
+  n_cu: 1
+  n_ue: 8
+  n_splits: 3           # 3GPP TR 38.801 Options 2/6/8, mapped to centralization
+                          # levels c=0/1/2 -- Concept Note Section 10.2 (needs validation)
+  area_size_m: 500
+  carrier_freq_ghz: 3.5
+  bandwidth_mhz: 20
+  noise_power_dbm: -102
+
+# ============================================================
+# Channel Model (simplified: log-distance path loss + Rayleigh fading only,
+# no shadowing/temporal correlation -- Concept Note Section 5.1)
+# ============================================================
+channel:
+  path_loss_exponent: 3.5
+
+# ============================================================
+# Traffic Model (trapezoidal daily envelope x Poisson per-UE arrivals,
+# Concept Note Section 5.1; all numeric knobs below are needs-validation
+# placeholders per Section 10.3)
+# ============================================================
+traffic:
+  lambda_peak: 5.0           # peak Poisson rate, packets/step, per UE
+  floor_ratio: 0.2           # off-peak floor as a fraction of lambda_peak
+  packet_size_bits: 1.0e6
+  step_duration_s: 0.1       # matches the 10-100ms Near-RT RIC decision rate
+  t1: 7.0                    # rise start (hour of day)
+  t2: 10.0                   # plateau start
+  t3: 20.0                   # plateau end
+  t4: 23.0                   # fall end
+
+# ============================================================
+# Power Model (RU/DU/CU/fronthaul, monotonic in split centralization level;
+# all constants below are needs-validation literature-style placeholders,
+# Concept Note Section 10.5)
+# ============================================================
+power:
+  ru:
+    p_sleep_w: 2.0
+    p_switch_w: 2.0           # RU activation-flip switching cost
+    p_switch_split_w: 1.0     # RU split-change switching cost
+    pa_efficiency: 0.25
+    p_max_dbm: 30
+
+  du:
+    p_static_w: 50.0
+
+  cu:
+    p_static_w: 30.0
+    p_dyn_per_ru_w: 1.0
+
+  fronthaul:
+    p_common_w: 10.0
+
+# ============================================================
+# DRL Algorithm (BMPP-DQN: two-timescale upper/lower Q-networks, no TD3 --
+# Concept Note Section 5.2/10.4)
+# ============================================================
+algorithm:
+  name: "bmpp_dqn"
+  max_episodes: 500
+  max_steps_per_episode: 100
+
+  # Two-timescale cadence: discrete (upper) decisions held for N lower-level
+  # steps -- Concept Note Section 5.2 ("1-10s" upper vs "10-100ms" lower;
+  # at step_duration_s=0.1, N=10 is the low end of that range, needs validation)
+  upper_level_period_steps: 10
+
+  # Replay buffers: separate lengths per Concept Note Section 5.2
+  # ("longer replay buffers" for upper-level, "faster updates" for lower-level)
+  upper_buffer_size: 200000
+  lower_buffer_size: 1000000
+  batch_size: 128
+  min_buffer_size: 2000
+
+  lr_discrete: 1.0e-4
+  lr_actor: 3.0e-4
+
+  # Smaller than the C-RAN track's [256, 128] -- matches this track's
+  # smaller single-gNB scope (Concept Note Section 5.1)
+  hidden_dims: [128, 64]
+  activation: "relu"
+  use_layer_norm: true
+
+  gamma: 0.99
+  tau: 0.005
+
+  epsilon_start: 1.0
+  epsilon_end: 0.01
+  epsilon_decay: 0.995
+
+  continuous_noise_std: 0.1
+  continuous_noise_std_end: 0.01
+
+  gradient_clip_norm: 1.0
+
+  # Tractability cap for the flat MP-DQN baseline's joint action space
+  # (2^n_ru * n_splits^n_ru); mirrors config/default.yaml's analogous cap
+  # for its own MP-DQN baseline.
+  max_n_ru_for_flat_joint_action: 6
+
+# ============================================================
+# Reward Function Weights
+# ============================================================
+reward:
+  alpha_energy: 1.0
+  beta_qos: 10.0
+  gamma_switch: 0.5
+
+# ============================================================
+# Evaluation (Concept Note Section 5.3: 3 seeds, per RQ2)
+# ============================================================
+evaluation:
+  eval_freq: 50
+  n_eval_episodes: 5
+  n_random_seeds: 3   # [42, 123, 456] -- Concept Note Section 5.3 "3 random seeds"
+  save_checkpoints: true
+  checkpoint_freq: 250
+
+# ============================================================
+# Hardware
+# ============================================================
+hardware:
+  device: "cuda"   # falls back to cpu automatically if no GPU is available
