@@ -18,6 +18,14 @@ case "$1" in
     shift
     exec python training/run_extended_sweeps.py "$@"
     ;;
+  oran_hybrid|oran_bmpp_dqn|train_bmpp_dqn)
+    shift
+    exec python -m oran_training.train_bmpp_dqn "$@"
+    ;;
+  oran_baselines|train_oran_baselines)
+    shift
+    exec python -m oran_training.train_oran_baselines "$@"
+    ;;
   "")
     exec python training/train_hybrid.py --config config/default.yaml
     ;;

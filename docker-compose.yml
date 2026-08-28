@@ -19,3 +19,21 @@ services:
               count: all
               capabilities: [gpu]
     command: ["hybrid", "--config", "config/default.yaml", "--seed", "42"]
+
+  train-oran:
+    build: .
+    image: gabriel-cran-drl:latest
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./data/results_oran:/app/data/results_oran
+      - ./config:/app/config:ro
+    # GPU reservation, same convention as the `train` service above.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    command: ["oran_hybrid", "--config", "config/oran_default.yaml", "--seed", "42"]

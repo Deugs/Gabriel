@@ -95,6 +95,12 @@ if __name__ == "__main__":
     )
     parser.add_argument("--episodes", type=int, default=150, help="Episodes per seed")
     parser.add_argument(
+        "--save-dir",
+        type=str,
+        default="data/results",
+        help="Directory to save results",
+    )
+    parser.add_argument(
         "--run-csi-and-generalization",
         action="store_true",
         help=(
@@ -107,5 +113,6 @@ if __name__ == "__main__":
     run_extended_sweeps(
         config_path=args.config,
         episodes=args.episodes,
+        results_dir=args.save_dir,
         run_csi_and_generalization=args.run_csi_and_generalization,
     )

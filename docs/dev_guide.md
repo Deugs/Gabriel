@@ -2,6 +2,11 @@
 
 > **Status note (sixth audit round)**: this file was written as a week-by-week development *roadmap* before implementation began. Phases 1–4 below are now complete (see `README.md`'s "Immediate Next Steps" for what's actually still outstanding), and Phase 3's architecture spec/Phase 4's config block described the superseded v1.0 "Hybrid SAC-DDQN" design and a flat config schema that never matched the real nested `config/default.yaml`. Both have been corrected below to point at the actual implementation rather than duplicate it (duplication is exactly how this drift happened) — for the authoritative, current architecture spec, read `docs/skills/skill_hybrid_agent.md` and `agents/branching_mp_dqn.py` directly.
 
+> **Running experiments**: for setup + a step-by-step (or one-command) way to
+> run every experiment this track requires, see
+> `docs/cran_experiment_guide.md` / `bash scripts/run_cran_experiments.sh`
+> rather than assembling the commands below by hand.
+
 ## Environment Setup
 
 ### Prerequisites
@@ -309,6 +314,8 @@ duplicating it here (this guide's own established convention):
 - Environment design: `docs/skills/skill_oran_env.md`
 - BMPP-DQN agent design: `docs/skills/skill_oran_bmpp_dqn.md`
 - Full concept note: `manuscript/ORAN_BMPP_DQN_Concept_Note_v1.md`
+- Running every required experiment: `docs/oran_experiment_guide.md` /
+  `bash scripts/run_oran_experiments.sh`
 
 Quick commands:
 ```bash
@@ -316,7 +323,7 @@ Quick commands:
 pytest tests/test_oran_env.py tests/test_oran_agents.py -v
 
 # Train proposed method (single seed)
-python -c "from oran_training.train_bmpp_dqn import train_bmpp_dqn_agent; train_bmpp_dqn_agent(config_path='config/oran_default.yaml', seed=42, save_dir='data/results_oran')"
+python -m oran_training.train_bmpp_dqn --config config/oran_default.yaml --seed 42 --save-dir data/results_oran
 
 # Run all 3 baselines
 python -m oran_training.train_oran_baselines

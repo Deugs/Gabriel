@@ -8,6 +8,8 @@ __pycache__/
 # Experiment artifacts
 data/results/*
 !data/results/.gitkeep
+data/results_oran/*
+!data/results_oran/.gitkeep
 wandb/
 *.pt
 *.pth

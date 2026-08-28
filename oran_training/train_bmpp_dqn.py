@@ -7,6 +7,7 @@ ORAN_BMPP_DQN_Concept_Note_v1.md Section 5.3: "single-GPU setup", no
 logging-service requirement). Zero imports from training/ or agents/.
 """
 
+import argparse
 import gc
 import json
 from pathlib import Path
@@ -269,9 +270,33 @@ def train_bmpp_dqn_agent(
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Train BMPP-DQN Agent for O-RAN")
+    parser.add_argument(
+        "--config",
+        type=str,
+        default="config/oran_default.yaml",
+        help="Config file path",
+    )
+    parser.add_argument("--seed", type=int, default=42, help="Random seed")
+    parser.add_argument("--episodes", type=int, default=100, help="Number of episodes")
+    parser.add_argument(
+        "--eval-freq",
+        type=int,
+        default=None,
+        help="Evaluation frequency (overrides config's evaluation.eval_freq if set)",
+    )
+    parser.add_argument(
+        "--save-dir",
+        type=str,
+        default="data/results_oran",
+        help="Directory to save results",
+    )
+    args = parser.parse_args()
+
     train_bmpp_dqn_agent(
-        config_path="config/oran_default.yaml",
-        seed=42,
-        episodes=10,
-        save_dir="data/results_oran",
+        config_path=args.config,
+        seed=args.seed,
+        episodes=args.episodes,
+        eval_freq=args.eval_freq,
+        save_dir=args.save_dir,
     )
