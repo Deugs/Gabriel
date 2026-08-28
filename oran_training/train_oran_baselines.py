@@ -5,6 +5,7 @@ baselines this track's scope requires (Concept Note Section 6.3/7.1):
 DQN, DDPG, MP-DQN. Zero imports from training/ or agents/.
 """
 
+import argparse
 import gc
 import json
 from pathlib import Path
@@ -286,4 +287,23 @@ def run_oran_baseline_benchmarks(
 
 
 if __name__ == "__main__":
-    run_oran_baseline_benchmarks()
+    parser = argparse.ArgumentParser(description="Run Baseline Benchmarks for O-RAN")
+    parser.add_argument(
+        "--config",
+        type=str,
+        default="config/oran_default.yaml",
+        help="Config file path",
+    )
+    parser.add_argument(
+        "--episodes", type=int, default=50, help="Number of episodes per seed"
+    )
+    parser.add_argument(
+        "--save-dir", type=str, default="data/results_oran", help="Save directory"
+    )
+    args = parser.parse_args()
+
+    run_oran_baseline_benchmarks(
+        config_path=args.config,
+        episodes=args.episodes,
+        save_dir=args.save_dir,
+    )

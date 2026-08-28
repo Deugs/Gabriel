@@ -37,6 +37,11 @@ python training/train_hybrid.py --config config/default.yaml --seed 42
 # Run all baselines
 python training/train_baselines.py --config config/default.yaml
 
+# Run the FULL required experiment suite (all 10 seeds x 11 methods, plus
+# scalability/CSI-robustness/generalization/latency/ablation/demand-response/
+# power-time-profile/reward-sensitivity) -- see docs/cran_experiment_guide.md
+bash scripts/run_cran_experiments.sh
+
 # Generate figures (planned — evaluation/generate_figures.py not yet implemented;
 # see evaluation/plot_utils.py's individual plotting functions for what exists today)
 python evaluation/generate_figures.py --results-dir data/results/
@@ -48,15 +53,20 @@ cd thesis && pdflatex main.tex && bibtex main && pdflatex main.tex
 # Pre-submission check (planned — scripts/pre_submission.sh not yet implemented)
 bash scripts/pre_submission.sh
 
-# --- O-RAN / BMPP-DQN track (secondary, additive) ---
+# --- O-RAN / BMPP-DQN track (thesis) ---
 # Test environment
 pytest tests/test_oran_env.py -v
 
 # Train proposed method
-python -c "from oran_training.train_bmpp_dqn import train_bmpp_dqn_agent; train_bmpp_dqn_agent(config_path='config/oran_default.yaml', seed=42)"
+python -m oran_training.train_bmpp_dqn --config config/oran_default.yaml --seed 42
 
 # Run all baselines
 python -m oran_training.train_oran_baselines
+
+# Run the FULL required experiment suite (3 seeds x 4 methods, plus
+# statistical aggregation and inference-latency benchmark) -- see
+# docs/oran_experiment_guide.md
+bash scripts/run_oran_experiments.sh
 ```
 
 ## File Quick Access
@@ -73,9 +83,11 @@ python -m oran_training.train_oran_baselines
 | Plan schedule | `docs/workflow.md` |
 | Trace equations | `docs/equation_code_mapping.md` |
 | Configure experiment | `config/default.yaml` |
-| Build O-RAN env (secondary track) | `docs/skills/skill_oran_env.md` |
-| Build BMPP-DQN agent (secondary track) | `docs/skills/skill_oran_bmpp_dqn.md` |
+| Run all required C-RAN experiments | `docs/cran_experiment_guide.md` |
+| Build O-RAN env (thesis track) | `docs/skills/skill_oran_env.md` |
+| Build BMPP-DQN agent (thesis track) | `docs/skills/skill_oran_bmpp_dqn.md` |
 | O-RAN track overview | `docs/oran_thesis_guide.md` |
+| Run all required O-RAN experiments | `docs/oran_experiment_guide.md` |
 
 ## Emergency Contacts
 

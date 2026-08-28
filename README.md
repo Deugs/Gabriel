@@ -32,6 +32,7 @@ nothing about the other.
 | Document | Purpose | When to Read |
 |----------|---------|-------------|
 | [manuscript/MPhil_Thesis_Concept_Note_v4.md](manuscript/MPhil_Thesis_Concept_Note_v4.md) | Governing research concept document | Before any C-RAN change |
+| [docs/cran_experiment_guide.md](docs/cran_experiment_guide.md) | Setup + how to run every required experiment | When running experiments |
 | [docs/dev_guide.md](docs/dev_guide.md) | Detailed development guide, code architecture | When implementing |
 | [docs/thesis_guide.md](docs/thesis_guide.md) | Thesis writing guide, chapter structure | When writing |
 | [docs/workflow.md](docs/workflow.md) | Development phases and milestones | When planning |
@@ -44,6 +45,7 @@ nothing about the other.
 | Document | Purpose | When to Read |
 |----------|---------|-------------|
 | [manuscript/ORAN_BMPP_DQN_Concept_Note_v1.md](manuscript/ORAN_BMPP_DQN_Concept_Note_v1.md) | Governing research concept document | Before any O-RAN change |
+| [docs/oran_experiment_guide.md](docs/oran_experiment_guide.md) | Setup + how to run every required experiment | When running experiments |
 | [docs/oran_thesis_guide.md](docs/oran_thesis_guide.md) | Thesis writing guide, chapter structure | When writing |
 | [docs/dev_guide.md](docs/dev_guide.md) | Development guide (has its own O-RAN section) | When implementing |
 | [docs/skills/skill_oran_env.md](docs/skills/skill_oran_env.md) | Environment design specification | When building env |
@@ -112,8 +114,8 @@ The O-RAN track has no equivalent iterated log — it's governed by a single sup
 
 The environment (`cran_env/`), all 10 baselines (`agents/`, `baselines/`), and the proposed branching MP-DQN + TD3 agent are already implemented and unit-tested (Phases 1-3 of `docs/workflow.md` are complete). What actually remains:
 
-1. **Run** the full 10-seed × 11-method experiment matrix at thesis scale (Phase 4, `docs/workflow.md`) — everything so far has been verified at small network sizes and short training runs only
-2. **Run** the CSI-robustness, cross-profile generalization, and inference-latency evaluations at full scale (infrastructure exists and is tested; full-scale runs are not yet executed)
+1. **Run** the full 10-seed × 11-method experiment matrix at thesis scale (Phase 4, `docs/workflow.md`) — everything so far has been verified at small network sizes and short training runs only. See `docs/cran_experiment_guide.md` for setup + step-by-step instructions, or run `bash scripts/run_cran_experiments.sh` to do all of it in one command.
+2. **Run** the CSI-robustness, cross-profile generalization, and inference-latency evaluations at full scale (infrastructure exists and is tested; full-scale runs are not yet executed) — also covered by the guide/script above
 3. **Write** Chapter 3's formal MDP formulation, and Chapters 4-5 (Results and Conclusion), once the above results are available
 4. **Obtain** supervisor sign-off on Concept Note v4.0 as the governing document before committing to the full experiment run (see `manuscript/response_to_supervisor_review.md`)
 
@@ -121,7 +123,7 @@ The environment (`cran_env/`), all 10 baselines (`agents/`, `baselines/`), and t
 
 The environment (`oran_env/`), all 3 baselines (`oran_agents/{dqn_agent,ddpg_agent,mpdqn_agent}.py`), and the proposed BMPP-DQN agent (`oran_agents/bmpp_dqn.py`) are already implemented and unit-tested. What actually remains:
 
-1. **Run** the full 3-seed × 4-method experiment matrix at thesis scale (Concept Note §5.3) — everything so far has been verified at short training runs only
+1. **Run** the full 3-seed × 4-method experiment matrix at thesis scale (Concept Note §5.3) — everything so far has been verified at short training runs only. See `docs/oran_experiment_guide.md` for setup + step-by-step instructions, or run `bash scripts/run_oran_experiments.sh` to do all of it in one command.
 2. **Resolve** the needs-validation placeholders flagged in `docs/oran_thesis_guide.md` (power-model constants, traffic breakpoints, split→centralization mapping, default scenario scale) before the thesis states any of them as fact
 3. **Write** thesis chapter text per `docs/oran_thesis_guide.md`'s Chapter Content Mapping, once full-scale results are available
 
@@ -137,6 +139,8 @@ Gabriel/
 ├── requirements.txt        # Python dependencies
 ├── docs/
 │   ├── dev_guide.md            # Development guide (both tracks)
+│   ├── cran_experiment_guide.md # C-RAN setup + how to run all required experiments
+│   ├── oran_experiment_guide.md # O-RAN setup + how to run all required experiments
 │   ├── thesis_guide.md         # C-RAN thesis writing and structure guide
 │   ├── oran_thesis_guide.md    # O-RAN thesis writing and structure guide
 │   ├── rules.md                # Mandatory development rules
@@ -173,6 +177,7 @@ Gabriel/
 ├── config/                    # Experiment configurations (default*.yaml = C-RAN, oran_default.yaml = O-RAN)
 ├── data/                       # Traffic traces, results
 ├── tests/                      # Unit tests (both tracks)
+├── scripts/                    # run_cran_experiments.sh, run_oran_experiments.sh (one-command full runs)
 └── thesis/                     # LaTeX source (future)
 ```
 
