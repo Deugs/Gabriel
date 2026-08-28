@@ -8,6 +8,15 @@
 **Supervisor**: [Supervisor Name]  
 **Version**: 1.0 (July 2026)
 
+> **Track scope note**: everything below (Thesis Status, Contribution Claim,
+> Code Architecture) describes the **C-RAN / Branching MP-DQN + TD3 track**
+> (`manuscript/MPhil_Thesis_Concept_Note_v4.md`), which continues to be
+> developed for **publications**. The actual **MPhil thesis submission** is
+> now governed by a second, supervisor-approved concept note and a fully
+> separate, additive codebase — see "O-RAN / BMPP-DQN Track" near the end of
+> this file, or `README.md`'s own section on it, before assuming this page
+> describes the whole repository.
+
 ---
 
 ## Thesis Status
@@ -150,11 +159,21 @@ Gabriel/
 │   ├── traces/
 │   └── results/
 ├── tests/                 # Unit tests
-└── thesis/                # LaTeX source
-    ├── chapters/
-    ├── figures/
-    └── main.tex
+├── thesis/                # LaTeX source
+│   ├── chapters/
+│   ├── figures/
+│   └── main.tex
+├── oran_env/              # O-RAN Gymnasium environment (secondary, additive track)
+├── oran_agents/           # BMPP-DQN + DQN/DDPG/MP-DQN baselines (O-RAN track)
+├── oran_training/         # Training loops (O-RAN track)
+├── oran_evaluation/       # Analysis and plotting (O-RAN track)
+└── config/oran_default.yaml  # O-RAN track config
 ```
+
+The `oran_*` packages and `config/oran_default.yaml` above are a **fully
+separate, additive** codebase — zero shared code with anything else in this
+tree, in either direction. See the "O-RAN / BMPP-DQN Track" section below for
+what actually governs and lives there.
 
 ---
 
@@ -190,6 +209,30 @@ Before any chapter is considered complete, it must pass:
 | Baseline implementation bugs | Medium | High | Unit test each baseline; validate against published results |
 | Parameter validation rejection | Medium | Medium | Document all sources; include sensitivity analysis |
 | Scope creep (multi-agent, etc.) | High | Medium | Strictly bound to single-agent, downlink, single pool |
+
+---
+
+## O-RAN / BMPP-DQN Track (Secondary, Additive) — Governs the Actual Thesis
+
+A second, supervisor-approved research concept
+(`manuscript/ORAN_BMPP_DQN_Concept_Note_v1.md`) governs the actual MPhil
+thesis submission: an O-RAN (disaggregated RU/DU/CU) energy-optimization
+study using a two-timescale "BMPP-DQN" agent, compared against 3 baselines
+(DQN, DDPG, MP-DQN). It lives in `oran_env/`, `oran_agents/`,
+`oran_training/`, `oran_evaluation/`, `config/oran_default.yaml` — a fully
+separate, additive codebase that shares no code with, and never modifies,
+the C-RAN/Branching-MP-DQN+TD3 track this file otherwise describes, which
+continues under `manuscript/MPhil_Thesis_Concept_Note_v4.md` for
+publications.
+
+For the authoritative technical spec, read directly rather than duplicating
+it here:
+- Full concept note: `manuscript/ORAN_BMPP_DQN_Concept_Note_v1.md`
+- Environment design: `docs/skills/skill_oran_env.md`
+- BMPP-DQN agent design: `docs/skills/skill_oran_bmpp_dqn.md`
+- Writing/implementation guide: `docs/oran_thesis_guide.md`
+- Developer quick-start (commands, code walkthrough): `docs/dev_guide.md`'s
+  own "O-RAN / BMPP-DQN Track" section
 
 ---
 

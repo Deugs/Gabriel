@@ -135,5 +135,5 @@ the authoritative technical specs.
 
 ---
 
-*Last Updated: 2026-07-22*
+*Last Updated: 2026-08-27*
 *Version: 1.0*
