@@ -2,6 +2,59 @@
 
 > Filled instances of `docs/daily_log_template.md`. Newest entry first.
 
+## Date: 2026-08-29
+
+### What I Did Today
+- [x] Closed the blocker open since 2026-08-13/2026-08-15: actually ran `training/hyperparam_search.py::run_proxy_sensitivity_sweep()` against the real, current config values. `run_proxy_sensitivity_sweep()`'s own default `base_config_path` (`config/small_network.yaml`) now has `lr_discrete=1e-4`/`lr_actor=3e-4` (matching `config/default.yaml`), so no override was needed -- confirmed this first by reading the file directly rather than assuming.
+- [x] Logged the resulting keep/change decision (below) per Section 12.11 item 3.
+- [x] Ran this via the just-fixed decision logic (round-15 audit fix, PR #56) that genuinely compares the default variant's tail critic loss against the swept alternatives, not just whether the default itself crashed -- so this run's `default_kept=True` verdicts are a real comparison, not the old rubber-stamp.
+- [x] The candidate supplied the actual primary-source PDFs for the C-RAN power model's citations (Al-Zubaedi 2019's PhD thesis, Auer et al. 2011's EARTH paper) -- previously unverifiable in this environment (no internet egress to the hosting domains). Read them directly and checked every `power:` constant in `config/default.yaml` against them for the first time (see Decisions Made).
+
+### Time Spent
+| Activity | Hours |
+|----------|-------|
+| Coding | 0.1 |
+| Writing | 0.3 |
+| Reading | 0.6 (6 uploaded PDFs: Al-Zubaedi 2019 thesis x3 parts, EARTH paper, EARTH book chapter, a telco-cloud power-modeling survey) |
+| Debugging | 0 |
+| Running experiments | ~0.3 (background wall-clock on a CPU-only sandbox; a GPU host would be faster) |
+| **Total** | ~1.3 |
+
+### Decisions Made
+| Decision | Rationale |
+|----------|-----------|
+| Keep the default branch/continuous-net learning rates (lr_discrete=1e-4, lr_actor=3e-4) unchanged | Sweeping ~half an order of magnitude down (lr_discrete~3.16e-5, lr_actor~9.49e-5) and up (lr_discrete~3.16e-4, lr_actor~9.49e-4) produced no crash and no non-finite reward at either extreme, and no tail-critic-loss divergence relative to the alternatives (down: 6865.8, default: 6446.1, up: 6419.3 -- all the same order of magnitude). Per Section 12.11 item 2, a not-visibly-unstable default is kept without further search. This is the sweep the 2026-08-05 entry should have been but wasn't (that one tested a since-superseded 1e-3/1e-4 pair). |
+| Keep the default tau (0.005) unchanged | Same protocol: down (~1.58e-3) and up (~1.58e-2) both ran without crashing, and tau_default's tail critic loss (7962.8) is not more than 3x either alternative's (down: 6298.0, up: 5504.9) -- no visible divergence. Kept unchanged. |
+| Confirmed `power.bbu.{p_stat_w,p_dyn_w,delta_p}` (175 W / 250 W / 0.44) exactly match Al-Zubaedi (2019) Table 3.1 "Simulation parameters" | Direct verification against the primary-source PDF (Chapter 3, page 63) rather than a citation claim -- exact match on all three values, no change needed |
+| Fixed `power.fronthaul.{p_lc_w,p_onu_active_w}`: were 10.0/5.0, corrected to 5.0/10.5 | Table 3.1 gives "Power consumption of LC" = 5 W and "Power consumption of ONU" = 10.5 W -- the two values in `config/default.yaml` were transposed (a transcription error only catchable by actually checking the source, not previously verifiable in this environment). `tests/test_env.py::test_power_model_fronthaul_line_card_term` constructs `PowerModel` with its own explicit kwargs rather than reading `config/default.yaml`, so this fix doesn't touch that test's assertions -- confirmed by re-running it. |
+| Corrected the `p_stat_w`/`p_dyn_w`/`delta_p` comment to stop implying Auer et al. (2011) directly reports these three values | Auer et al. 2011's own Table II (per-BS-type power model) has no row matching 175/250/0.44 for any BS type -- Auer et al. 2011 is the source of the underlying linear power-model *form* (`P_in = N_TRX*(P_0 + delta_p*P_out)`) that Al-Zubaedi's thesis adapts for a BBU-pool context, not of these specific numbers. Citing both papers as if they independently reported the same three values was inaccurate. |
+| Left `power.fronthaul.{p_olt_w,p_onu_sleep_w}` unchanged, flagged unverified | Table 3.1 has no row for OLT power or ONU sleep-mode power -- no evidence either way in the supplied sources, so left as-is rather than guessing, per the Ethical AI Rule (`docs/rules.md` §10) |
+
+### Blockers
+| Blocker | Severity | Plan |
+|---------|----------|------|
+| None | -- | The 2026-08-13/2026-08-15 blocker is closed: the sweep now covers the real config values. |
+
+### Tomorrow's Plan
+- [ ] Proceed to the full 10-seed x 11-method experiment matrix (Phase 4, `docs/workflow.md`) now that this gate is genuinely satisfied -- ideally on a GPU host given how slow this sweep was on a CPU-only sandbox (5 network, 100 episodes x 2 seeds x 6 variants)
+- [ ] The O-RAN track's own needs-validation flags (`docs/oran_thesis_guide.md`: RU/DU/CU/fronthaul power constants, split-to-centralization-level mapping, traffic breakpoints, default scenario scale) remain unresolved -- none of today's supplied sources cover O-RAN (Al-Zubaedi's thesis and the EARTH papers predate and don't address 3GPP TR 38.801 functional splits or RU/DU/CU disaggregation). Different, more recent literature is needed for those.
+
+### Notes
+Full per-variant results (`data/results/proxy_sweep_2026-08-29/proxy_sweep_summary.json`, session-local, not committed per `data/results/*`'s `.gitignore` entry -- same convention as the 2026-08-05 entry's now-gone `data/results/proxy_sweep/`):
+
+| Variant | Mean final eval reward (2 seeds) | Mean tail critic loss | Crashed? |
+|---|---|---|---|
+| lr_pair_down | -10282.326 | 6865.779 | No |
+| lr_pair_default | **-10403.361** | 6446.147 | No |
+| lr_pair_up | -10196.111 | 6419.297 | No |
+| tau_down | -10366.821 | 6297.988 | No |
+| tau_default | **-10349.359** | 7962.808 | No |
+| tau_up | -10259.337 | 5504.877 | No |
+
+Unlike the 2026-08-05 sweep, the default wasn't the best-performing reward here (lr_pair_up and tau_up both scored marginally better) -- but Section 12.11 item 2's bar is "not visibly unstable relative to the alternatives," not "best of the three," and none of these differences are large relative to the run-to-run variance visible across just 2 seeds. Same caveat as 2026-08-05 applies: at only 100 episodes on R=5/U=2, none of these runs show a converged policy (QoS satisfaction 15-72%, 1-2.8 of 5 RRHs active) -- expected and fine for a sensitivity check, not a preview of final results.
+
+---
+
 ## Date: 2026-08-15
 
 ### What I Did Today
