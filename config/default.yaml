@@ -54,9 +54,19 @@ power:
     p_max_dbm: 30          # Max transmit power per RRH
 
   bbu:
-    p_stat_w: 175.0        # Static power per active BBU (EARTH model: Al-Zubaedi 2019 Table 3.1 / Auer et al. 2011)
-    p_dyn_w: 250.0         # Dynamic processing power range (EARTH model: Al-Zubaedi 2019)
-    delta_p: 0.44          # Load-dependent power slope parameter (EARTH model)
+    # Verified 2026-08-29 directly against the primary source (uploaded PDF,
+    # not merely cited from memory): Al-Zubaedi (2019) Table 3.1
+    # "Simulation parameters" gives Static power at BBU = 175 W, Dynamic
+    # power at BBU = 250 W, Linear model slope = 0.44 -- an exact match to
+    # all three values below. Al-Zubaedi's own linear form (P_BBU = P_stat +
+    # delta_p * P_dyn * load) adapts the EARTH project's per-BS-type linear
+    # power model (P_in = N_TRX*(P_0 + delta_p*P_out), Auer et al. 2011
+    # Table II) to a BBU-pool context -- Auer et al. 2011 is the source of
+    # that linear FORM, not of these specific three numeric values (Auer's
+    # own Table II has no row matching 175/250/0.44 for any BS type).
+    p_stat_w: 175.0        # Static power per active BBU (Al-Zubaedi 2019 Table 3.1)
+    p_dyn_w: 250.0         # Dynamic processing power range (Al-Zubaedi 2019 Table 3.1)
+    delta_p: 0.44          # Load-dependent power slope parameter (Al-Zubaedi 2019 Table 3.1)
     # max_capacity_gops: aspirational/reserved. compute_bbu_power() takes a
     # load *fraction* in [0,1] (derived from the count of active RRHs), not
     # an absolute GOPS quantity — there is no per-RRH compute-demand model
@@ -71,10 +81,17 @@ power:
     # no branch for epon/aon — there is no alternate implementation to
     # select. Not read anywhere today.
     pon_type: "twdm"       # twdm, epon, aon
-    p_olt_w: 20.0
-    p_lc_w: 10.0           # Per active line card
-    p_onu_active_w: 5.0
-    p_onu_sleep_w: 0.5
+    p_olt_w: 20.0          # No matching row in Al-Zubaedi (2019) Table 3.1 -- unverified against
+                           # this source; not otherwise cited (needs validation before thesis use)
+    # Verified 2026-08-29 against Al-Zubaedi (2019) Table 3.1: "Power
+    # consumption of LC" = 5 W, "Power consumption of ONU" = 10.5 W -- these
+    # two values were previously transposed here (p_lc_w was 10.0 and
+    # p_onu_active_w was 5.0, i.e. each other's correct value), a
+    # transcription error caught only once the primary source PDF was
+    # actually checked rather than cited from memory.
+    p_lc_w: 5.0            # Per active line card (Al-Zubaedi 2019 Table 3.1)
+    p_onu_active_w: 10.5   # Al-Zubaedi 2019 Table 3.1
+    p_onu_sleep_w: 0.5     # No matching row in Table 3.1 -- unverified against this source
     wavelength_capacity_gbps: 10  # Aggregate demand capacity per active line card
 
 # ============================================================
