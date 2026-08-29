@@ -126,12 +126,15 @@ class ORANEnv(gym.Env):
         self.power = ORANPowerModel(
             n_ru=self.n_ru,
             n_splits=self.n_splits,
+            p_ru_proc_by_split=getattr(ru_cfg, "p_proc_by_split_w", None),
             p_ru_sleep_w=float(getattr(ru_cfg, "p_sleep_w", 2.0)),
             pa_efficiency=float(getattr(ru_cfg, "pa_efficiency", 0.25)),
             p_du_static_w=float(getattr(du_cfg, "p_static_w", 50.0)),
+            p_du_per_ru_by_split=getattr(du_cfg, "p_per_ru_by_split_w", None),
             p_cu_static_w=float(getattr(cu_cfg, "p_static_w", 30.0)),
             p_cu_dyn_per_ru_w=float(getattr(cu_cfg, "p_dyn_per_ru_w", 1.0)),
             p_fh_common_w=float(getattr(fh_cfg, "p_common_w", 10.0)),
+            p_fh_per_ru_by_split=getattr(fh_cfg, "p_per_ru_by_split_w", None),
             p_switch_ru_w=float(getattr(ru_cfg, "p_switch_w", 2.0)),
             p_switch_split_w=float(getattr(ru_cfg, "p_switch_split_w", 1.0)),
         )

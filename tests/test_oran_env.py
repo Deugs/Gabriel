@@ -139,6 +139,27 @@ def test_power_model_monotonic_in_split_centralization_level():
     assert fh_powers == sorted(fh_powers)
 
 
+def test_power_model_per_split_arrays_read_from_config(default_config):
+    """oran_env.py never passed power.ru.p_proc_by_split_w /
+    power.du.p_per_ru_by_split_w / power.fronthaul.p_per_ru_by_split_w to
+    ORANPowerModel -- the per-split-level arrays that actually encode the
+    Section 10.2 monotonic centralization trade-off always silently used
+    ORANPowerModel's own Python-side defaults regardless of config,
+    the exact "dead config key" bug class this codebase has repeatedly
+    found and fixed elsewhere. A config override must now actually reach
+    ORANPowerModel."""
+    cfg = deepcopy(default_config)
+    cfg["power"]["ru"]["p_proc_by_split_w"] = [111.0, 22.0, 3.0]
+    cfg["power"]["du"]["p_per_ru_by_split_w"] = [4.0, 5.0, 6.0]
+    cfg["power"]["fronthaul"]["p_per_ru_by_split_w"] = [7.0, 8.0, 9.0]
+
+    env = ORANEnv(cfg)
+
+    assert list(env.power.p_ru_proc_by_split) == [111.0, 22.0, 3.0]
+    assert list(env.power.p_du_per_ru_by_split) == [4.0, 5.0, 6.0]
+    assert list(env.power.p_fh_per_ru_by_split) == [7.0, 8.0, 9.0]
+
+
 def test_power_model_switching_cost_counts_flips_and_split_changes():
     pm = ORANPowerModel(n_ru=3)
     prev_active = np.array([True, True, False])
