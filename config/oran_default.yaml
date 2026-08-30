@@ -4,7 +4,11 @@
 # read by cran_env/agents/training/evaluation, and vice versa.
 
 # ============================================================
-# Network Topology (Concept Note Section 10.3: single-gNB, focused scope)
+# Network Topology (Concept Note Section 10.3: single-gNB, focused scope;
+# 2026-08-30 literature check of DQRL/OREO's own scenario scales -- see
+# Section 10.3's own note -- shows this UE:RU ratio sits within
+# precedented ranges, though the absolute RU count is still smaller than
+# either paper's own scenario)
 # ============================================================
 network:
   n_ru: 4
