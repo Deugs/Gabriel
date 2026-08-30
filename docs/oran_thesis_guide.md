@@ -57,6 +57,15 @@ thesis states them as fact:
   presentation) both run 20-100x above this model's own placeholder scale
   — neither source says what scale a small `n_ru=4` scenario should use,
   so nothing was rescaled from this finding alone
-- `oran_env/traffic_model.py`'s trapezoidal breakpoints and Poisson rate (§10.3, via `config/oran_default.yaml`'s `traffic:` section) — still open, none of the sources checked so far address O-RAN/5G traffic-shape parameters specifically
+- `oran_env/traffic_model.py`'s trapezoidal breakpoints and Poisson rate
+  (§10.6, via `config/oran_default.yaml`'s `traffic:` section) —
+  **still open** after a 2026-08-30 check of all 8 previously-supplied
+  O-RAN sources for traffic-shape content specifically (see §10.6's own
+  note); one source (Lassoued & Boujnah 2026) gives a real diurnal
+  traffic-load curve whose shape and rough breakpoint timing broadly
+  match this module's `t1`/`t4`, but it's a generic macro-cellular
+  occupation-rate curve, not a 5G/O-RAN Poisson arrival-rate source, so
+  no numeric constant (`lambda_peak`, `floor_ratio`, `packet_size_bits`,
+  exact `t1`-`t4`) has been validated or changed
 - The 3GPP split → centralization-level mapping (§10.2) — **partially informed**: the O-RAN Alliance's own 2021 white paper confirms the real specified split is Option 7-2x, not literally Option 2/6/8 (see §10.2's own note); a 2026-08-30 check of Rony et al. 2021 independently confirms the *qualitative direction* of the RU-processing-vs-fronthaul-cost trade-off this mapping assumes (in cost percentages, not power or bandwidth), but the 3-level abstraction itself is still a tractability simplification, not a literature-validated numeric mapping
 - Default scenario scale (`n_ru=4, n_ue=8`, §10.3) — still open
