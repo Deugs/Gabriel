@@ -2,6 +2,44 @@
 
 > Filled instances of `docs/daily_log_template.md`. Newest entry first.
 
+## Date: 2026-08-30 (default scenario scale)
+
+### What I Did Today
+- [x] Moved on to the last untouched O-RAN needs-validation flag: default scenario scale (`n_ru=4, n_du=1, n_cu=1, n_ue=8, n_splits=3`, Concept Note §10.3). No new sources supplied, so re-mined the same 8 already-held O-RAN PDFs (keyword search via `pdftotext`) for scenario-scale content this time.
+- [x] Found two directly comparable RAN-DRL papers' own scenario scales (DQRL: 12 RUs; OREO: 42 RUs, 100 UEs) and one qualitative O-RAN Alliance deployment-scenario description. Documented as context/corroboration for the tractability rationale, without treating any of it as validating the exact `n_ru=4`/`n_ue=8` counts.
+
+### Time Spent
+| Activity | Hours |
+|----------|-------|
+| Coding | 0 |
+| Writing | 0.3 |
+| Reading | 0.3 (keyword search + targeted re-reads of DQRL's simulation-setup section, OREO's discussion section, the MVP white paper's Deployment Scenario E.1) |
+| Debugging | 0 |
+| Running experiments | 0 |
+| **Total** | ~0.6 |
+
+### Decisions Made
+| Decision | Rationale |
+|----------|-----------|
+| Left `n_ru=4, n_du=1, n_cu=1, n_ue=8, n_splits=3` unchanged | No source specifies these exact counts for a 5G/O-RAN small-cell scenario; changing them to match another paper's own scale (12 or 42 RUs) would defeat the tractability reason they were chosen (`2^n_ru * n_splits^n_ru` must stay enumerable for the flat MP-DQN baseline) and would not itself be "validation" -- those papers picked their own scales for their own reasons, not ours. |
+| Documented DQRL (12 RUs, 12-16 UEs) and OREO (42 RUs, 100 UEs) as context, not validation | Both are directly comparable (RAN-DRL, energy-focused) recent papers with their own concrete scenario scales. This repo's UE:RU ratio (2) sits inside the range both papers use (~1.0-2.4) -- a genuine, if coincidental, consistency worth noting -- but the absolute RU count (4) is markedly smaller than either paper's, which is disclosed as a real scale difference rather than glossed over. |
+| Highlighted OREO's own admitted scalability concern as independent corroboration | OREO's discussion section states its single-agent centralised RL formulation "may... face scalability challenges as the number of RUs grows substantially" -- this is a literature-stated version of exactly the tractability concern already motivating this repo's small `n_ru`, from a paper that is not this repo and had no reason to support this repo's design choice. Worth citing as corroboration of the *rationale*, explicitly not as validation of the *number*. |
+| Noted the O-RAN Alliance's own MVP white paper's "Deployment Scenario E.1" (single cloudified O-DU serving "several" non-virtualized O-RUs) as qualitative-only support | "Several" is not a specific count, so this only supports the single-DU/multi-RU *structure* (`n_du=1` serving `n_ru=4`), not any specific number |
+
+### Blockers
+| Blocker | Severity | Plan |
+|---------|----------|------|
+| None | -- | This flag is now "partially informed" rather than "still open" (`docs/oran_thesis_guide.md`); closing it fully would need a source that specifically justifies a small-cell/testbed-scale RU/UE count, which none of the 8 sources on hand provides. |
+
+### Tomorrow's Plan
+- [ ] All four O-RAN needs-validation flags in `docs/oran_thesis_guide.md` have now been checked against the 8 supplied sources at least once; further progress on any of them needs new sources with more specific numeric content (a 5G/O-RAN-specific traffic trace, an O-RAN Alliance/vendor RU-DU-CU hardware power measurement at small-cell scale, or a paper justifying a specific small `n_ru`/`n_ue` count) rather than re-mining the same 8 PDFs again
+- [ ] Otherwise, ready to move to whatever the candidate directs next (e.g. actually running experiments per `docs/oran_experiment_guide.md`/`docs/cran_experiment_guide.md`)
+
+### Notes
+No code or config numeric changes this round -- only a docstring/config-comment/doc update, same "no fabrication" discipline as the three prior 2026-08-30 entries. This is the fourth and last of the O-RAN needs-validation flags addressed via the 8-source pool gathered from the 2026-08-29/2026-08-30 supplied-PDF rounds.
+
+---
+
 ## Date: 2026-08-30 (traffic model)
 
 ### What I Did Today

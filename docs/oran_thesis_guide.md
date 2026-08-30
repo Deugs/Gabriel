@@ -68,4 +68,13 @@ thesis states them as fact:
   no numeric constant (`lambda_peak`, `floor_ratio`, `packet_size_bits`,
   exact `t1`-`t4`) has been validated or changed
 - The 3GPP split → centralization-level mapping (§10.2) — **partially informed**: the O-RAN Alliance's own 2021 white paper confirms the real specified split is Option 7-2x, not literally Option 2/6/8 (see §10.2's own note); a 2026-08-30 check of Rony et al. 2021 independently confirms the *qualitative direction* of the RU-processing-vs-fronthaul-cost trade-off this mapping assumes (in cost percentages, not power or bandwidth), but the 3-level abstraction itself is still a tractability simplification, not a literature-validated numeric mapping
-- Default scenario scale (`n_ru=4, n_ue=8`, §10.3) — still open
+- Default scenario scale (`n_ru=4, n_ue=8`, §10.3) — **partially
+  informed** after a 2026-08-30 check of the 8 already-supplied O-RAN
+  sources for scenario-scale content (see §10.3's own note): two directly
+  comparable RAN-DRL papers give concrete scales (DQRL: 12 RUs, 12-16
+  UEs; OREO: 42 RUs, 100 UEs) whose UE:RU ratio (~1.0-2.4) brackets this
+  repo's own ratio (8/4=2), and OREO's own discussion independently flags
+  scalability challenges for single-agent centralized RL as RU count
+  grows — corroborating the tractability rationale, not the exact counts.
+  `n_ru=4`/`n_ue=8` themselves remain an unvalidated tractability choice,
+  just one now shown to sit within precedented ranges
