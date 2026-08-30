@@ -2,6 +2,43 @@
 
 > Filled instances of `docs/daily_log_template.md`. Newest entry first.
 
+## Date: 2026-08-30 (traffic model)
+
+### What I Did Today
+- [x] Moved on to the O-RAN track's traffic-model needs-validation flag (`oran_env/traffic_model.py`'s trapezoid breakpoints/Poisson rate). No new sources were supplied for this round, so re-examined all 8 O-RAN-context PDFs already on hand from the two power-model literature-check rounds, this time searching specifically for traffic-shape content (keyword search via `pdftotext` across all 8, then targeted re-reads of the promising hits).
+- [x] Found one genuinely useful result (Lassoued & Boujnah 2026's Figure 7, a real diurnal traffic-load curve) and one non-result worth recording (no source directly precedents this module's specific temporal-Poisson-arrival design). Documented both without changing any numeric constant, since neither gives a matching lambda_peak/floor_ratio/packet_size_bits/t1-t4 for a 5G/O-RAN scenario.
+
+### Time Spent
+| Activity | Hours |
+|----------|-------|
+| Coding | 0 |
+| Writing | 0.3 |
+| Reading | 0.4 (keyword search across 8 already-held PDFs via `pdftotext`, then a targeted re-read of Lassoued & Boujnah 2026's Figure 7 and the OREO/MEC-survey Poisson-model passages) |
+| Debugging | 0 |
+| Running experiments | 0 |
+| **Total** | ~0.7 |
+
+### Decisions Made
+| Decision | Rationale |
+|----------|-----------|
+| Left every traffic-model numeric constant in `oran_env/traffic_model.py`/`config/oran_default.yaml` unchanged | No source gives a 5G/O-RAN-specific Poisson arrival rate, floor ratio, packet size, or exact trapezoid breakpoints. Lassoued & Boujnah 2026's Figure 7 is a generic macro-cellular *relative occupation rate* (%) curve, not a bps/Poisson-rate source, and its timing is only a rough (not exact) match to this module's `t1=7`/`t4=23` -- its decline looks closer to ~18:00 than this module's `t3=20`. Adjusting `t3` to fit a hand-read bar chart pixel height would be exactly the kind of unsupported precision the Ethical AI Rule forbids, so nothing was changed. |
+| Documented Figure 7 as qualitative/order-of-magnitude shape support, added new Concept Note §10.6 | No dedicated needs-validation subsection existed for the traffic model in `manuscript/ORAN_BMPP_DQN_Concept_Note_v1.md` before now (only a one-line mention in §5.1); added §10.6 mirroring §10.5's structure, and corrected `docs/oran_thesis_guide.md`'s stale cross-reference (previously pointed traffic-model flag at §10.3, which is actually the unrelated "Default scenario scale" flag). |
+| Documented that the temporal-Poisson-arrival design itself isn't directly precedented in the sources checked | OREO uses a Poisson *point process* for UE spatial positions (not per-step arrival counts), and a cited work in the MEC/Open RAN survey table explicitly describes its own traffic model as "Poisson point process (without temporal variability)" -- i.e., spatial-only, the opposite structural choice from this module's diurnal/temporal design. Poisson-based traffic modeling is precedented in this literature broadly; this specific temporal form is not directly precedented by any source checked so far. |
+
+### Blockers
+| Blocker | Severity | Plan |
+|---------|----------|------|
+| None | -- | The traffic-model flag remains open; would need a 5G/O-RAN-specific traffic trace or standard (e.g. a 3GPP traffic model TR, or ETSI's dynamic-load UE-emulator profile referenced in the Open RAN Handbook) to close. |
+
+### Tomorrow's Plan
+- [ ] If more sources are supplied, prioritize anything with an explicit 5G/O-RAN small-cell traffic trace or arrival-rate model over another generic macro-cellular curve
+- [ ] Default scenario scale (`n_ru=4, n_ue=8`, Concept Note §10.3) remains the one fully-untouched needs-validation flag left in `docs/oran_thesis_guide.md`
+
+### Notes
+No code or config changes this round -- purely a documentation/citation pass, same honest "partial support documented, nothing invented" outcome as the two power-model rounds. Unlike those rounds, no new PDF was supplied this time; the finding came from re-mining sources already on hand for content relevant to a different flag, using `pdftotext` keyword search to avoid a costly blind re-read of all 8 PDFs.
+
+---
+
 ## Date: 2026-08-30
 
 ### What I Did Today

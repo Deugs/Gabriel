@@ -11,6 +11,31 @@ burstiness) than cran_env/traffic_model.py. Zero imports from cran_env/.
 
 All numeric breakpoints/rate constants are needs-validation placeholders
 per the concept note's Section 10 implementation addendum.
+
+**2026-08-30 literature check (see docs/daily_log.md's 2026-08-30 entry;
+Concept Note Section 10.6)**: re-examined all 8 O-RAN-context sources
+already supplied for the power-model checks (power_model.py's own
+docstring) for traffic-shape content specifically. No source gives a
+matching lambda_peak/floor_ratio/packet_size_bits or exact t1-t4 for a
+5G/O-RAN scenario -- that stays genuinely open. One useful, order-of-
+magnitude finding: Lassoued & Boujnah 2026 (Computers)'s Figure 7 ("Daily
+traffic load variations during a 24 h weekday") shows the same qualitative
+diurnal shape this module assumes -- near-zero floor overnight, a morning
+rise, a sustained (if noisy) daytime peak, and an evening decline -- with
+breakpoint timing roughly consistent with this module's own t1=7 and
+t4=23, though its decline looks closer to ~18:00 than this module's t3=20
+and its "peak" is noisy/bimodal rather than flat. That figure reports a
+generic macro-cellular network's relative occupation rate (%), not a
+Poisson arrival rate or bps demand for a 5G/O-RAN small cell, so it
+corroborates only the general shape and rough timing, not any of this
+module's actual numeric constants. The temporal-Poisson-arrival design
+itself is not directly precedented either: OREO's own traffic model uses a
+Poisson *point process* for UE spatial positions (not per-step arrival
+counts), and a cited work in the MEC/Open RAN survey uses an
+"inhomogeneous Poisson point process (without temporal variability)" --
+i.e. spatial-only, the opposite structural choice from this module's
+temporal/diurnal design. Poisson-based traffic modeling is precedented in
+this literature broadly, just not in this specific temporal-arrival form.
 """
 
 import numpy as np
