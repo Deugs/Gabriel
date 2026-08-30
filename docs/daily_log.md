@@ -2,6 +2,44 @@
 
 > Filled instances of `docs/daily_log_template.md`. Newest entry first.
 
+## Date: 2026-08-30
+
+### What I Did Today
+- [x] The candidate supplied 3 more O-RAN-context sources (Open RAN Handbook 2nd Edition, Vodafone + Keysight, Feb 2025; a Hoffmann/Dryjanski/Kliks Rimedo Labs/i4y Lab E2E energy-testing-framework presentation; Rony et al. 2021's IEEE Access PHY-layer fronthaul functional-split cost analysis), continuing the same literature-verification pass as 2026-08-29 for the O-RAN track's still-open needs-validation flags. Read all three in full (58, 38, and 18 pages respectively).
+- [x] Still no source gives a split-level RU/DU/CU/fronthaul wattage table matching `oran_env/power_model.py`'s parameterization -- that flag stays open -- but two genuinely new results came out of it: one independent qualitative corroboration, and one important disclosable limitation (see Decisions Made).
+
+### Time Spent
+| Activity | Hours |
+|----------|-------|
+| Coding | 0 |
+| Writing | 0.4 |
+| Reading | 0.9 (3 uploaded PDFs: Open RAN Handbook 2nd Ed., Hoffmann et al. presentation, Rony et al. 2021) |
+| Debugging | 0 |
+| Running experiments | 0 |
+| **Total** | ~1.3 |
+
+### Decisions Made
+| Decision | Rationale |
+|----------|-----------|
+| Left every O-RAN power-model numeric constant unchanged again | None of the 3 new sources gives a matching wattage table either -- same Ethical AI Rule reasoning as 2026-08-29. |
+| Documented Rony et al. 2021 as independent qualitative (not numeric) support for Concept Note §10.2's monotonic centralization mapping | Their own PHY-split taxonomy (Split-A..D) shows the same RU-processing-vs-fronthaul-capacity trade-off direction as this repo's Option 2→Option 8 c-level mapping -- their most-centralized split needs the most fronthaul capacity and least RU processing, and vice versa for their least-centralized split. Their evidence is CAPEX/OPEX cost-percentage weights, not bandwidth or power, so it corroborates the trade-off's *direction* only. |
+| Disclosed a genuine scale mismatch rather than rescaling any constant | The Open RAN Handbook's real measured Fujitsu macro-O-RU static power (~200-550 W) and the Hoffmann presentation's real Dell R750 enterprise-server power draw (~625-780 W, used there as an O-DU/O-CU compute-host proxy) are both 20-100x above this model's own RU/DU/CU placeholder scale. Neither source states what power scale a small `n_ru=4` simulation/testbed scenario like this one should use, so nothing was rescaled from this alone -- guessing a scaling factor would be exactly the kind of unsupported numeric claim the Ethical AI Rule forbids. Documented as a limitation to disclose in the thesis instead, in `oran_env/power_model.py`'s docstring, Concept Note §10.5, and `docs/oran_thesis_guide.md`'s Needs-Validation Flags. |
+| Reconfirmed (independently of the 2026-08-29 OREO footnote) that no O-RAN Alliance normative power-measurement framework yet exists | The Hoffmann presentation quotes an O-RAN SuFG technical report stating this directly; it and the Handbook both point to real standardized test methodologies this model's own linear/step form only loosely resembles (ETSI ES 202 706 static, ETSI TS 103 786 dynamic, 3GPP TR 38.864 power-consumption model) -- added as citable context, not as a source of new numeric constants. |
+
+### Blockers
+| Blocker | Severity | Plan |
+|---------|----------|------|
+| None | -- | The power-model wattage flag remains open; no further supplied source has resolved it after 8 sources checked across two days. |
+
+### Tomorrow's Plan
+- [ ] The O-RAN power-model wattage flag likely needs an O-RAN Alliance/vendor hardware measurement source at the *specific small-cell/testbed scale* this environment models, or an explicit supervisor-approved decision to state the constants as a deliberately unvalidated tractability placeholder in the thesis text (mirroring how §10.2's 3-level split abstraction is already framed) rather than continuing to search for an exact match that may not exist in the literature at this scale.
+- [ ] Traffic-model breakpoints/Poisson rate and default scenario scale (`docs/oran_thesis_guide.md`) remain fully open; no source checked so far (13 total across both literature-verification passes) has addressed either.
+
+### Notes
+No code or config changes this round -- purely a documentation/citation pass, mirroring the honest "partial support documented, nothing invented" outcome of 2026-08-29's O-RAN check. Full source list check so far for the power-model flag: Qazzaz et al. 2026 (OREO), Barker/Seyfi/Afghah 2025, Lassoued & Boujnah 2026, Eskandarinia et al.'s DQRL paper, the O-RAN Alliance's 2021 MVP white paper (2026-08-29); Open RAN Handbook 2nd Ed., Hoffmann et al.'s presentation, Rony et al. 2021 (2026-08-30).
+
+---
+
 ## Date: 2026-08-29
 
 ### What I Did Today

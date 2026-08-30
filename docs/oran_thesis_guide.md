@@ -47,9 +47,16 @@ literature-style placeholders chosen for internal consistency (e.g.
 monotonicity), not verified physical constants — resolve/cite before the
 thesis states them as fact:
 - `oran_env/power_model.py`'s RU/DU/CU/fronthaul power constants (§10.5) —
-  **still open** after a 2026-08-29 check against 5 O-RAN-context sources
-  (see §10.5's own note); some order-of-magnitude/qualitative support now
-  exists, but no source gives a matching per-split numeric table
+  **still open** after 2026-08-29 and 2026-08-30 checks against 8
+  O-RAN-context sources total (see §10.5's own notes); some order-of-
+  magnitude/qualitative support now exists, but no source gives a matching
+  per-split numeric table. The 2026-08-30 pass additionally surfaced a
+  genuine **scale mismatch** worth disclosing in the thesis: real measured
+  macro-cell O-RU power (~200-550 W, Open RAN Handbook 2nd Ed.) and
+  enterprise-server O-DU/O-CU host power (~625-780 W, Hoffmann et al.
+  presentation) both run 20-100x above this model's own placeholder scale
+  — neither source says what scale a small `n_ru=4` scenario should use,
+  so nothing was rescaled from this finding alone
 - `oran_env/traffic_model.py`'s trapezoidal breakpoints and Poisson rate (§10.3, via `config/oran_default.yaml`'s `traffic:` section) — still open, none of the sources checked so far address O-RAN/5G traffic-shape parameters specifically
-- The 3GPP split → centralization-level mapping (§10.2) — **partially informed**: the O-RAN Alliance's own 2021 white paper confirms the real specified split is Option 7-2x, not literally Option 2/6/8 (see §10.2's own note); the 3-level abstraction itself is still a tractability simplification, not a literature-validated mapping
+- The 3GPP split → centralization-level mapping (§10.2) — **partially informed**: the O-RAN Alliance's own 2021 white paper confirms the real specified split is Option 7-2x, not literally Option 2/6/8 (see §10.2's own note); a 2026-08-30 check of Rony et al. 2021 independently confirms the *qualitative direction* of the RU-processing-vs-fronthaul-cost trade-off this mapping assumes (in cost percentages, not power or bandwidth), but the 3-level abstraction itself is still a tractability simplification, not a literature-validated numeric mapping
 - Default scenario scale (`n_ru=4, n_ue=8`, §10.3) — still open

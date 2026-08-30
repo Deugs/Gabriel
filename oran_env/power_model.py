@@ -31,6 +31,43 @@ that remains a genuine gap. What partial support does exist:
   those numbers is unlikely to already exist and may need to come from
   O-RAN Alliance/vendor hardware measurements instead.
 
+**2026-08-30 literature check (3 more sources; see docs/daily_log.md's
+2026-08-30 entry)**: still no matching wattage table, but one genuinely new
+result and one important disclosable limitation:
+- Rony et al. 2021 (IEEE Access, PHY-layer fronthaul functional-split cost
+  analysis) independently confirms the *qualitative direction* this model
+  assumes: their Split-A (near-full centralization, "almost no processing at
+  RRH") requires the most fronthaul capacity, while their Split-D (least
+  centralization, "all PHY layer processing... performed at RRH") requires
+  the least -- the same RU-processing-vs-fronthaul-cost trade-off direction
+  as this model's c=0..2. Their numbers are CAPEX/OPEX cost percentages
+  (e.g. Split-A=40%, Split-D=39% of a per-RU cost-weighting function),
+  not power/energy Watts, so this corroborates the trade-off's direction,
+  not any of this model's actual wattage constants.
+- The Open RAN Handbook 2nd Edition (Vodafone + Keysight, Feb 2025) and the
+  Hoffmann/Dryjanski/Kliks (Rimedo Labs/i4y Lab) E2E energy-testing
+  presentation both report real measured hardware power figures: Fujitsu
+  macro-cell O-RU static power of roughly 200-550 W depending on band/load
+  (Handbook Section 6.1.5), and a Dell R750 enterprise server drawing
+  roughly 625-780 W across its CPU load range (used in the presentation as
+  a stand-in for O-DU/O-CU compute-host power). Both are 20-100x larger
+  than this model's own RU/DU/CU placeholder scale (~3-10 W RU processing,
+  ~50-70 W DU, ~30-34 W CU). Neither source states what power scale a
+  small, n_ru=4-style testbed/simulation scenario like this one should use,
+  so no constant has been rescaled from this finding -- it is disclosed
+  here as a genuine scale mismatch between this model's placeholders and
+  real macro-cell/enterprise-hardware O-RAN deployments, not silently
+  patched with a guessed scaling factor.
+- Both sources also reconfirm, independently of the OREO footnote above,
+  that no O-RAN Alliance normative power-measurement framework yet exists
+  (the Hoffmann presentation quotes an O-RAN SuFG technical report stating
+  exactly this), and point to real standardized test methodologies this
+  model's own linear/step form only loosely resembles: ETSI ES 202 706
+  (static base-station power) and ETSI TS 103 786 (dynamic power/energy
+  efficiency), with measurements fitted to the 3GPP TR 38.864 static +
+  dynamic power-consumption model (scaled by antenna elements, occupied
+  RBs/CCs, TRPs, transmit PSD, and occupied symbols per slot).
+
 This module is fully decoupled from cran_env/power_model.py: no shared code,
 no shared imports.
 """
