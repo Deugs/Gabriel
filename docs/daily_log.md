@@ -9,16 +9,17 @@
 - [x] Logged the resulting keep/change decision (below) per Section 12.11 item 3.
 - [x] Ran this via the just-fixed decision logic (round-15 audit fix, PR #56) that genuinely compares the default variant's tail critic loss against the swept alternatives, not just whether the default itself crashed -- so this run's `default_kept=True` verdicts are a real comparison, not the old rubber-stamp.
 - [x] The candidate supplied the actual primary-source PDFs for the C-RAN power model's citations (Al-Zubaedi 2019's PhD thesis, Auer et al. 2011's EARTH paper) -- previously unverifiable in this environment (no internet egress to the hosting domains). Read them directly and checked every `power:` constant in `config/default.yaml` against them for the first time (see Decisions Made).
+- [x] The candidate then supplied 5 O-RAN-specific sources (Qazzaz et al. 2026 OREO; Barker/Seyfi/Afghah 2025 MEC/Open RAN survey; Lassoued & Boujnah 2026 Computers 5G energy-efficiency review; Eskandarinia et al.'s DQRL clustered-RAN paper; the O-RAN Alliance's 2021 MVP white paper) to attempt the same check for the O-RAN track's own needs-validation flags. None gives a split-level RU/DU/CU/fronthaul wattage table matching `oran_env/power_model.py`'s parameterization -- that flag stays genuinely open -- but real, useful things came out of it (see Decisions Made): partial order-of-magnitude support for the RU power model, the O-RAN Alliance's actual specified split (Option 7-2x, not literally Option 2/6/8), and a real bug: three per-split power arrays that encode the whole Section 10.2 monotonicity trade-off were never wired from config to `ORANPowerModel` at all -- fixed.
 
 ### Time Spent
 | Activity | Hours |
 |----------|-------|
-| Coding | 0.1 |
-| Writing | 0.3 |
-| Reading | 0.6 (6 uploaded PDFs: Al-Zubaedi 2019 thesis x3 parts, EARTH paper, EARTH book chapter, a telco-cloud power-modeling survey) |
+| Coding | 0.2 |
+| Writing | 0.5 |
+| Reading | 1.1 (11 uploaded PDFs total: Al-Zubaedi 2019 thesis x3 parts, EARTH paper, EARTH book chapter, a telco-cloud power-modeling survey, OREO, an MEC/Open RAN survey, a 5G energy-efficiency review, a DQRL clustered-RAN paper, the O-RAN Alliance MVP white paper) |
 | Debugging | 0 |
 | Running experiments | ~0.3 (background wall-clock on a CPU-only sandbox; a GPU host would be faster) |
-| **Total** | ~1.3 |
+| **Total** | ~2.1 |
 
 ### Decisions Made
 | Decision | Rationale |
@@ -29,6 +30,9 @@
 | Fixed `power.fronthaul.{p_lc_w,p_onu_active_w}`: were 10.0/5.0, corrected to 5.0/10.5 | Table 3.1 gives "Power consumption of LC" = 5 W and "Power consumption of ONU" = 10.5 W -- the two values in `config/default.yaml` were transposed (a transcription error only catchable by actually checking the source, not previously verifiable in this environment). `tests/test_env.py::test_power_model_fronthaul_line_card_term` constructs `PowerModel` with its own explicit kwargs rather than reading `config/default.yaml`, so this fix doesn't touch that test's assertions -- confirmed by re-running it. |
 | Corrected the `p_stat_w`/`p_dyn_w`/`delta_p` comment to stop implying Auer et al. (2011) directly reports these three values | Auer et al. 2011's own Table II (per-BS-type power model) has no row matching 175/250/0.44 for any BS type -- Auer et al. 2011 is the source of the underlying linear power-model *form* (`P_in = N_TRX*(P_0 + delta_p*P_out)`) that Al-Zubaedi's thesis adapts for a BBU-pool context, not of these specific numbers. Citing both papers as if they independently reported the same three values was inaccurate. |
 | Left `power.fronthaul.{p_olt_w,p_onu_sleep_w}` unchanged, flagged unverified | Table 3.1 has no row for OLT power or ONU sleep-mode power -- no evidence either way in the supplied sources, so left as-is rather than guessing, per the Ethical AI Rule (`docs/rules.md` §10) |
+| Left every O-RAN power-model numeric constant in `oran_env/power_model.py`/`config/oran_default.yaml` unchanged | None of the 5 O-RAN sources checked gives a split-level RU/DU/CU/fronthaul wattage table matching this model's parameterization -- OREO's own energy model explicitly excludes DU/CU/fronthaul from its scope (their footnote 1), so a source directly validating those specific numbers likely doesn't yet exist in the O-RAN RL literature. Guessing numbers to "resolve" the flag would violate the same Ethical AI Rule as above. Added a literature-grounding note to `oran_env/power_model.py`'s docstring and Concept Note §10.5 documenting what partial (order-of-magnitude, structural) support does exist, without claiming full validation. |
+| Fixed a real bug found while doing this check: `oran_env/oran_env.py` never passed `power.ru.p_proc_by_split_w`/`power.du.p_per_ru_by_split_w`/`power.fronthaul.p_per_ru_by_split_w` to `ORANPowerModel` | These three arrays are the actual mechanism behind Section 10.2's monotonic centralization trade-off -- arguably the most important constants in the whole power model -- yet they weren't even exposed in `config/oran_default.yaml` and always silently used `ORANPowerModel`'s Python-side hardcoded defaults. Exposed them in config (same numeric values, so no behavior change yet) and wired them through, matching every other constructor argument's existing convention, so a future citation can actually be applied via config once found. Added `tests/test_oran_env.py::test_power_model_per_split_arrays_read_from_config`. |
+| Added a real-world data point to Concept Note §10.2: the O-RAN Alliance's 2021 MVP white paper states the actual specified O-DU/O-RU fronthaul split is Option 7-2x, not literally Option 2/6/8 | This doesn't change the modeling choice (the 3-level Option 2/6/8 abstraction is still needed for tractability), but the thesis text should acknowledge this rather than imply Option 2/6/8 is how real O-RAN deployments work |
 
 ### Blockers
 | Blocker | Severity | Plan |
@@ -37,7 +41,7 @@
 
 ### Tomorrow's Plan
 - [ ] Proceed to the full 10-seed x 11-method experiment matrix (Phase 4, `docs/workflow.md`) now that this gate is genuinely satisfied -- ideally on a GPU host given how slow this sweep was on a CPU-only sandbox (5 network, 100 episodes x 2 seeds x 6 variants)
-- [ ] The O-RAN track's own needs-validation flags (`docs/oran_thesis_guide.md`: RU/DU/CU/fronthaul power constants, split-to-centralization-level mapping, traffic breakpoints, default scenario scale) remain unresolved -- none of today's supplied sources cover O-RAN (Al-Zubaedi's thesis and the EARTH papers predate and don't address 3GPP TR 38.801 functional splits or RU/DU/CU disaggregation). Different, more recent literature is needed for those.
+- [ ] The O-RAN track's needs-validation flags are now partially informed but not resolved (`docs/oran_thesis_guide.md`): RU/DU/CU/fronthaul power constants and traffic breakpoints/Poisson rate/default scenario scale remain fully open (no source yet gives numbers for these); the split-centralization mapping now has one concrete real-world data point (O-RAN Alliance's actual Option 7-2x) but the 3-level abstraction itself is still an unvalidated tractability simplification. A source giving actual O-RAN Alliance/vendor RU-DU-CU hardware power measurements, or a traffic trace/standard for 5G small-cell deployments, would close the remaining gaps.
 
 ### Notes
 Full per-variant results (`data/results/proxy_sweep_2026-08-29/proxy_sweep_summary.json`, session-local, not committed per `data/results/*`'s `.gitignore` entry -- same convention as the 2026-08-05 entry's now-gone `data/results/proxy_sweep/`):

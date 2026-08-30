@@ -7,6 +7,30 @@ are literature-style placeholders explicitly flagged "needs validation" in
 the concept note -- they are chosen only to preserve a monotonic energy
 trade-off across splits, not asserted as physically validated figures.
 
+**2026-08-29 literature check (see docs/daily_log.md's 2026-08-29 entry for
+the full writeup)**: no supplied source gives a split-level RU/DU/CU/
+fronthaul wattage breakdown matching this model's exact parameterization --
+that remains a genuine gap. What partial support does exist:
+- The RU active-vs-sleep-power structure here mirrors the general EARTH
+  linear power model (Auer et al. 2011; independently reproduced in
+  Lassoued & Boujnah 2026, Computers 15(50) Table 1) already validated for
+  the C-RAN track's BBU model, though that table gives no O-RAN-specific
+  RU/DU/CU split figures.
+- Eskandarinia et al.'s DQRL clustered-RAN paper models a comparable
+  small-cell/mmWave RU active power scale (tens of Watts, scaled down from
+  macro-cell figures) and an explicit per-RU activation cost concept
+  (P_newRU), broadly consistent with this model's own small p_ru_proc_by_split
+  scale and p_switch_ru_w -- order-of-magnitude corroboration, not a
+  matching numeric table.
+- Qazzaz et al. 2026 (OREO)'s own O-RAN RL energy model explicitly scopes
+  itself to RF-only RU power and excludes "auxiliary site power consumption
+  such as baseband processing, associated cooling, backhaul equipment"
+  (their footnote 1) -- i.e. the DU/CU/fronthaul costs this model includes
+  are outside the scope even of directly-comparable recent O-RAN RL
+  literature, which is itself evidence that a validated source for exactly
+  those numbers is unlikely to already exist and may need to come from
+  O-RAN Alliance/vendor hardware measurements instead.
+
 This module is fully decoupled from cran_env/power_model.py: no shared code,
 no shared imports.
 """

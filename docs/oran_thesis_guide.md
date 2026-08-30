@@ -46,7 +46,10 @@ Per Concept Note §10's implementation addendum, the following are
 literature-style placeholders chosen for internal consistency (e.g.
 monotonicity), not verified physical constants — resolve/cite before the
 thesis states them as fact:
-- `oran_env/power_model.py`'s RU/DU/CU/fronthaul power constants (§10.5)
-- `oran_env/traffic_model.py`'s trapezoidal breakpoints and Poisson rate (§10.3, via `config/oran_default.yaml`'s `traffic:` section)
-- The 3GPP split → centralization-level mapping (§10.2)
-- Default scenario scale (`n_ru=4, n_ue=8`, §10.3)
+- `oran_env/power_model.py`'s RU/DU/CU/fronthaul power constants (§10.5) —
+  **still open** after a 2026-08-29 check against 5 O-RAN-context sources
+  (see §10.5's own note); some order-of-magnitude/qualitative support now
+  exists, but no source gives a matching per-split numeric table
+- `oran_env/traffic_model.py`'s trapezoidal breakpoints and Poisson rate (§10.3, via `config/oran_default.yaml`'s `traffic:` section) — still open, none of the sources checked so far address O-RAN/5G traffic-shape parameters specifically
+- The 3GPP split → centralization-level mapping (§10.2) — **partially informed**: the O-RAN Alliance's own 2021 white paper confirms the real specified split is Option 7-2x, not literally Option 2/6/8 (see §10.2's own note); the 3-level abstraction itself is still a tractability simplification, not a literature-validated mapping
+- Default scenario scale (`n_ru=4, n_ue=8`, §10.3) — still open
