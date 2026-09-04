@@ -131,6 +131,50 @@ per-split fronthaul bandwidth table. Two results:
   See ORAN_BMPP_DQN_Concept_Note_v1.md Section 10.2's own note for the full
   bandwidth table and this citation.
 
+**2026-08-30 literature check, part 4**: obtained Al-Tahmeesschi et al.
+2025 ("Enhancing Open RAN Digital Twin Through Power Consumption
+Measurement," arXiv:2507.00928) and 3GPP TR 38.801 itself (V0.4.0,
+2016-08 -- the primary document behind the Option 2/6/8 definitions and
+bandwidth table cited above, not a secondary reproduction).
+- TR 38.801's own Annex A Table A-1 gives exact, non-rounded bandwidth
+  figures that **exactly cross-validate** the pixel-verified HUBER+SUHNER
+  reading above: Option 2 = 4016/3024 Mb/s (DL/UL), Option 6 = 5626.7/7140
+  Mb/s, Option 8 = 157.3/157.3 Gb/s. See Concept Note Section 10.2's own
+  note for the full table (including sub-options 7a/7b/7c and per-option
+  latency, not previously available from a primary source).
+- Al-Tahmeesschi et al. 2025 is the first source in either literature-
+  check round giving real, *component-decomposed* (RU vs. DU vs. CU) O-RAN
+  power measurements. Their Split 8 testbed is an exact match to this
+  model's c=2 (both are literally Option 8/PHY-RF split): measured RU
+  power (a USRP) is ~43-45 W, essentially load-independent across 0-100%
+  PRB utilization; combined DU+CU power (one shared server) is ~119.5-
+  141.6 W. This model's own composite c=2 RU estimate (~11 W) is now only
+  ~4x below this real measurement -- the closest gap found in either
+  round (was 20-100x against macro-cell figures, 5-14x against the RAN550
+  datasheet's own "typical" figure in part 3 above). Still not decomposable
+  into this model's separate processing/RF terms without guessing that
+  split -- not done.
+- Their Split 7.2b testbed (not one of this model's three mapped options)
+  used *separate* dedicated servers for DU and CU (~187-194 W and ~189.6-
+  192.7 W respectively), unlike Split 8's single shared server. This is a
+  genuine hardware-choice confound: comparing Split 7.2b's DU/CU figures
+  against Split 8's combined DU+CU figure to infer a split-dependent power
+  difference would be misleading, since most of the apparent gap reflects
+  which server class was used, not split-driven processing cost -- flagged
+  explicitly, not used for any inference here.
+- The paper's own conclusion -- "power consumption does not scale
+  significantly with network load... a large portion of energy consumption
+  remains constant regardless of traffic demand" -- independently
+  corroborates this model's existing design: compute_du_power() and
+  compute_cu_power() already depend on active-RU-count and split choice,
+  not on instantaneous PRB/throughput load. No design change needed; cited
+  as validation of an existing choice.
+- The RAN550's *measured* Split-7.2b RU power here (~28.3-30.1 W) is
+  somewhat lower than its own datasheet's "typical power consumption: 40 W"
+  claim used for the p_max_dbm fix in part 3 above -- a real-vs-nominal
+  discrepancy worth noting; it does not affect that fix (a different
+  physical quantity, max TX power vs. typical total consumption).
+
 This module is fully decoupled from cran_env/power_model.py: no shared code,
 no shared imports.
 """
