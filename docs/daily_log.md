@@ -2,6 +2,47 @@
 
 > Filled instances of `docs/daily_log_template.md`. Newest entry first.
 
+## Date: 2026-08-30 (3GPP TR 38.801 primary source + real O-RAN power measurements)
+
+### What I Did Today
+- [x] The candidate supplied two more sources without further comment: Al-Tahmeesschi et al. 2025 (arXiv:2507.00928, "Enhancing Open RAN Digital Twin Through Power Consumption Measurement") and 3GPP TR 38.801 itself (V0.4.0, 2016-08, Release 14 -- the actual primary document recommended earlier today, previously only seen via a secondary HUBER+SUHNER infographic reproducing its bandwidth table).
+- [x] TR 38.801's Annex A Table A-1 gave exact, non-rounded bandwidth figures for all 8 split options (plus 7a/7b/7c sub-variants and per-option latency) -- and these figures **exactly** cross-validated the pixel-verified HUBER+SUHNER infographic reading from earlier today (Option 8 = 157.3/157.3 Gb/s, matching to the decimal). A genuine, welcome confirmation that the pixel-verification methodology used earlier was correct.
+- [x] Al-Tahmeesschi et al. 2025 is the first source in either literature-check round to give real, RU/DU/CU-*decomposed* O-RAN power measurements (not whole-BS, not macro-cell, not a single vendor total). Their Split 8 testbed is an exact match to this model's `c=2` (both are literally Option 8/PHY-RF split), giving the closest RU power anchor found yet (~44 W measured vs. ~11 W predicted by this model's own constants, a ~4x gap).
+
+### Time Spent
+| Activity | Hours |
+|----------|-------|
+| Coding | 0 |
+| Writing | 0.5 |
+| Reading | 0.5 (TR 38.801, 36 pages, focused on §6.1.2 and Annex A; Al-Tahmeesschi et al., 6 pages, full read) |
+| Debugging | 0 |
+| Running experiments | 0 |
+| **Total** | ~1.0 |
+
+### Decisions Made
+| Decision | Rationale |
+|----------|-----------|
+| No numeric constant changed this round | Neither source gives a clean decomposition of measured RU/DU/CU power into this model's separate processing/RF/static-power terms. TR 38.801's bandwidth table confirms (exactly) figures already cited from a secondary source -- a citation-quality upgrade, not a new numeric fact. |
+| Documented TR 38.801's exact bandwidth table as superseding/confirming the HUBER+SUHNER infographic's pixel-verified reading | The primary document is now the citable source (Option 2 = 4016/3024 Mb/s, Option 6 = 5626.7/7140 Mb/s, Option 8 = 157.3/157.3 Gb/s, exactly matching the earlier pixel-verified reading) -- the infographic remains a valid secondary corroboration, but the thesis should cite the primary TR. |
+| Documented Al-Tahmeesschi et al.'s Split 8 measurements (RU ~43-45 W, DU+CU ~119.5-141.6 W) as the closest real anchor for `c=2`, without rescaling any constant | The ~4x gap between this model's own composite RU estimate and the real measurement is the closest found in either round, but the paper gives only combined DU+CU (not separate) for Split 8, and RU power isn't decomposed into processing-vs-RF -- setting any specific array element would still require guessing a split of the total. |
+| Explicitly flagged a hardware-choice confound between the paper's two testbeds | Split 8 uses one shared server for DU+CU; Split 7.2b uses two separate dedicated servers, one per component. Comparing Split 7.2b's DU (~187-194 W) and CU (~189.6-192.7 W) figures against Split 8's combined DU+CU (~119.5-141.6 W) to conclude "Split 7.2b needs more DU/CU power than Split 8" would be misleading -- most of that gap is which server class was used, not the split option. Stating this caveat explicitly avoids a plausible-looking but wrong inference. |
+| Cited the paper's "power doesn't scale with load" finding as validation of an existing design choice, not a needed change | This model's `compute_du_power()`/`compute_cu_power()` already depend on active-RU-count and split choice, not on instantaneous PRB/throughput -- exactly the structural choice this real measurement independently supports. |
+| Noted the RAN550's measured Split-7.2b RU power (~28.3-30.1 W) is lower than its own datasheet's "typical power consumption: 40 W" claim | A real-vs-nominal discrepancy worth disclosing for completeness, though it's a different physical quantity from the max-TX-power figure already used for the `p_max_dbm` fix, so that fix is unaffected. |
+
+### Blockers
+| Blocker | Severity | Plan |
+|---------|----------|------|
+| None | -- | The RU/DU/CU/fronthaul wattage table remains the one still-open needs-validation flag; a source that decomposes a single O-RU's or O-DU's power into processing vs. RF vs. static-baseline shares (rather than giving only a bundled total) would be needed to close it fully. |
+
+### Tomorrow's Plan
+- [ ] If the candidate wants to keep pursuing this, the natural next ask is a source that decomposes total measured O-RU/O-DU/O-CU power into sub-component shares, since every source checked so far (RAN550 datasheet, Open RAN Handbook, Hoffmann presentation, now Al-Tahmeesschi et al.) gives only bundled totals
+- [ ] Otherwise, ready to move to whatever the candidate directs next
+
+### Notes
+No code or config changes this round -- a documentation-only pass, same discipline as the other 2026-08-30 entries. This closes out the literature thread the candidate opened by asking "what is still pending" / "what is needed in the literature": both of the two specific documents recommended then (3GPP TR 38.801, and a vendor/measurement source with real O-RAN component-level power data) have now been supplied and incorporated.
+
+---
+
 ## Date: 2026-08-30 (vendor datasheet + fronthaul bandwidth table)
 
 ### What I Did Today
