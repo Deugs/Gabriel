@@ -160,6 +160,21 @@ def test_power_model_per_split_arrays_read_from_config(default_config):
     assert list(env.power.p_fh_per_ru_by_split) == [7.0, 8.0, 9.0]
 
 
+def test_p_max_dbm_matches_ran550_datasheet(default_config):
+    """p_max_dbm=33 (2 W) is derived from the Benetel RAN550's real max TX
+    output power (total EIRP) for a Split-7.2x indoor small-cell O-RU, not
+    a guess -- see oran_env/power_model.py's docstring."""
+    assert default_config["power"]["ru"]["p_max_dbm"] == pytest.approx(33.0)
+
+    env = ORANEnv(default_config)
+    assert env.p_max_dbm == pytest.approx(33.0)
+    # 33 dBm converts to ~1.995 W exactly; the datasheet states "2 W" as a
+    # rounded figure, so this checks the conversion is in that ballpark
+    # rather than requiring bit-exact agreement with the rounded marketing
+    # number.
+    assert env.p_max_w == pytest.approx(2.0, rel=1e-2)
+
+
 def test_power_model_switching_cost_counts_flips_and_split_changes():
     pm = ORANPowerModel(n_ru=3)
     prev_active = np.array([True, True, False])

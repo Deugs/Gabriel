@@ -57,8 +57,9 @@ traffic:
 
 # ============================================================
 # Power Model (RU/DU/CU/fronthaul, monotonic in split centralization level;
-# all constants below are needs-validation literature-style placeholders,
-# Concept Note Section 10.5)
+# Concept Note Section 10.5). Most constants below remain needs-validation
+# literature-style placeholders; p_max_dbm (below) is the one exception,
+# now derived from a real small-cell O-RU datasheet -- see its own comment.
 # ============================================================
 power:
   ru:
@@ -66,7 +67,12 @@ power:
     p_switch_w: 2.0           # RU activation-flip switching cost
     p_switch_split_w: 1.0     # RU split-change switching cost
     pa_efficiency: 0.25
-    p_max_dbm: 30
+    # 2026-08-30: 33 dBm = 2 W, matching the Benetel RAN550's real max TX
+    # output power (total EIRP) for a Split-7.2x indoor small-cell O-RU
+    # (was 30 dBm/1 W, an unvalidated placeholder) -- see Concept Note
+    # Section 10.5's own note. Not a guess: same physical quantity, same
+    # units, a real commercial small-cell O-RU datasheet.
+    p_max_dbm: 33
     # Active-RU processing power per split centralization level c=0/1/2
     # (Concept Note Section 10.2), c=0 (Option 2) = most RU-side processing
     # down to c=2 (Option 8) = least. Previously not exposed here at all --

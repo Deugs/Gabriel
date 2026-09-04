@@ -2,6 +2,47 @@
 
 > Filled instances of `docs/daily_log_template.md`. Newest entry first.
 
+## Date: 2026-08-30 (vendor datasheet + fronthaul bandwidth table)
+
+### What I Did Today
+- [x] The candidate supplied 3 more sources without further comment: Benetel's RAN550 datasheet (a real, small-cell-class, Split-7.2x indoor O-RU product) and two identical copies (confirmed via `md5sum`) of a HUBER+SUHNER/CubeOptics infographic reproducing 3GPP TR 38.801's own functional-split taxonomy and per-split fronthaul bandwidth table.
+- [x] The infographic's bandwidth table is dense and multi-column; the linearized PDF text extraction scrambled the option-to-value mapping (naive reading order suggested Option 1 had the *highest* bandwidth, contradicting the infographic's own prose stating Option 8 has "the highest bandwidth requirements of all functional split options" -- a red flag). Rendered the page at 300 DPI, located the exact red vertical guide-line x-coordinates separating each split's column programmatically, annotated them, and cropped/re-read the header-number row and the bandwidth row against those same coordinates to get an unambiguous, pixel-verified mapping -- avoiding a transposition-style error like the one caught in the C-RAN power model on 2026-08-29.
+- [x] Result: a real, quantitative confirmation of the O-RAN split-centralization mapping's (§10.2) monotonic direction for the three mapped options, plus one genuine numeric constant fix (`power.ru.p_max_dbm`, 30 -> 33 dBm) from the RAN550 datasheet's real max-TX-power spec.
+
+### Time Spent
+| Activity | Hours |
+|----------|-------|
+| Coding | 0.3 |
+| Writing | 0.4 |
+| Reading | 0.3 (RAN550 datasheet, 4 pages; HUBER+SUHNER infographic, 1 dense page) |
+| Debugging | 0.4 (pixel-level re-analysis of the infographic to avoid a transposition error from scrambled text extraction) |
+| Running experiments | 0 |
+| **Total** | ~1.4 |
+
+### Decisions Made
+| Decision | Rationale |
+|----------|-----------|
+| Changed `power.ru.p_max_dbm` 30 -> 33 dBm (1 W -> 2 W) | Benetel RAN550's datasheet states "Maximum TX output power (total EIRP): 2 W" for a real, commercially available, Split-7.2x indoor small-cell O-RU -- the same physical quantity, same units, as this model's `p_max_dbm` action-space ceiling. A clean primary-source match, not a guess, following the same principle as the FTP Model 3 traffic-model fix earlier today. |
+| Did NOT decompose RAN550's "typical power consumption: 40 W" into this model's RU processing/DU/fronthaul arrays | The datasheet gives only a single total-power figure with no breakdown into processing vs. RF vs. fronthaul-interface shares -- assigning it to specific array elements would require guessing that decomposition. Documented as a scale-mismatch-narrowing data point (5-14x this model's own composite RU estimate, vs. 20-100x for the earlier macro-cell/enterprise-server figures) instead. |
+| Precisely pixel-verified the HUBER+SUHNER infographic's bandwidth table before citing any number from it | The naive linearized-text reading order was backwards relative to well-known 5G fronthaul facts (it implied Option 1 has the highest bandwidth, when Option 8/CPRI is well known to have the highest) -- a clear signal the text extraction order didn't match the visual column layout. Rendered at 300 DPI, found the red guide-line x-coordinates programmatically, and cross-checked against the unambiguous "3GPP TR 38.801 / 1 2 3 4 5 6 7-3 7-2 7-1 8" header row and the Small Cell Forum naming row (PDCP-RLC=2, RLC-MAC=3, etc.) before trusting any bandwidth figure. Final verified table: Option 2=3/4 Gbps, Option 6=7.1/5.6 Gbps, Option 8=157.3/157.3 Gbps (full 10-option table in the Concept Note). |
+| Did not rescale `p_fh_per_ru_by_split` to match the real bandwidth ratio | The verified bandwidth figures show Option 8 requires ~39-52x Option 2's bandwidth, far steeper than this model's own 1:2:5 power ratio -- but no source states that fronthaul *power* scales linearly with fronthaul *bandwidth* requirement, so inventing that proportionality to "fix" the ratio would be exactly the kind of unsupported claim the Ethical AI Rule forbids. Documented as a disclosable, now-quantified version of the existing "shape confirmed, magnitude unconfirmed" gap instead. |
+| Confirmed the two HUBER+SUHNER PDFs are byte-identical (`md5sum`) before treating them as one source | Avoided double-counting or wasting effort reading the same document twice. |
+| Added `tests/test_oran_env.py::test_p_max_dbm_matches_ran550_datasheet` | Locks in both the config value and the derived `env.p_max_w`, mirroring the traffic-model regression test added earlier today. |
+
+### Blockers
+| Blocker | Severity | Plan |
+|---------|----------|------|
+| None | -- | The RU/DU/CU/fronthaul wattage table remains the one still-fully-open needs-validation flag; would need a vendor datasheet that actually decomposes total O-RU/O-DU/O-CU power by subsystem (not just a single "typical power consumption" figure) to close it fully. |
+
+### Tomorrow's Plan
+- [ ] If the candidate wants to keep pursuing this, a vendor datasheet with a component-level power breakdown (not just a single total-power figure) would be the natural next ask, along with 3GPP TR 38.801 itself (recommended earlier, not yet supplied) for the split's own text describing these bandwidth figures' derivation
+- [ ] Otherwise, ready to move to whatever the candidate directs next
+
+### Notes
+Full test/lint verification before commit: `black --check`, `flake8 --max-line-length=100`, `mypy --ignore-missing-imports`, and the full O-RAN test suite all clean. No C-RAN files touched (grep-confirmed). This continues the same-day pattern of the 3GPP TR 38.864 entry above: literature can sometimes give a genuine primary-source match (p_max_dbm, lambda_peak, packet_size_bits) worth acting on, and sometimes only narrows/contextualizes a gap without resolving it (the RU/DU/CU/fronthaul wattage table, the bandwidth-vs-power ratio mismatch) -- both outcomes are documented with equal rigor rather than the latter being quietly dropped.
+
+---
+
 ## Date: 2026-08-30 (3GPP TR 38.864 primary source)
 
 ### What I Did Today

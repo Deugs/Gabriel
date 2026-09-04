@@ -47,10 +47,10 @@ literature-style placeholders chosen for internal consistency (e.g.
 monotonicity), not verified physical constants — resolve/cite before the
 thesis states them as fact:
 - `oran_env/power_model.py`'s RU/DU/CU/fronthaul power constants (§10.5) —
-  **still open** after 2026-08-29 and 2026-08-30 checks against 9
+  **still open** after 2026-08-29 and 2026-08-30 checks against 11
   O-RAN-context sources total (see §10.5's own notes); some order-of-
   magnitude/qualitative support now exists, but no source gives a matching
-  per-split numeric table. The 2026-08-30 pass additionally surfaced a
+  per-split numeric table. The 2026-08-30 passes additionally surfaced a
   genuine **scale mismatch** worth disclosing in the thesis: real measured
   macro-cell O-RU power (~200-550 W, Open RAN Handbook 2nd Ed.) and
   enterprise-server O-DU/O-CU host power (~625-780 W, Hoffmann et al.
@@ -60,7 +60,19 @@ thesis states them as fact:
   itself (the actual document, not a secondary citation) independently
   confirms the static+dynamic model *family* is right, but its own power
   table is in relative units with no absolute-Watt anchor, so it still
-  couldn't be used to set any Watt-valued constant here
+  couldn't be used to set any Watt-valued constant here. A real small-cell
+  O-RU datasheet (Benetel RAN550, Split 7.2x) later narrowed the scale
+  mismatch to 5-14x (from 20-100x) with its "typical power consumption:
+  40 W" figure, still not decomposed into this model's RU/DU/CU/fronthaul
+  shares — but its "max TX output power: 2 W (33 dBm)" *did* directly fix
+  one constant: `power.ru.p_max_dbm` (30 → 33 dBm), the one exception to
+  "still open" in this flag. A HUBER+SUHNER/CubeOptics infographic
+  reproducing 3GPP TR 38.801's real per-split fronthaul bandwidth table
+  also quantitatively confirmed this model's `p_fh_per_ru_by_split`
+  monotonic *direction* for the three mapped options, while revealing its
+  1:2:5 ratio is far shallower than the real bandwidth-ratio these figures
+  imply (~1:1.4-2.4:39-52) — not used to rescale it, since fronthaul power
+  isn't established to scale linearly with bandwidth (see §10.2)
 - `oran_env/traffic_model.py`'s trapezoidal breakpoints and Poisson rate
   (§10.6, via `config/oran_default.yaml`'s `traffic:` section) —
   **partially resolved** as of a 2026-08-30 check that obtained 3GPP
@@ -75,7 +87,7 @@ thesis states them as fact:
   TR 38.864's own load scenarios are load-level snapshots with no
   time-of-day association, and its scope stops at "medium load," giving no
   floor:peak ratio or diurnal timing to derive those from
-- The 3GPP split → centralization-level mapping (§10.2) — **partially informed**: the O-RAN Alliance's own 2021 white paper confirms the real specified split is Option 7-2x, not literally Option 2/6/8 (see §10.2's own note); a 2026-08-30 check of Rony et al. 2021 independently confirms the *qualitative direction* of the RU-processing-vs-fronthaul-cost trade-off this mapping assumes (in cost percentages, not power or bandwidth), but the 3-level abstraction itself is still a tractability simplification, not a literature-validated numeric mapping
+- The 3GPP split → centralization-level mapping (§10.2) — **partially informed**: the O-RAN Alliance's own 2021 white paper confirms the real specified split is Option 7-2x, not literally Option 2/6/8 (see §10.2's own note); a 2026-08-30 check of Rony et al. 2021 independently confirms the *qualitative direction* of the RU-processing-vs-fronthaul-cost trade-off this mapping assumes (in cost percentages, not power or bandwidth). A same-day follow-up check (a HUBER+SUHNER/CubeOptics infographic reproducing 3GPP TR 38.801's real per-split bandwidth table) went further, giving *quantitative* fronthaul-bandwidth figures for exactly the three mapped options (Option 2 = 3/4 Gbps, Option 6 = 7.1/5.6 Gbps, Option 8 = 157.3/157.3 Gbps) — a real numeric confirmation of the monotonic direction, though the 3-level abstraction itself is still a tractability simplification, not a literature-validated mapping in the sense of matching this model's own power-array ratios (see §10.5's note on the resulting bandwidth-vs-power ratio mismatch)
 - Default scenario scale (`n_ru=4, n_ue=8`, §10.3) — **partially
   informed** after a 2026-08-30 check of the 8 already-supplied O-RAN
   sources for scenario-scale content (see §10.3's own note): two directly

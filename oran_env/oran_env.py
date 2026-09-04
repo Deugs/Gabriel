@@ -90,7 +90,10 @@ class ORANEnv(gym.Env):
 
         power_cfg = getattr(cfg, "power", cfg)
         ru_cfg = getattr(power_cfg, "ru", power_cfg)
-        self.p_max_dbm = float(getattr(ru_cfg, "p_max_dbm", 30.0))
+        # 33 dBm (2 W) matches the Benetel RAN550's real max TX output power
+        # (total EIRP) for a Split-7.2x indoor small-cell O-RU -- see
+        # ORAN_BMPP_DQN_Concept_Note_v1.md Section 10.5's 2026-08-30 note.
+        self.p_max_dbm = float(getattr(ru_cfg, "p_max_dbm", 33.0))
         self.p_max_w = 10.0 ** ((self.p_max_dbm - 30.0) / 10.0)
 
         reward_cfg = getattr(cfg, "reward", cfg)
