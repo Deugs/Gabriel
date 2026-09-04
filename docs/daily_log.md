@@ -2,6 +2,46 @@
 
 > Filled instances of `docs/daily_log_template.md`. Newest entry first.
 
+## Date: 2026-08-30 (3GPP TR 38.864 primary source)
+
+### What I Did Today
+- [x] The candidate asked what specific literature was still needed to close the remaining O-RAN needs-validation flags; I recommended obtaining 3GPP TR 38.864 ("Study on network energy savings for NR") and 3GPP TR 38.801 directly, rather than more secondary citations of them.
+- [x] The candidate supplied 3GPP TR 38.864 itself (a `.docx`, V18.1.0). Extracted its text (`unzip` + XML strip, since `pandoc` was unavailable in this sandbox) and read §5.1 (Energy consumption model for BS) and Annex A (Evaluation scenarios, traffic models and loads) in full.
+- [x] This is the first source in either literature-check round that gives a genuine, primary-source, right-units numeric match rather than order-of-magnitude/qualitative context: Annex A's FTP Model 3 (0.5 MB packet size, 200 ms mean inter-arrival time) is a real, standard 3GPP Poisson traffic model. Updated `lambda_peak` and `packet_size_bits` to derive directly from it -- the first *numeric constant change* driven by literature in either O-RAN literature-check round (the 2026-08-29 C-RAN fix was also a real value change, but that was a same-day correction against Al-Zubaedi's own table, not part of this O-RAN check series).
+
+### Time Spent
+| Activity | Hours |
+|----------|-------|
+| Coding | 0.2 |
+| Writing | 0.4 |
+| Reading | 0.5 (3GPP TR 38.864, 72 pages, focused on §5.1 and Annex A/B) |
+| Debugging | 0.1 (pandoc unavailable in this sandbox; worked around via unzip + XML text extraction) |
+| Running experiments | 0 |
+| **Total** | ~1.2 |
+
+### Decisions Made
+| Decision | Rationale |
+|----------|-----------|
+| Changed `lambda_peak` 5.0 → 0.5 and `packet_size_bits` 1.0e6 → 4.0e6 (both in `config/oran_default.yaml` and `oran_env/traffic_model.py`'s class defaults) | TR 38.864 Annex A's FTP Model 3 gives 200 ms mean inter-arrival time (= 5 arrivals/s = 0.5 per this model's 0.1s step) and 0.5 MB (=4e6 bits) packet/file size -- a real 3GPP standard traffic model in exactly the units this model needs, not an approximate/order-of-magnitude match like every other source checked so far. This is a genuine primary-source derivation, following the same principle as the 2026-08-29 C-RAN fix (Al-Zubaedi's Table 3.1): when a primary source gives an exact match in the right units, use it. |
+| Left `floor_ratio` and `t1`-`t4` unchanged | TR 38.864 Annex A's own "load (L)%" scenarios (Table A-1) are instantaneous PRB-utilization snapshots with no time-of-day association, and the TR's own stated scope ("prioritizes idle/empty and low/medium load scenarios") stops at 50% load with no busy-hour/full-load reference point -- it gives no floor:peak ratio or diurnal timing to derive these from. Extending the fix to these would require guessing, which the Ethical AI Rule forbids. |
+| Adopted FTP Model 3 specifically (not FTP Model 3 IM or VoIP) | 3GPP leaves the traffic-model choice to the evaluating party; FTP Model 3 is the most commonly used baseline across 3GPP energy-saving evaluations, a defensible choice, documented as such rather than presented as the only possible one. Noted (not implemented) that FTP3-IM's lighter traffic (0.1 MB, 2s inter-arrival) could plausibly inform off-peak/floor behavior better than a flat `floor_ratio` scaling, but this module's structure only supports one packet size for the whole day -- changing that is a design change, left for a future round if wanted. |
+| Documented TR 38.864 §5.1's real 3GPP power-consumption model as additional power-model context, without changing any power-model constant | §5.1's `P_static + P_dynamic` structure (scaled by active-TRX fraction, RF-bandwidth ratio, PSD ratio) independently confirms, from the actual governing 3GPP source, that this family of model is right for the C-RAN/O-RAN power models already in use -- but its Table 5.1-3 values are relative units with no absolute-Watt anchor, and the model is whole-BS, not disaggregated into O-RAN's RU/DU/CU/fronthaul components. Converting relative units to Watts would require inventing a scale factor, so no power-model constant was changed. |
+| Added `tests/test_oran_env.py::test_traffic_model_defaults_match_3gpp_ftp_model_3` | Locks in the new literature-derived defaults (both the `ORANTrafficModel` class default and `config/oran_default.yaml`'s value), mirroring how the C-RAN power-model fix was paired with a re-run of its own regression test. |
+
+### Blockers
+| Blocker | Severity | Plan |
+|---------|----------|------|
+| None | -- | `floor_ratio`/`t1`-`t4` remain open; would need a source giving diurnal timing or a busy-hour:off-peak traffic ratio specifically, which TR 38.864 does not provide. |
+
+### Tomorrow's Plan
+- [ ] If the candidate wants to pursue 3GPP TR 38.801 (the actual source of the Option 2/6/7/8 split numbering, recommended alongside TR 38.864) next, it could similarly upgrade §10.2's split-mapping flag from qualitative to numeric
+- [ ] Otherwise, ready to move to whatever the candidate directs next (e.g. running real experiments)
+
+### Notes
+Full test/lint verification before commit: `black --check`, `flake8 --max-line-length=100`, and `pytest tests/test_oran_env.py -v` all clean; confirmed no other O-RAN test/training/evaluation file hardcodes the old `lambda_peak`/`packet_size_bits` defaults before changing them (`grep` across `tests/test_oran_*.py`, `oran_training/`, `oran_evaluation/`). This is the first literature-driven numeric change in the O-RAN track since the 2026-08-29 config-wiring bug fix, and the first one driven by an exact primary-source match rather than a bug.
+
+---
+
 ## Date: 2026-08-30 (default scenario scale)
 
 ### What I Did Today

@@ -68,6 +68,28 @@ result and one important disclosable limitation:
   dynamic power-consumption model (scaled by antenna elements, occupied
   RBs/CCs, TRPs, transmit PSD, and occupied symbols per slot).
 
+**2026-08-30 literature check, part 2**: obtained 3GPP TR 38.864 itself
+("Study on network energy savings for NR") rather than only secondary
+citations of it. Its §5.1 defines the real 3GPP NR BS power model:
+`P_DL = P_static,DL + P_dynamic,DL` (and analogously for UL), with the
+dynamic term scaled by the fraction of active TRX/RUs, the RF-to-system
+bandwidth ratio, and the transmit PSD ratio -- independent confirmation,
+from the actual governing 3GPP source rather than a secondary citation,
+that a static-plus-scaled-dynamic linear-style structure (the same family
+as this model's own form and the EARTH model already used for the C-RAN
+track) is the right family of model. Its Table 5.1-3 gives concrete
+sleep/active-state power ratios for two "BS Category" classes across three
+reference configurations -- e.g. Category 2/Set 1: Deep sleep=1, Micro
+sleep=5.5, Active DL=32 -- order-of-magnitude comparable to this model's
+own active:sleep ratios, though not identical. This is **not** used to
+change any constant here: TR 38.864's model is whole-BS, not disaggregated
+into O-RAN's RU/DU/CU/fronthaul components, and Table 5.1-3's values are
+relative units with no stated absolute-Watt anchor -- converting them to
+Watts would require inventing a scale factor, which was not done. (Compare
+oran_env/traffic_model.py's docstring, where the same TR *did* directly
+inform two constants -- its Annex A traffic-model definitions are in
+absolute, directly-usable units, unlike this power-model section.)
+
 This module is fully decoupled from cran_env/power_model.py: no shared code,
 no shared imports.
 """

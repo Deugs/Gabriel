@@ -172,6 +172,19 @@ def test_power_model_switching_cost_counts_flips_and_split_changes():
     assert cost == pytest.approx(expected)
 
 
+def test_traffic_model_defaults_match_3gpp_ftp_model_3(default_config):
+    """lambda_peak/packet_size_bits are derived from 3GPP TR 38.864 Annex A's
+    FTP Model 3 (0.5 MB packet size, 200 ms mean inter-arrival time), not a
+    guess -- see oran_env/traffic_model.py's docstring."""
+    tm = ORANTrafficModel(n_ue=1)
+    assert tm.lambda_peak == pytest.approx(0.5)
+    assert tm.packet_size_bits == pytest.approx(4.0e6)
+
+    traffic_cfg = default_config["traffic"]
+    assert traffic_cfg["lambda_peak"] == pytest.approx(0.5)
+    assert traffic_cfg["packet_size_bits"] == pytest.approx(4.0e6)
+
+
 def test_traffic_model_trapezoidal_shape():
     tm = ORANTrafficModel(
         n_ue=1, lambda_peak=5.0, floor_ratio=0.2, t1=7, t2=10, t3=20, t4=23

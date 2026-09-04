@@ -110,9 +110,9 @@ class ORANEnv(gym.Env):
         traffic_cfg = getattr(cfg, "traffic", cfg)
         self.traffic = ORANTrafficModel(
             n_ue=self.n_ue,
-            lambda_peak=float(getattr(traffic_cfg, "lambda_peak", 5.0)),
+            lambda_peak=float(getattr(traffic_cfg, "lambda_peak", 0.5)),
             floor_ratio=float(getattr(traffic_cfg, "floor_ratio", 0.2)),
-            packet_size_bits=float(getattr(traffic_cfg, "packet_size_bits", 1.0e6)),
+            packet_size_bits=float(getattr(traffic_cfg, "packet_size_bits", 4.0e6)),
             step_duration_s=float(getattr(traffic_cfg, "step_duration_s", 0.1)),
             t1=float(getattr(traffic_cfg, "t1", 7.0)),
             t2=float(getattr(traffic_cfg, "t2", 10.0)),

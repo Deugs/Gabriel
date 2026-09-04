@@ -47,7 +47,7 @@ literature-style placeholders chosen for internal consistency (e.g.
 monotonicity), not verified physical constants — resolve/cite before the
 thesis states them as fact:
 - `oran_env/power_model.py`'s RU/DU/CU/fronthaul power constants (§10.5) —
-  **still open** after 2026-08-29 and 2026-08-30 checks against 8
+  **still open** after 2026-08-29 and 2026-08-30 checks against 9
   O-RAN-context sources total (see §10.5's own notes); some order-of-
   magnitude/qualitative support now exists, but no source gives a matching
   per-split numeric table. The 2026-08-30 pass additionally surfaced a
@@ -56,17 +56,25 @@ thesis states them as fact:
   enterprise-server O-DU/O-CU host power (~625-780 W, Hoffmann et al.
   presentation) both run 20-100x above this model's own placeholder scale
   — neither source says what scale a small `n_ru=4` scenario should use,
-  so nothing was rescaled from this finding alone
+  so nothing was rescaled from this finding alone. Obtaining 3GPP TR 38.864
+  itself (the actual document, not a secondary citation) independently
+  confirms the static+dynamic model *family* is right, but its own power
+  table is in relative units with no absolute-Watt anchor, so it still
+  couldn't be used to set any Watt-valued constant here
 - `oran_env/traffic_model.py`'s trapezoidal breakpoints and Poisson rate
   (§10.6, via `config/oran_default.yaml`'s `traffic:` section) —
-  **still open** after a 2026-08-30 check of all 8 previously-supplied
-  O-RAN sources for traffic-shape content specifically (see §10.6's own
-  note); one source (Lassoued & Boujnah 2026) gives a real diurnal
-  traffic-load curve whose shape and rough breakpoint timing broadly
-  match this module's `t1`/`t4`, but it's a generic macro-cellular
-  occupation-rate curve, not a 5G/O-RAN Poisson arrival-rate source, so
-  no numeric constant (`lambda_peak`, `floor_ratio`, `packet_size_bits`,
-  exact `t1`-`t4`) has been validated or changed
+  **partially resolved** as of a 2026-08-30 check that obtained 3GPP
+  TR 38.864 itself (see §10.6's own note): its Annex A's FTP Model 3 (0.5
+  MB packet size, 200 ms mean inter-arrival time — a real, standard 3GPP
+  Poisson traffic model) is a genuine primary-source match in the right
+  units, so `lambda_peak` (5.0 → 0.5) and `packet_size_bits` (1.0e6 →
+  4.0e6) have been updated to derive directly from it — not a guess. This
+  also corrects the same day's earlier, more tentative finding that this
+  module's temporal-Poisson-arrival design wasn't precedented; it is, by
+  3GPP's own FTP Model 3. `floor_ratio` and `t1`-`t4` remain unvalidated:
+  TR 38.864's own load scenarios are load-level snapshots with no
+  time-of-day association, and its scope stops at "medium load," giving no
+  floor:peak ratio or diurnal timing to derive those from
 - The 3GPP split → centralization-level mapping (§10.2) — **partially informed**: the O-RAN Alliance's own 2021 white paper confirms the real specified split is Option 7-2x, not literally Option 2/6/8 (see §10.2's own note); a 2026-08-30 check of Rony et al. 2021 independently confirms the *qualitative direction* of the RU-processing-vs-fronthaul-cost trade-off this mapping assumes (in cost percentages, not power or bandwidth), but the 3-level abstraction itself is still a tractability simplification, not a literature-validated numeric mapping
 - Default scenario scale (`n_ru=4, n_ue=8`, §10.3) — **partially
   informed** after a 2026-08-30 check of the 8 already-supplied O-RAN
