@@ -68,6 +68,69 @@ result and one important disclosable limitation:
   dynamic power-consumption model (scaled by antenna elements, occupied
   RBs/CCs, TRPs, transmit PSD, and occupied symbols per slot).
 
+**2026-08-30 literature check, part 2**: obtained 3GPP TR 38.864 itself
+("Study on network energy savings for NR") rather than only secondary
+citations of it. Its §5.1 defines the real 3GPP NR BS power model:
+`P_DL = P_static,DL + P_dynamic,DL` (and analogously for UL), with the
+dynamic term scaled by the fraction of active TRX/RUs, the RF-to-system
+bandwidth ratio, and the transmit PSD ratio -- independent confirmation,
+from the actual governing 3GPP source rather than a secondary citation,
+that a static-plus-scaled-dynamic linear-style structure (the same family
+as this model's own form and the EARTH model already used for the C-RAN
+track) is the right family of model. Its Table 5.1-3 gives concrete
+sleep/active-state power ratios for two "BS Category" classes across three
+reference configurations -- e.g. Category 2/Set 1: Deep sleep=1, Micro
+sleep=5.5, Active DL=32 -- order-of-magnitude comparable to this model's
+own active:sleep ratios, though not identical. This is **not** used to
+change any constant here: TR 38.864's model is whole-BS, not disaggregated
+into O-RAN's RU/DU/CU/fronthaul components, and Table 5.1-3's values are
+relative units with no stated absolute-Watt anchor -- converting them to
+Watts would require inventing a scale factor, which was not done. (Compare
+oran_env/traffic_model.py's docstring, where the same TR *did* directly
+inform two constants -- its Annex A traffic-model definitions are in
+absolute, directly-usable units, unlike this power-model section.)
+
+**2026-08-30 literature check, part 3**: obtained a real small-cell O-RU
+vendor datasheet -- Benetel's RAN550 (n78/n79, Split 7.2x indoor O-RU) --
+plus a HUBER+SUHNER/CubeOptics infographic reproducing 3GPP TR 38.801's
+per-split fronthaul bandwidth table. Two results:
+- The RAN550 datasheet gives a real *small-cell-class* (not macro, not
+  enterprise-server) O-RU total power figure: "Typical power consumption:
+  40 W". This is 5-14x this model's own composite active-RU power estimate
+  (processing + max-TX/eta, roughly 3-18 W across split levels using this
+  model's own constants), narrowing -- not resolving -- the 20-100x scale
+  mismatch found against macro-cell/enterprise-hardware figures in the
+  2026-08-29/2026-08-30 checks above. It does not decompose the 40 W into
+  processing vs. RF vs. fronthaul-interface shares, so it still cannot set
+  p_ru_proc_by_split, p_du_per_ru_by_split, or p_fh_per_ru_by_split without
+  guessing that decomposition -- not done.
+- The RAN550's "Maximum TX output power (total EIRP): 2 W" (33 dBm) *is* a
+  clean, same-quantity, same-units match for oran_env/oran_env.py's
+  p_max_dbm (the RU transmit-power action-space ceiling, read by this
+  model's compute_ru_power() as transmit_power_w) -- updated from 30 dBm
+  (1 W, an unvalidated placeholder) to 33 dBm (2 W), citing this datasheet
+  directly. See oran_env/oran_env.py and config/oran_default.yaml's own
+  comments for this specific change.
+- The HUBER+SUHNER infographic reproduces 3GPP TR 38.801's real per-split
+  fronthaul bandwidth requirements for exactly the three options this
+  model's split-centralization mapping (Concept Note Section 10.2) uses:
+  Option 2 = 3/4 Gbps (UL/DL), Option 6 = 7.1/5.6 Gbps, Option 8 = 157.3/
+  157.3 Gbps (100 MHz reference; Option 2's figure is on an 8-layer/256QAM
+  basis, Option 6/8's on a 32-antenna basis -- the two reference conditions
+  differ, a caveat on direct comparison). This quantitatively confirms the
+  monotonic direction this model assumes (least-to-most fronthaul need as
+  centralization increases), and also reveals that this model's own
+  p_fh_per_ru_by_split ratio ([3.0, 6.0, 15.0], a 1:2:5 ratio) is far
+  shallower than the real bandwidth-requirement ratio implied by these
+  figures (roughly 1:1.4-2.4:39-52, depending on UL/DL). Fronthaul *power*
+  does not necessarily scale linearly with fronthaul *bandwidth*
+  requirement, and no source states that relationship, so this was not
+  used to rescale p_fh_per_ru_by_split -- it is disclosed as a further,
+  more precise version of the "monotonic shape confirmed, magnitude
+  relationship unconfirmed" finding already on record for this constant.
+  See ORAN_BMPP_DQN_Concept_Note_v1.md Section 10.2's own note for the full
+  bandwidth table and this citation.
+
 This module is fully decoupled from cran_env/power_model.py: no shared code,
 no shared imports.
 """

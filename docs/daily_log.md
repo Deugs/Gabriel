@@ -2,6 +2,87 @@
 
 > Filled instances of `docs/daily_log_template.md`. Newest entry first.
 
+## Date: 2026-08-30 (vendor datasheet + fronthaul bandwidth table)
+
+### What I Did Today
+- [x] The candidate supplied 3 more sources without further comment: Benetel's RAN550 datasheet (a real, small-cell-class, Split-7.2x indoor O-RU product) and two identical copies (confirmed via `md5sum`) of a HUBER+SUHNER/CubeOptics infographic reproducing 3GPP TR 38.801's own functional-split taxonomy and per-split fronthaul bandwidth table.
+- [x] The infographic's bandwidth table is dense and multi-column; the linearized PDF text extraction scrambled the option-to-value mapping (naive reading order suggested Option 1 had the *highest* bandwidth, contradicting the infographic's own prose stating Option 8 has "the highest bandwidth requirements of all functional split options" -- a red flag). Rendered the page at 300 DPI, located the exact red vertical guide-line x-coordinates separating each split's column programmatically, annotated them, and cropped/re-read the header-number row and the bandwidth row against those same coordinates to get an unambiguous, pixel-verified mapping -- avoiding a transposition-style error like the one caught in the C-RAN power model on 2026-08-29.
+- [x] Result: a real, quantitative confirmation of the O-RAN split-centralization mapping's (§10.2) monotonic direction for the three mapped options, plus one genuine numeric constant fix (`power.ru.p_max_dbm`, 30 -> 33 dBm) from the RAN550 datasheet's real max-TX-power spec.
+
+### Time Spent
+| Activity | Hours |
+|----------|-------|
+| Coding | 0.3 |
+| Writing | 0.4 |
+| Reading | 0.3 (RAN550 datasheet, 4 pages; HUBER+SUHNER infographic, 1 dense page) |
+| Debugging | 0.4 (pixel-level re-analysis of the infographic to avoid a transposition error from scrambled text extraction) |
+| Running experiments | 0 |
+| **Total** | ~1.4 |
+
+### Decisions Made
+| Decision | Rationale |
+|----------|-----------|
+| Changed `power.ru.p_max_dbm` 30 -> 33 dBm (1 W -> 2 W) | Benetel RAN550's datasheet states "Maximum TX output power (total EIRP): 2 W" for a real, commercially available, Split-7.2x indoor small-cell O-RU -- the same physical quantity, same units, as this model's `p_max_dbm` action-space ceiling. A clean primary-source match, not a guess, following the same principle as the FTP Model 3 traffic-model fix earlier today. |
+| Did NOT decompose RAN550's "typical power consumption: 40 W" into this model's RU processing/DU/fronthaul arrays | The datasheet gives only a single total-power figure with no breakdown into processing vs. RF vs. fronthaul-interface shares -- assigning it to specific array elements would require guessing that decomposition. Documented as a scale-mismatch-narrowing data point (5-14x this model's own composite RU estimate, vs. 20-100x for the earlier macro-cell/enterprise-server figures) instead. |
+| Precisely pixel-verified the HUBER+SUHNER infographic's bandwidth table before citing any number from it | The naive linearized-text reading order was backwards relative to well-known 5G fronthaul facts (it implied Option 1 has the highest bandwidth, when Option 8/CPRI is well known to have the highest) -- a clear signal the text extraction order didn't match the visual column layout. Rendered at 300 DPI, found the red guide-line x-coordinates programmatically, and cross-checked against the unambiguous "3GPP TR 38.801 / 1 2 3 4 5 6 7-3 7-2 7-1 8" header row and the Small Cell Forum naming row (PDCP-RLC=2, RLC-MAC=3, etc.) before trusting any bandwidth figure. Final verified table: Option 2=3/4 Gbps, Option 6=7.1/5.6 Gbps, Option 8=157.3/157.3 Gbps (full 10-option table in the Concept Note). |
+| Did not rescale `p_fh_per_ru_by_split` to match the real bandwidth ratio | The verified bandwidth figures show Option 8 requires ~39-52x Option 2's bandwidth, far steeper than this model's own 1:2:5 power ratio -- but no source states that fronthaul *power* scales linearly with fronthaul *bandwidth* requirement, so inventing that proportionality to "fix" the ratio would be exactly the kind of unsupported claim the Ethical AI Rule forbids. Documented as a disclosable, now-quantified version of the existing "shape confirmed, magnitude unconfirmed" gap instead. |
+| Confirmed the two HUBER+SUHNER PDFs are byte-identical (`md5sum`) before treating them as one source | Avoided double-counting or wasting effort reading the same document twice. |
+| Added `tests/test_oran_env.py::test_p_max_dbm_matches_ran550_datasheet` | Locks in both the config value and the derived `env.p_max_w`, mirroring the traffic-model regression test added earlier today. |
+
+### Blockers
+| Blocker | Severity | Plan |
+|---------|----------|------|
+| None | -- | The RU/DU/CU/fronthaul wattage table remains the one still-fully-open needs-validation flag; would need a vendor datasheet that actually decomposes total O-RU/O-DU/O-CU power by subsystem (not just a single "typical power consumption" figure) to close it fully. |
+
+### Tomorrow's Plan
+- [ ] If the candidate wants to keep pursuing this, a vendor datasheet with a component-level power breakdown (not just a single total-power figure) would be the natural next ask, along with 3GPP TR 38.801 itself (recommended earlier, not yet supplied) for the split's own text describing these bandwidth figures' derivation
+- [ ] Otherwise, ready to move to whatever the candidate directs next
+
+### Notes
+Full test/lint verification before commit: `black --check`, `flake8 --max-line-length=100`, `mypy --ignore-missing-imports`, and the full O-RAN test suite all clean. No C-RAN files touched (grep-confirmed). This continues the same-day pattern of the 3GPP TR 38.864 entry above: literature can sometimes give a genuine primary-source match (p_max_dbm, lambda_peak, packet_size_bits) worth acting on, and sometimes only narrows/contextualizes a gap without resolving it (the RU/DU/CU/fronthaul wattage table, the bandwidth-vs-power ratio mismatch) -- both outcomes are documented with equal rigor rather than the latter being quietly dropped.
+
+---
+
+## Date: 2026-08-30 (3GPP TR 38.864 primary source)
+
+### What I Did Today
+- [x] The candidate asked what specific literature was still needed to close the remaining O-RAN needs-validation flags; I recommended obtaining 3GPP TR 38.864 ("Study on network energy savings for NR") and 3GPP TR 38.801 directly, rather than more secondary citations of them.
+- [x] The candidate supplied 3GPP TR 38.864 itself (a `.docx`, V18.1.0). Extracted its text (`unzip` + XML strip, since `pandoc` was unavailable in this sandbox) and read §5.1 (Energy consumption model for BS) and Annex A (Evaluation scenarios, traffic models and loads) in full.
+- [x] This is the first source in either literature-check round that gives a genuine, primary-source, right-units numeric match rather than order-of-magnitude/qualitative context: Annex A's FTP Model 3 (0.5 MB packet size, 200 ms mean inter-arrival time) is a real, standard 3GPP Poisson traffic model. Updated `lambda_peak` and `packet_size_bits` to derive directly from it -- the first *numeric constant change* driven by literature in either O-RAN literature-check round (the 2026-08-29 C-RAN fix was also a real value change, but that was a same-day correction against Al-Zubaedi's own table, not part of this O-RAN check series).
+
+### Time Spent
+| Activity | Hours |
+|----------|-------|
+| Coding | 0.2 |
+| Writing | 0.4 |
+| Reading | 0.5 (3GPP TR 38.864, 72 pages, focused on §5.1 and Annex A/B) |
+| Debugging | 0.1 (pandoc unavailable in this sandbox; worked around via unzip + XML text extraction) |
+| Running experiments | 0 |
+| **Total** | ~1.2 |
+
+### Decisions Made
+| Decision | Rationale |
+|----------|-----------|
+| Changed `lambda_peak` 5.0 → 0.5 and `packet_size_bits` 1.0e6 → 4.0e6 (both in `config/oran_default.yaml` and `oran_env/traffic_model.py`'s class defaults) | TR 38.864 Annex A's FTP Model 3 gives 200 ms mean inter-arrival time (= 5 arrivals/s = 0.5 per this model's 0.1s step) and 0.5 MB (=4e6 bits) packet/file size -- a real 3GPP standard traffic model in exactly the units this model needs, not an approximate/order-of-magnitude match like every other source checked so far. This is a genuine primary-source derivation, following the same principle as the 2026-08-29 C-RAN fix (Al-Zubaedi's Table 3.1): when a primary source gives an exact match in the right units, use it. |
+| Left `floor_ratio` and `t1`-`t4` unchanged | TR 38.864 Annex A's own "load (L)%" scenarios (Table A-1) are instantaneous PRB-utilization snapshots with no time-of-day association, and the TR's own stated scope ("prioritizes idle/empty and low/medium load scenarios") stops at 50% load with no busy-hour/full-load reference point -- it gives no floor:peak ratio or diurnal timing to derive these from. Extending the fix to these would require guessing, which the Ethical AI Rule forbids. |
+| Adopted FTP Model 3 specifically (not FTP Model 3 IM or VoIP) | 3GPP leaves the traffic-model choice to the evaluating party; FTP Model 3 is the most commonly used baseline across 3GPP energy-saving evaluations, a defensible choice, documented as such rather than presented as the only possible one. Noted (not implemented) that FTP3-IM's lighter traffic (0.1 MB, 2s inter-arrival) could plausibly inform off-peak/floor behavior better than a flat `floor_ratio` scaling, but this module's structure only supports one packet size for the whole day -- changing that is a design change, left for a future round if wanted. |
+| Documented TR 38.864 §5.1's real 3GPP power-consumption model as additional power-model context, without changing any power-model constant | §5.1's `P_static + P_dynamic` structure (scaled by active-TRX fraction, RF-bandwidth ratio, PSD ratio) independently confirms, from the actual governing 3GPP source, that this family of model is right for the C-RAN/O-RAN power models already in use -- but its Table 5.1-3 values are relative units with no absolute-Watt anchor, and the model is whole-BS, not disaggregated into O-RAN's RU/DU/CU/fronthaul components. Converting relative units to Watts would require inventing a scale factor, so no power-model constant was changed. |
+| Added `tests/test_oran_env.py::test_traffic_model_defaults_match_3gpp_ftp_model_3` | Locks in the new literature-derived defaults (both the `ORANTrafficModel` class default and `config/oran_default.yaml`'s value), mirroring how the C-RAN power-model fix was paired with a re-run of its own regression test. |
+
+### Blockers
+| Blocker | Severity | Plan |
+|---------|----------|------|
+| None | -- | `floor_ratio`/`t1`-`t4` remain open; would need a source giving diurnal timing or a busy-hour:off-peak traffic ratio specifically, which TR 38.864 does not provide. |
+
+### Tomorrow's Plan
+- [ ] If the candidate wants to pursue 3GPP TR 38.801 (the actual source of the Option 2/6/7/8 split numbering, recommended alongside TR 38.864) next, it could similarly upgrade §10.2's split-mapping flag from qualitative to numeric
+- [ ] Otherwise, ready to move to whatever the candidate directs next (e.g. running real experiments)
+
+### Notes
+Full test/lint verification before commit: `black --check`, `flake8 --max-line-length=100`, and `pytest tests/test_oran_env.py -v` all clean; confirmed no other O-RAN test/training/evaluation file hardcodes the old `lambda_peak`/`packet_size_bits` defaults before changing them (`grep` across `tests/test_oran_*.py`, `oran_training/`, `oran_evaluation/`). This is the first literature-driven numeric change in the O-RAN track since the 2026-08-29 config-wiring bug fix, and the first one driven by an exact primary-source match rather than a bug.
+
+---
+
 ## Date: 2026-08-30 (default scenario scale)
 
 ### What I Did Today
