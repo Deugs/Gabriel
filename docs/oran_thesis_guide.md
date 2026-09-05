@@ -82,7 +82,23 @@ thesis states them as fact:
   7.2b DU/CU figures are confounded by a different-server-class testbed
   choice, so not directly comparable to Split 8's. Their finding that power
   barely scales with PRB load independently corroborates this model's
-  existing load-independent DU/CU power design (no change needed)
+  existing load-independent DU/CU power design (no change needed). Two
+  more sources supplied the same day: Abubakar et al. 2023's own survey
+  conclusion states RU/fronthaul-specific O-RAN power modeling remains an
+  open research gap in the literature at large (a survey-level
+  confirmation this flag's "still open" status is a field-wide gap, not a
+  search failure), and cites a real fronthaul-*power* percentage (not
+  bandwidth) from Lopez-Perez et al. — 2%/30%/60% of total C-RAN power for
+  split options 6/7/8 — that further quantifies (without rescaling) the
+  bandwidth-vs-power gap already noted above, since this model's own
+  implied fronthaul fraction (~11-18% across c=0..2) sits well below the
+  cited 60% at the most-centralized option. A 2025 MASc thesis on CF-mMIMO
+  under O-RAN Split 7.2/8 gave further structural corroboration (its own
+  power model is the same static+load-dependent family) and closed-form
+  fronthaul-rate formulas confirming the bandwidth-monotonicity direction,
+  but the supplied PDF excerpt stops before its own numeric Simulation
+  Parameters table and Appendix A ("Maximum Supported APs per DU under a
+  Fronthaul Budget") — exactly the kind of table this flag still needs
 - `oran_env/traffic_model.py`'s trapezoidal breakpoints and Poisson rate
   (§10.6, via `config/oran_default.yaml`'s `traffic:` section) —
   **partially resolved** as of a 2026-08-30 check that obtained 3GPP
@@ -107,4 +123,8 @@ thesis states them as fact:
   scalability challenges for single-agent centralized RL as RU count
   grows — corroborating the tractability rationale, not the exact counts.
   `n_ru=4`/`n_ue=8` themselves remain an unvalidated tractability choice,
-  just one now shown to sit within precedented ranges
+  just one now shown to sit within precedented ranges. A 2025 MASc thesis
+  on CF-mMIMO under O-RAN (`K=16` users, `L=20`-`50` APs) adds a third
+  reference point, though its UE:AP ratio (0.32-0.8) sits *below* this
+  repo's own ratio (2), unlike DQRL/OREO's ratios which bracketed it —
+  disclosed as a genuine difference, not cherry-picked

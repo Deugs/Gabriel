@@ -175,6 +175,42 @@ bandwidth table cited above, not a secondary reproduction).
   discrepancy worth noting; it does not affect that fix (a different
   physical quantity, max TX power vs. typical total consumption).
 
+**2026-08-30 literature check, part 5**: obtained Abubakar et al. 2023
+("Energy Efficiency of Open Radio Access Network: A Survey," IEEE
+VTC2023-Spring) and a 2025 MASc thesis (SK Razib Ahmed, UBC, on CF-mMIMO
+under O-RAN Split 7.2/8).
+- Abubakar et al.'s own survey conclusion states that RU-specific and
+  transport/fronthaul-specific O-RAN power modeling remains an open
+  research gap in the literature at large as of 2023 -- a survey-level
+  confirmation that this model's own "still open" status reflects a
+  genuine field-wide gap, not a failure of this literature search.
+- The same survey cites a real, quantified, split-dependent fronthaul
+  *power* percentage (not bandwidth) from Lopez-Perez et al.: for a C-RAN
+  with split options 6/7/8, "the transport network contributes about
+  2%, 30%, and 60% respectively" of total power. This model's own implied
+  fronthaul fraction of total RU+DU+CU+fronthaul power is roughly 11% at
+  c=0 and 18% at c=2 (using this model's own default constants) -- well
+  below the cited 60% for the most-centralized option, suggesting this
+  model likely under-weights fronthaul's power share at high
+  centralization. Not used to rescale p_fh_per_ru_by_split (their
+  percentage is for a differently-scoped "total power" basis, so
+  converting it into this model's absolute Watt terms would need
+  additional unstated assumptions), but a further quantification of the
+  bandwidth-vs-power-ratio gap already on record in part 3 above.
+- The MASc thesis's own CF-mMIMO power model is structurally
+  `P_total = P_fixed + P_load` (static + load-dependent) -- the same
+  family already cited from 3GPP TR 38.864 and EARTH, further structural
+  corroboration, no new numbers. Its closed-form fronthaul data-rate
+  formulas for Split 7.2/8 are another independent confirmation of the
+  bandwidth-monotonicity direction (in formula form, not fixed numbers).
+- Caveat: the two supplied PDF parts of this thesis have a gap (pages
+  ~23-50 not included) and stop at page 74, before the thesis's own
+  referenced Appendix A ("Table A.1: Maximum Supported APs per DU under
+  20 Gbps Fronthaul Budget for Split 7.2 and Split 8," page 115) --
+  exactly the kind of concrete numeric table this flag still needs.
+  Nothing was inferred to fill this gap; those pages remain the most
+  promising lead if supplied later.
+
 This module is fully decoupled from cran_env/power_model.py: no shared code,
 no shared imports.
 """
