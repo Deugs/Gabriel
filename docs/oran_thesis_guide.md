@@ -119,9 +119,34 @@ thesis states them as fact:
   (Chapter 4, a live OpenAirInterface/Scaphandre-RAPL testbed) uses no
   real RU hardware at all and decomposes energy by accounting category
   (Host/Activation/Service), not by RAN component — so it still gives no
-  RU/DU/CU wattage table. This flag remains the most-open of the four
-  O-RAN needs-validation flags after 7 literature-check passes across two
-  days
+  RU/DU/CU wattage table. An 8th pass (a Rutgers WINLAB/ONF/ORCID Lab white
+  paper on a real commercial O-RAN test line) is the strongest source found
+  yet: real, separately-decomposed RU/DU/CU absolute-Watt measurements
+  (not just RU vs. combined DU+CU), a validated multi-band power-model
+  formula in the same static+per-chain family this model already uses,
+  and — for the first time in this flag's history — genuine,
+  scale-invariant validation of one constant with no scale-mismatch
+  caveat: this model's `pa_efficiency=0.25` falls squarely inside the
+  paper's own fitted PA-efficiency ranges (29-39% and 14-32% for its two
+  bands). It also resolves an apparent tension between the two previously-
+  cited RU-share figures: computed directly from its own test cases,
+  RU-share-of-total-power ranges from ~29-47% at small RU/band counts
+  (closer to this model's own implied ~16-36%) up to ~80-81% at full
+  commercial multi-RU scale — independently cross-validating the Bologna
+  thesis's 82% figure almost exactly at the large-scale end, showing
+  RU-share scales with RU/band count rather than being a fixed ratio.
+  Still, the paper's test cases vary RF gain/MIMO order/traffic load/band
+  count, never 3GPP split option, and give no separately-metered fronthaul
+  figure, so they cannot inform the split-dependent
+  `p_ru_proc_by_split`/`p_du_per_ru_by_split`/`p_fh_per_ru_by_split`
+  arrays — and the paper's absolute Watt figures (RU ~200-670 W, DU
+  ~280-310 W, CU ~230 W, real commercial macro-cell-class multi-band
+  hardware) remain ~10-50x this model's own small-cell placeholder scale,
+  so nothing was rescaled. This flag remains the most-open of the four
+  O-RAN needs-validation flags after 8 literature-check passes across two
+  days, though its broader context (and the `pa_efficiency` constant
+  specifically) is now substantially better-supported than at any prior
+  pass
 - `oran_env/traffic_model.py`'s trapezoidal breakpoints and Poisson rate
   (§10.6, via `config/oran_default.yaml`'s `traffic:` section) —
   **partially resolved** as of a 2026-08-30 check that obtained 3GPP

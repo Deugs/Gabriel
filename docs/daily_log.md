@@ -2,6 +2,49 @@
 
 > Filled instances of `docs/daily_log_template.md`. Newest entry first.
 
+## Date: 2026-08-30 (Rutgers WINLAB/ONF/ORCID commercial O-RAN white paper)
+
+### What I Did Today
+- [x] The candidate supplied a new white paper: Shankaranarayanan et al. (Rutgers WINLAB / Open Networking Foundation / ORCID Lab), "Energy Efficiency Testing and Modeling of a Commercial O-RAN System" (Feb 2026). Read it in full.
+- [x] This is the single strongest source found across all eight literature-check passes on the power-model flag: it gives real, separately-decomposed RU/DU/CU power measurements (not just RU vs. a combined DU+CU, as with Al-Tahmeesschi et al.) for a genuinely commercial, high-power, multi-band O-RAN test line (an AWS-hosted O-CU, a dedicated-server O-DU, and up to six multi-band O-RUs).
+- [x] Found the first constant in this flag's entire history to be genuinely validated with no scale-mismatch caveat: `pa_efficiency=0.25` (a dimensionless ratio, not an absolute Watt figure) falls squarely inside the paper's own fitted PA-efficiency ranges (29-39% and 14-32% for its two bands). Not changed, since it already sits inside the validated range.
+- [x] Computed RU-share-of-total-power directly from the paper's own test-case tables (~29-47% at small RU/band counts, rising to ~80-81% at full six-RU/three-sector commercial scale) and found it bridges, rather than contradicts, two previously-conflicting findings: this repo's own model's implied RU-share (~16-36%) and the Bologna thesis's cited 66-82% macro/massive-MIMO figure -- the paper's own large-scale figure (80.9%) independently cross-validates the 82% figure almost exactly.
+- [x] Confirmed the paper's own multi-band O-RU power-model formula is structurally the same static-baseline + per-active-chain-idle/tx-over-efficiency family as this repo's own model, the EARTH model, and 3GPP TR 38.864 -- now validated against real commercial hardware rather than only derived analytically.
+- [x] Confirmed the paper still cannot inform the split-dependent power arrays this flag actually needs (its test cases vary RF gain/MIMO/traffic/band count, never 3GPP split option, and it gives no separately-metered fronthaul figure) and that its absolute Watt figures remain ~10-50x this repo's own placeholder scale -- honestly reported as still open for the flag's actual scope, despite being the best source found so far.
+- [x] Updated `oran_env/power_model.py` (docstring, part 8), `manuscript/ORAN_BMPP_DQN_Concept_Note_v1.md` §10.5, and `docs/oran_thesis_guide.md`'s power-model flag entry. No numeric constants changed.
+
+### Time Spent
+| Activity | Hours |
+|----------|-------|
+| Coding | 0 |
+| Writing | 0.4 |
+| Reading | 0.35 (23-page white paper, full read, plus arithmetic on its own test-case tables to compute RU-share percentages) |
+| Debugging | 0 |
+| Running experiments | 0 |
+| **Total** | ~0.75 |
+
+### Decisions Made
+| Decision | Rationale |
+|----------|-----------|
+| Did not change `pa_efficiency` even though it's now validated | The current default (0.25) already sits inside the paper's own fitted ranges (29-39%, 14-32%) -- picking a different value from within the same validated range wouldn't be a "fix," just an arbitrary re-pick. Documenting the validation is the honest outcome here, not a change for its own sake. |
+| Did not rescale any RU/DU/CU/fronthaul absolute-Watt constant | The paper's own figures (RU ~200-670 W, DU ~280-310 W, CU ~230 W) are real commercial macro-cell-class, high-power, multi-band hardware -- roughly 10-50x this repo's own small-cell/testbed placeholder scale, consistent with (and further reinforcing) the scale mismatch already on record from earlier passes. Converting these into a rescaling factor for this repo's own scenario would require inventing an unstated scale-transfer function. |
+| Reported the RU-share finding as "bridging" rather than "resolving" the two previously-conflicting figures | The paper's own RU-share scales continuously with RU/band count (29% to 81%) rather than being a fixed number -- so while it's genuinely useful context that both ends of this repo's own range and the previously-cited macro figure are now independently anchored in real data, it doesn't hand over a single number to adopt for this repo's own `n_ru=4` scenario without picking an arbitrary point on that curve. |
+| Documented the flag as still open for its actual scope (split-dependent RU/DU/CU/fronthaul wattage) despite this being the best source yet | The paper never varies functional split option and never separately meters fronthaul power -- so even this strong a source cannot close the specific gap the flag names. Saying otherwise would overclaim what a genuinely excellent source actually established. |
+
+### Blockers
+| Blocker | Severity | Plan |
+|---------|----------|------|
+| None | -- | The RU/DU/CU/fronthaul wattage flag remains open after 8 passes; only a source that varies functional split option (not just RF gain/MIMO/band count) and gives a matching, component-decomposed Watt table at a small-cell/testbed scale would close it. |
+
+### Tomorrow's Plan
+- [ ] Ready for whatever the candidate directs next
+- [ ] If more literature is wanted, a source that specifically varies 3GPP functional split option (Option 2/6/8-style) while measuring real RU/DU/CU/fronthaul Watts remains the single most valuable missing document type
+
+### Notes
+Verified this round's `power_model.py` edit is docstring-only via `git diff` (all added lines fall inside the module docstring, before the closing `"""`) and `python3 -c "import ast; ast.parse(...)"` (confirms the file still parses). `numpy`/`pytest`/`flake8`/`black` remain unavailable in this session; reinstalling the full stack was judged unnecessary for a documentation-only change, consistent with the precedent set in earlier entries today.
+
+---
+
 ## Date: 2026-08-30 (new Bologna thesis on O-RAN CU energy scaling)
 
 ### What I Did Today

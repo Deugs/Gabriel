@@ -284,6 +284,89 @@ source.
   independent source, that the RU/DU/CU/fronthaul wattage decomposition
   itself remains fully open -- not a partial resolution.
 
+**2026-08-30 literature check, part 8**: obtained a new primary source --
+Shankaranarayanan et al. (Rutgers WINLAB / Open Networking Foundation / ORCID
+Lab), "Energy Efficiency Testing and Modeling of a Commercial O-RAN System,"
+white paper, Feb 2026 -- the single most directly relevant source found
+across all eight passes: real power measurements, separately decomposed by
+RU/DU/CU (not just RU vs. a combined DU+CU as in Al-Tahmeesschi, part 4
+above), for a genuinely commercial, high-power, multi-band O-RAN test line
+(an AWS-hosted O-CU, a dedicated-server O-DU, and up to six multi-band
+O-RUs).
+- The paper's own multi-band O-RU power model (its Figure 10):
+  `P_O-RU = P_base + sum_b[N_TX,b*(P_idle-ch,b + P_tx-ch,b(u)/eta_PA,b(u) +
+  alpha_O-RU,b(u))]` -- structurally the same family (static baseline +
+  per-active-chain idle/tx-over-efficiency) as this model's own
+  `compute_ru_power()`, the EARTH model, and 3GPP TR 38.864, now further
+  extended (multi-band summation, an explicit utilization-dependent
+  processing-overhead term `alpha`) and, notably, *validated against real
+  measured commercial hardware* rather than only derived analytically --
+  the strongest structural confirmation found in any of the eight passes.
+  Its own fitted parameters (Type-A O-RU): `P_base=152 W`,
+  `P_idle-ch,N70=55 W`, `P_idle-ch,N66g=84 W`.
+- This model's own `pa_efficiency=0.25` (a single constant across all
+  splits) is, for the first time in this flag's whole history, a genuine
+  same-quantity match without a scale-mismatch caveat: PA drain efficiency
+  is a dimensionless ratio, not an absolute Watt figure, so it isn't
+  subject to the small-cell-vs-macro-cell scale mismatch found for every
+  other constant in this flag. The paper's own fitted PA efficiencies are
+  29-39% (N70 band, 37-43 dBm Tx gain) and 14-32% (N66g band, 37-46 dBm) --
+  this model's `pa_efficiency=0.25` falls squarely inside both ranges. Not
+  changed, since it already sits within the validated range -- but this is
+  the first constant in this flag's history to receive direct numeric
+  corroboration with no scale-mismatch caveat attached.
+- A genuinely new, precisely quantified finding: RU-share-of-total-system-
+  power, computed directly from the paper's own Figure 15/16/17 test-case
+  tables, ranges from ~29-47% (single/dual-RU, single/dual-band
+  configurations, e.g. 268/782=34.3% for a single N70 carrier) up to
+  ~80-81% (the full six-RU, three-sector, twelve-band commercial
+  configuration, e.g. 2267/2802=80.9%). This *bridges* -- rather than
+  contradicts -- the two previously-disclosed, seemingly conflicting
+  findings: this model's own implied RU-share (~16-36% across `c=0..2`,
+  part 7 above) sits closer to (if still somewhat below) this paper's own
+  small-RU-count figures, while its full-commercial-scale figure (80.9%)
+  independently cross-validates the Bologna thesis's cited massive-MIMO
+  AAU figure (82%, part 7 above) almost exactly -- two unrelated real
+  sources agreeing at the large-scale end. This suggests RU-share is a
+  genuine function of RU/band count and configuration scale, not a fixed
+  ratio -- useful context, still not a number that can be transplanted
+  into this model's own constants without a stated RU-count-to-scale
+  mapping, which no source provides.
+- The paper's own DU (Dell XR11 server) power shows only modest
+  load-dependency (idle ~280 W, rising ~2-9% to ~284-310 W across all
+  its test cases -- e.g. +2 W for 572 Mb/s DL, +25 W for 1836 Mb/s DL),
+  and its O-CU (AWS-hosted, CPU-utilization-based estimate,
+  `P = P_idle + (P_max - P_idle) * U/100`) shows near-zero load-dependency
+  (~+1 W under full data load, attributed to the CU being provisioned for
+  17x the actual load). Both independently corroborate -- from real
+  commercial measurements, not just Al-Tahmeesschi's testbed (part 4
+  above) -- this model's existing design choice that DU/CU power should be
+  dominated by a static term with only a small per-active-RU dynamic term;
+  no design change needed, cited as further validation.
+- The absolute-Watt figures themselves (O-RU ~200-670 W per unit across
+  its test cases; O-DU server ~280-310 W; O-CU ~230 W) remain roughly
+  10-50x larger than this model's own composite RU/DU/CU placeholder scale
+  (~3-18 W RU, ~50-130 W DU, ~30-34 W CU) -- this is real commercial
+  macro-cell-class, high-power, multi-band hardware, not the small-cell/
+  testbed scale this model targets, consistent with (and further
+  reinforcing) the scale mismatch already disclosed against macro-cell/
+  enterprise-hardware figures in earlier passes. No absolute constant was
+  rescaled from it.
+- The paper gives no split-option-dependent (3GPP Option 2/6/8-style)
+  power breakdown at all -- its test cases vary RF gain, MIMO order,
+  traffic load, and band/carrier/RU count, not functional split choice --
+  so it still cannot inform this model's own `p_ru_proc_by_split`/
+  `p_du_per_ru_by_split`/`p_fh_per_ru_by_split` monotonic-in-`c` ratios,
+  and it gives no separately-metered fronthaul power figure at all. The
+  RU/DU/CU/fronthaul wattage decomposition *by functional-split
+  centralization level* -- the actual scope of this flag -- therefore
+  remains open after this 8th pass, though the flag's broader context
+  (real, separately-decomposed, commercial RU/DU/CU absolute power; a
+  validated PA efficiency constant; a validated multi-band power-model
+  structure; and independent cross-validation of the RU-share-of-total
+  finding against an unrelated source) is now substantially stronger than
+  at any prior pass.
+
 This module is fully decoupled from cran_env/power_model.py: no shared code,
 no shared imports.
 """
