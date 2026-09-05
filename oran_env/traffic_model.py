@@ -63,6 +63,20 @@ FTP3-IM vs. VoIP as "the" traffic class for a small-cell O-RAN UE is itself
 a modeling decision 3GPP leaves to the evaluating company, so adopting
 FTP3 specifically (as the most commonly used baseline in 3GPP energy-
 saving evaluations) is a defensible choice, not the only possible one.
+
+**2026-08-30 literature check, part 2**: a 2025 MASc thesis (SK Razib
+Ahmed, UBC) cites an ETSI standard (ETSI TR 103 737) for 24-hour power
+averaging using three weighted load periods: Busy=6h, Medium=10h, Low=8h
+(summing to 24h). This module's own t1=7/t4=23 imply a floor duration of
+exactly 24-(23-7)=8 hours and an active (rise+plateau+fall) duration of
+exactly 23-7=16 hours -- an exact match to the ETSI standard's Low
+duration (8h) and combined Medium+Busy duration (16h). This is a genuine
+confirmation of the *aggregate* floor-vs-active day-fraction split these
+breakpoints imply, not a coincidence to dismiss -- but it does not fully
+validate the four individual breakpoints, since three aggregate durations
+underdetermine four specific t-values (many rise/plateau/fall splits
+within the same 16-hour window would give the same aggregate durations),
+and it says nothing about lambda_peak, floor_ratio, or packet_size_bits.
 """
 
 import numpy as np

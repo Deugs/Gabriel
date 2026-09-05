@@ -203,13 +203,32 @@ under O-RAN Split 7.2/8).
   corroboration, no new numbers. Its closed-form fronthaul data-rate
   formulas for Split 7.2/8 are another independent confirmation of the
   bandwidth-monotonicity direction (in formula form, not fixed numbers).
-- Caveat: the two supplied PDF parts of this thesis have a gap (pages
-  ~23-50 not included) and stop at page 74, before the thesis's own
-  referenced Appendix A ("Table A.1: Maximum Supported APs per DU under
-  20 Gbps Fronthaul Budget for Split 7.2 and Split 8," page 115) --
-  exactly the kind of concrete numeric table this flag still needs.
-  Nothing was inferred to fill this gap; those pages remain the most
-  promising lead if supplied later.
+- Caveat (as of the first pass): the two supplied PDF parts of this
+  thesis had a gap (pages ~23-50 not included) and stopped at page 74,
+  before the thesis's own Chapter 4 and Appendix A. The candidate supplied
+  the missing pages the same day -- see part 6 below.
+
+**2026-08-30 literature check, part 6**: read the thesis's Chapter 4 and
+Appendix A in full. Chapter 4's own simulation *assumptions* state
+fronthaul capacity of "10 Gbps with 4 antennas and 20 Gbps with 8
+antennas" for Split 8, and "10 Gbps with both 4 and 8 antennas" for Split
+7.2 -- the author's own chosen simulation inputs, not a measurement.
+Appendix A gives a separate, formula-derived worked example (using
+standard 5G NR OFDM parameters: f_s=30.72 MHz, N_used=1200 subcarriers,
+T_s=66.7 microseconds, N_bits=12, N=8 antennas): R_FH^(7.2)~=2.764 Gbps,
+R_FH^(8)~=5.898 Gbps -- a Split-8-to-Split-7.2 ratio of only ~2.1x, giving
+7 vs. 3 maximum APs per DU under a 20 Gbps/DU budget. This thesis's own
+two sets of numbers disagree with each other (10/20 Gbps vs. 2.764/5.898
+Gbps) and with 3GPP TR 38.801's real Option 7-2-vs-Option 8 bandwidth
+ratio (~10-16x, part 3 above) -- disclosed honestly as a spread across
+(and even within) sources, not resolved by picking one. This reinforces,
+rather than closes, the existing bandwidth-vs-power-ratio gap; no
+constant was set from any of these three disagreeing figures. The
+Appendix A table does not decompose power by RU/DU/CU component either
+(it addresses only fronthaul *bandwidth*, not Watts), so it does not
+close the RU/DU/CU power-breakdown gap either -- that remains the one
+fully "still open" needs-validation flag after 6 literature-check passes
+across two days.
 
 This module is fully decoupled from cran_env/power_model.py: no shared code,
 no shared imports.

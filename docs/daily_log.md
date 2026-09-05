@@ -2,6 +2,44 @@
 
 > Filled instances of `docs/daily_log_template.md`. Newest entry first.
 
+## Date: 2026-08-30 (CF-mMIMO thesis, remaining pages)
+
+### What I Did Today
+- [x] The candidate supplied the remaining pages (75-117) of the same MASc thesis flagged as missing in the prior entry today -- a genuine follow-through on the specific gap disclosed there, rather than a new source.
+- [x] Read Chapter 4 (Simulation Setup, Results, Discussion) and both Appendices in full. Found two genuinely usable results: (1) an ETSI standard (TR 103 737, via the thesis's own citation) for 24-hour power averaging with three weighted load periods -- Busy=6h, Medium=10h, Low=8h -- that **exactly** matches this repo's own traffic model's implied floor duration (8h) and active duration (16h), a real confirmation of the aggregate day-fraction split; (2) Appendix A's formula-derived fronthaul-rate worked example (Split 7.2≈2.764 Gbps, Split 8≈5.898 Gbps at N=8 antennas), which -- honestly disclosed -- disagrees both with the same thesis's own Chapter 4 simulation assumptions (10/20 Gbps) and with 3GPP TR 38.801's real bandwidth ratio, reinforcing rather than closing the already-known bandwidth-vs-power-ratio gap.
+- [x] Confirmed the Appendix A table does not decompose power by RU/DU/CU component either (it's fronthaul bandwidth only) -- the RU/DU/CU wattage flag remains the one fully "still open" flag after 6 literature-check passes across two days, honestly reported as such rather than stretched to claim partial resolution it doesn't have.
+
+### Time Spent
+| Activity | Hours |
+|----------|-------|
+| Coding | 0 |
+| Writing | 0.3 |
+| Reading | 0.4 (thesis pages 75-117, ~43 pages: Chapter 4, Chapter 5, both appendices, bibliography) |
+| Debugging | 0 |
+| Running experiments | 0 |
+| **Total** | ~0.7 |
+
+### Decisions Made
+| Decision | Rationale |
+|----------|-----------|
+| Documented the ETSI 24h-weighting match as a genuine confirmation, precisely scoped | The match (8h floor / 16h active, both exact) is real and worth crediting -- but three aggregate durations don't uniquely determine four breakpoint values, so I was explicit that `t1`-`t4` individually (and `floor_ratio`) remain open, only the aggregate split is now grounded. Overstating this as "breakpoints validated" would be exactly the kind of imprecision the Ethical AI Rule warns against. |
+| Did not pick a "winning" fronthaul-rate figure among the thesis's own two internally-disagreeing numbers (10/20 Gbps vs. 2.764/5.898 Gbps) or against 3GPP TR 38.801's ratio | All three are legitimate in their own context (simulation assumption, formula-derived example, real standard) but disagree with each other -- disclosing the spread honestly is more useful than silently picking one to cite as "the" number. |
+| No numeric constant changed | Neither new finding gives a clean RU/DU/CU/fronthaul Watt decomposition; the ETSI finding is duration-only (already matches, nothing to change), and the fronthaul-rate figures are yet more bandwidth data disagreeing with each other, not power. |
+
+### Blockers
+| Blocker | Severity | Plan |
+|---------|----------|------|
+| None | -- | The RU/DU/CU/fronthaul wattage flag remains open; per the last several entries, only a source that actually decomposes measured or assumed power by component (not bandwidth, not GOPS, not a percentage of a differently-scoped total) would close it. |
+
+### Tomorrow's Plan
+- [ ] This closes out the currently-supplied literature; ready for whatever the candidate directs next
+- [ ] If more literature is wanted, a component-level power breakdown (RU vs. DU vs. CU vs. fronthaul, in Watts) remains the single most valuable missing document type
+
+### Notes
+No code or config changes this round. This is the sixth O-RAN literature-check pass in two days and the first to fully resolve a previously-disclosed "missing pages" gap by the candidate directly supplying exactly what was flagged as missing -- a good sign the disclosure practice (naming specific missing pages rather than a vague "partial read") is actionable.
+
+---
+
 ## Date: 2026-08-30 (O-RAN EE survey + CF-mMIMO thesis)
 
 ### What I Did Today
