@@ -106,8 +106,22 @@ thesis states them as fact:
   Neither the Chapter 4 assumptions nor Appendix A decompose power by
   RU/DU/CU component (both address fronthaul *bandwidth* only), so this
   flag's core RU/DU/CU wattage gap remains fully open after 6
-  literature-check passes across two days — the most-open of the four
-  O-RAN needs-validation flags
+  literature-check passes across two days. A 7th pass (a different
+  master's thesis, Caterina Leonelli/Bologna, on O-RAN CU energy scaling)
+  added a new, quantified finding in the opposite direction: its cited
+  survey figure that non-massive-MIMO/massive-MIMO base stations spend
+  66%/82% of total RAN energy on the RU alone implies this model's own
+  RU-share (~16-36% across c=0..2, computed from its default constants)
+  likely *under*-weights RU relative to DU/CU/fronthaul, not just
+  under-weights fronthaul as found earlier — still not used to rescale
+  anything, since the cited percentage is for a differently-scoped
+  real-hardware total. That thesis's own real measured energy data
+  (Chapter 4, a live OpenAirInterface/Scaphandre-RAPL testbed) uses no
+  real RU hardware at all and decomposes energy by accounting category
+  (Host/Activation/Service), not by RAN component — so it still gives no
+  RU/DU/CU wattage table. This flag remains the most-open of the four
+  O-RAN needs-validation flags after 7 literature-check passes across two
+  days
 - `oran_env/traffic_model.py`'s trapezoidal breakpoints and Poisson rate
   (§10.6, via `config/oran_default.yaml`'s `traffic:` section) —
   **partially resolved** as of a 2026-08-30 check that obtained 3GPP
@@ -143,4 +157,9 @@ thesis states them as fact:
   on CF-mMIMO under O-RAN (`K=16` users, `L=20`-`50` APs) adds a third
   reference point, though its UE:AP ratio (0.32-0.8) sits *below* this
   repo's own ratio (2), unlike DQRL/OREO's ratios which bracketed it —
-  disclosed as a genuine difference, not cherry-picked
+  disclosed as a genuine difference, not cherry-picked. A fourth source
+  (the Caterina Leonelli/Bologna O-RAN CU-scaling thesis) gives the
+  closest exact-count match found yet: its own testbed uses exactly
+  `n_ru=4` (matching this repo's own count precisely), with `n_ue=4` (a
+  UE:RU ratio of 1.0, at the low end of the DQRL/OREO bracket) — a further
+  data point, not a validation of `n_ue=8` specifically
