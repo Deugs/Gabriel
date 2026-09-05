@@ -230,6 +230,60 @@ close the RU/DU/CU power-breakdown gap either -- that remains the one
 fully "still open" needs-validation flag after 6 literature-check passes
 across two days.
 
+**2026-08-30 literature check, part 7**: read a new master's thesis (Caterina
+Leonelli, University of Bologna, "Dynamic Resource Allocation and Energy
+Optimization in 5G Open Radio Access Network (O-RAN)," AY2023-2024) in full.
+Its companion upload the same day
+("EnhancingOpenRANDigitalTwinThroughPowerConsumptionMeasurement.pdf") was
+confirmed (matching abstract/tables/equations) to be the same
+Al-Tahmeesschi et al. 2025 paper already cited in part 4 above -- the IEEE
+PIMRC 2025 published version with a White Rose Research Online institutional-
+repository cover page, not new content, so it is not re-cited as a separate
+source.
+- The new thesis's own Related Work (citing Larsen et al. 2023, IEEE OJCOMS
+  -- a different survey than any cited above) reports that non-massive-MIMO
+  RRU base stations consume 66%, and massive-MIMO AAU base stations 82%, of
+  total RAN energy -- i.e. the RU is by far the RAN's most power-hungry
+  single component, leaving only 18-34% for everything else (DU/CU/
+  fronthaul/other). This model's own analogous RU-share-of-(RU+DU+CU+
+  fronthaul) fraction, computed from its default constants (`n_ru=4`, all
+  RUs active, max transmit power at the now-updated `p_max_dbm=33` dBm), is
+  roughly 36% at `c=0` and 16% at `c=2` -- both well below the cited
+  66-82%. This is a new, quantified finding in the *opposite* direction from
+  the fronthaul-under-weighting finding already on record (part 5 above):
+  this model may under-weight not only fronthaul's share at high
+  centralization but also RU's own share overall, correspondingly
+  over-weighting DU+CU+fronthaul's combined share. Not used to rescale any
+  constant -- the cited percentage is for real macro-cell/massive-MIMO
+  deployments' whole-RAN energy (which may include elements this model
+  doesn't represent, e.g. cooling), not a same-scope, same-units figure for
+  this model's own small-cell placeholder scenario, so turning it into a
+  rescaling factor would require additional unstated assumptions.
+- The thesis's Chapter 2 gives three further power-model formulas -- an
+  O-RAN-specific EARTH-style RU model (`P_RU = P_RF + P_out/eta` active,
+  `P_sleep` idle), a carrier-aggregation RU model, and three symbolic
+  DU/CU CPU-load-based/server-activation formulas -- none with numeric
+  constants instantiated, and its own text states O-RAN-specific DU/CU
+  power modeling "remains an emerging research area" with limited
+  literature (independent corroboration of the same field-wide-gap finding
+  already on record from Abubakar et al. 2023 in part 5 above). Its
+  Chapter 4 -- the thesis's own stated original contribution: real measured
+  energy data from a live OpenAirInterface/Kubernetes/Scaphandre-RAPL
+  testbed on the SLICES-RI/OneLab infrastructure -- measures energy in
+  Joules for a CU-horizontal-scaling experiment (1-4 CU instances, Intel
+  Core i7-10700 host CPUs, 20 MB-2.5 GB data volumes), decomposed into
+  Host/Activation/Service energy terms. That decomposition is by
+  *energy-accounting category* (baseline vs. deployment vs. data-
+  processing), not by *RAN component* -- and critically, the testbed uses
+  OAI's RF-simulator with no real RU/USRP hardware at all (the thesis's own
+  Future Work section states it plans to add "real-radio devices such as
+  USRPs and RUs" later), so despite being real, measured, testbed energy
+  data, it contains no RU power measurement whatsoever, and does not
+  decompose DU vs. CU either (both run as generic containerized VNFs on the
+  same node class). This is a further confirmation, from a seventh
+  independent source, that the RU/DU/CU/fronthaul wattage decomposition
+  itself remains fully open -- not a partial resolution.
+
 This module is fully decoupled from cran_env/power_model.py: no shared code,
 no shared imports.
 """

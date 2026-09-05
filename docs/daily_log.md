@@ -2,6 +2,48 @@
 
 > Filled instances of `docs/daily_log_template.md`. Newest entry first.
 
+## Date: 2026-08-30 (new Bologna thesis on O-RAN CU energy scaling)
+
+### What I Did Today
+- [x] The candidate supplied two new files: `312b3ae9-296898.pdf`, confirmed via `md5sum` to be a byte-identical duplicate of the already-read Abubakar et al. 2023 survey (flagged to the candidate directly, no re-processing); and, in the next message, `b8564b32-Master_ThesisFINAL2.pdf` (a genuinely new master's thesis: Caterina Leonelli, University of Bologna, "Dynamic Resource Allocation and Energy Optimization in 5G Open Radio Access Network (O-RAN)," AY2023-2024) plus a companion PDF confirmed (matching abstract/tables/equations) to be the same Al-Tahmeesschi et al. 2025 paper already cited in an earlier entry today, just the IEEE PIMRC 2025 published version with an institutional-repository cover page -- not re-processed as a new source.
+- [x] Read the new thesis in full (title/TOC/abstract, Chapter 1 Introduction and Background, Chapter 2 Related Work, Chapter 3 System Architecture/Experimental Setup, Chapter 4 Experimental Evaluation, Conclusion, Appendix, bibliography).
+- [x] Found a new, quantified RU-dominance figure in its Related Work (citing Larsen et al. 2023, IEEE OJCOMS): non-massive-MIMO RRU base stations spend 66%, and massive-MIMO AAU base stations 82%, of total RAN energy on the RU alone. Computed this repo's own model's analogous RU-share (~16-36% across c=0..2, from its default constants) and found it sits well below that -- a new mismatch in the opposite direction from the already-known fronthaul-under-weighting finding.
+- [x] Read the thesis's own Chapter 4 (its stated original contribution: real measured energy-in-Joules data from a live OpenAirInterface/Kubernetes/Scaphandre-RAPL testbed on the SLICES-RI/OneLab infrastructure) in full and confirmed it does **not** close the RU/DU/CU/fronthaul wattage flag: the testbed uses no real RU/USRP hardware (RF-simulator only; the thesis's own Future Work section states it plans to add real radio devices later), and its own energy decomposition (Host/Activation/Service) is by accounting category, not by RAN component.
+- [x] Found a fourth scenario-scale reference point for a separate flag: the thesis's own testbed deploys exactly `n_ru=4` (an exact match to this repo's own count) and `n_ue=4`.
+- [x] Updated `oran_env/power_model.py`'s docstring (part 7), `manuscript/ORAN_BMPP_DQN_Concept_Note_v1.md` §10.3 and §10.5, and `docs/oran_thesis_guide.md`'s power-model and default-scenario-scale flag entries. No numeric constants changed.
+
+### Time Spent
+| Activity | Hours |
+|----------|-------|
+| Coding | 0 |
+| Writing | 0.4 |
+| Reading | 0.5 (91-page thesis, full read; plus md5sum/duplicate checks on two companion files) |
+| Debugging | 0 |
+| Running experiments | 0 |
+| **Total** | ~0.9 |
+
+### Decisions Made
+| Decision | Rationale |
+|----------|-----------|
+| Documented the 66%/82% RU-dominance finding as a new mismatch, not used to rescale any constant | The cited figure is for real macro-cell/massive-MIMO deployments' whole-RAN energy (which may include elements this model doesn't represent, e.g. cooling), not a same-scope, same-units figure for this model's own small-cell placeholder scenario -- converting it into a rescaling factor would require additional unstated assumptions the source doesn't provide. |
+| Reported Chapter 4's real testbed energy data honestly as *not* closing the RU/DU/CU/fronthaul flag, despite being genuinely measured, real data | Real measurement alone isn't sufficient -- it has to actually decompose power/energy by the RAN component this flag needs (RU vs. DU vs. CU vs. fronthaul). This testbed measures no RU power at all (RF-simulator, no real radio hardware) and doesn't separate DU from CU either, so despite being a rigorous real-world measurement study, it doesn't close this specific gap. Stretching this into "further validated" would overclaim. |
+| Added the thesis's own `n_ru=4`/`n_ue=4` testbed scale as a fourth default-scenario-scale reference point | It's the first exact match to this repo's own `n_ru=4` found across any source checked for that flag -- worth recording precisely, without overclaiming it validates `n_ue=8` (its own `n_ue=4` gives a different ratio). |
+| No numeric constant changed | No source in this round gives a same-units, same-scope, component-decomposed power figure for RU/DU/CU/fronthaul -- the 66%/82% figure is a percentage of a differently-scoped total, and Chapter 4's Joules data has no RU component at all. |
+
+### Blockers
+| Blocker | Severity | Plan |
+|---------|----------|------|
+| None | -- | The RU/DU/CU/fronthaul wattage flag remains open after 7 passes; only a source giving a matching, component-decomposed Watt table for a small-cell/testbed-scale O-RAN scenario would close it. |
+
+### Tomorrow's Plan
+- [ ] Ready for whatever the candidate directs next
+- [ ] If more literature is wanted, a component-level power breakdown (RU vs. DU vs. CU vs. fronthaul, in Watts, at a small-cell/testbed scale matching this model's own scenario) remains the single most valuable missing document type
+
+### Notes
+Verified this round's power_model.py edit is docstring-only via `git diff` (all added lines fall inside the module docstring, before the closing `"""`) and `python3 -c "import ast; ast.parse(...)"` (confirms the file still parses). `numpy`/`pytest`/`flake8`/`black` were all found missing again this session (the same environment-reset pattern noted in an earlier entry); reinstalling the full stack was judged unnecessary for a documentation-only change, consistent with that entry's precedent.
+
+---
+
 ## Date: 2026-08-30 (CF-mMIMO thesis, remaining pages)
 
 ### What I Did Today
