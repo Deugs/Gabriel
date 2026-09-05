@@ -2,6 +2,85 @@
 
 > Filled instances of `docs/daily_log_template.md`. Newest entry first.
 
+## Date: 2026-08-30 (CF-mMIMO thesis, remaining pages)
+
+### What I Did Today
+- [x] The candidate supplied the remaining pages (75-117) of the same MASc thesis flagged as missing in the prior entry today -- a genuine follow-through on the specific gap disclosed there, rather than a new source.
+- [x] Read Chapter 4 (Simulation Setup, Results, Discussion) and both Appendices in full. Found two genuinely usable results: (1) an ETSI standard (TR 103 737, via the thesis's own citation) for 24-hour power averaging with three weighted load periods -- Busy=6h, Medium=10h, Low=8h -- that **exactly** matches this repo's own traffic model's implied floor duration (8h) and active duration (16h), a real confirmation of the aggregate day-fraction split; (2) Appendix A's formula-derived fronthaul-rate worked example (Split 7.2≈2.764 Gbps, Split 8≈5.898 Gbps at N=8 antennas), which -- honestly disclosed -- disagrees both with the same thesis's own Chapter 4 simulation assumptions (10/20 Gbps) and with 3GPP TR 38.801's real bandwidth ratio, reinforcing rather than closing the already-known bandwidth-vs-power-ratio gap.
+- [x] Confirmed the Appendix A table does not decompose power by RU/DU/CU component either (it's fronthaul bandwidth only) -- the RU/DU/CU wattage flag remains the one fully "still open" flag after 6 literature-check passes across two days, honestly reported as such rather than stretched to claim partial resolution it doesn't have.
+
+### Time Spent
+| Activity | Hours |
+|----------|-------|
+| Coding | 0 |
+| Writing | 0.3 |
+| Reading | 0.4 (thesis pages 75-117, ~43 pages: Chapter 4, Chapter 5, both appendices, bibliography) |
+| Debugging | 0 |
+| Running experiments | 0 |
+| **Total** | ~0.7 |
+
+### Decisions Made
+| Decision | Rationale |
+|----------|-----------|
+| Documented the ETSI 24h-weighting match as a genuine confirmation, precisely scoped | The match (8h floor / 16h active, both exact) is real and worth crediting -- but three aggregate durations don't uniquely determine four breakpoint values, so I was explicit that `t1`-`t4` individually (and `floor_ratio`) remain open, only the aggregate split is now grounded. Overstating this as "breakpoints validated" would be exactly the kind of imprecision the Ethical AI Rule warns against. |
+| Did not pick a "winning" fronthaul-rate figure among the thesis's own two internally-disagreeing numbers (10/20 Gbps vs. 2.764/5.898 Gbps) or against 3GPP TR 38.801's ratio | All three are legitimate in their own context (simulation assumption, formula-derived example, real standard) but disagree with each other -- disclosing the spread honestly is more useful than silently picking one to cite as "the" number. |
+| No numeric constant changed | Neither new finding gives a clean RU/DU/CU/fronthaul Watt decomposition; the ETSI finding is duration-only (already matches, nothing to change), and the fronthaul-rate figures are yet more bandwidth data disagreeing with each other, not power. |
+
+### Blockers
+| Blocker | Severity | Plan |
+|---------|----------|------|
+| None | -- | The RU/DU/CU/fronthaul wattage flag remains open; per the last several entries, only a source that actually decomposes measured or assumed power by component (not bandwidth, not GOPS, not a percentage of a differently-scoped total) would close it. |
+
+### Tomorrow's Plan
+- [ ] This closes out the currently-supplied literature; ready for whatever the candidate directs next
+- [ ] If more literature is wanted, a component-level power breakdown (RU vs. DU vs. CU vs. fronthaul, in Watts) remains the single most valuable missing document type
+
+### Notes
+No code or config changes this round. This is the sixth O-RAN literature-check pass in two days and the first to fully resolve a previously-disclosed "missing pages" gap by the candidate directly supplying exactly what was flagged as missing -- a good sign the disclosure practice (naming specific missing pages rather than a vague "partial read") is actionable.
+
+---
+
+## Date: 2026-08-30 (O-RAN EE survey + CF-mMIMO thesis)
+
+### What I Did Today
+- [x] The candidate supplied 3 more sources without comment: Abubakar et al. 2023 ("Energy Efficiency of Open Radio Access Network: A Survey," IEEE VTC2023-Spring), and two PDF parts of a 2025 MASc thesis (SK Razib Ahmed, UBC, "Cell-Free Massive MIMO under the Open Radio Access Network Flexible Functional Splits towards Efficient Cellular Network").
+- [x] Fixed an environment issue first: `pdftoppm`/`pdftotext` (poppler-utils) had gone missing from this sandbox since the last literature-check round (likely a container/session reset since the base image only ships the `libpoppler134` library, not the CLI tools) -- reinstalled via `apt-get install poppler-utils` before it was needed again.
+- [x] Read Abubakar et al. 2023 in full (8 pages). Found a genuinely new, useful data point: a real fronthaul *power* percentage (not bandwidth) cited from Lopez-Perez et al., split-dependent (2%/30%/60% for split options 6/7/8) -- the first source in either literature-check round giving fronthaul's power *share*, as opposed to bandwidth or an absolute Watt figure.
+- [x] Read the two-part MASc thesis as far as it was supplied (thesis pages 1-22 and 51-74 of what appears to be a ~115+ page document) -- discovered a genuine gap (pages ~23-50 not included) and that both parts stop before Chapter 4's likely numeric parameter table and the thesis's own referenced Appendix A ("Table A.1: Maximum Supported APs per DU under 20 Gbps Fronthaul Budget for Split 7.2 and Split 8," page 115) -- exactly the kind of table this session has been hoping to find for the RU/fronthaul power flag. Documented what was actually supplied honestly rather than guessing at what the missing pages might contain.
+
+### Time Spent
+| Activity | Hours |
+|----------|-------|
+| Coding | 0 |
+| Writing | 0.4 |
+| Reading | 0.6 (Abubakar et al., 8 pages; MASc thesis, ~53 pages across the two supplied parts) |
+| Debugging | 0.1 (poppler-utils reinstall) |
+| Running experiments | 0 |
+| **Total** | ~1.1 |
+
+### Decisions Made
+| Decision | Rationale |
+|----------|-----------|
+| No numeric constant changed this round | Neither source gives a clean, absolute-Watt, per-component decomposition matching this model's own parameterization. Abubakar et al.'s 2%/30%/60% figure is a *percentage of total power*, not directly convertible to this model's Watt-valued `p_fh_per_ru_by_split` without an assumption about what "total power" means in this model's own terms -- documented as further quantification of an already-disclosed gap, not used to rescale anything. |
+| Documented Abubakar et al.'s own survey conclusion that RU/fronthaul-specific O-RAN power modeling is an open research gap field-wide | This is valuable context distinct from a numeric finding: it confirms this repo's own "still open" flag status reflects a genuine, literature-wide gap as of a comprehensive 2023 survey, not a shortcoming of this session's own search effort. |
+| Documented the MASc thesis's structural power-model similarity (static + load-dependent) and closed-form fronthaul-rate formulas as further corroboration, without extracting any numbers | The thesis's own equations are general/symbolic (no numeric instantiation appears in the pages supplied) -- useful as independent structural/directional confirmation, not as a numeric source. |
+| Explicitly disclosed the gap in the supplied thesis PDFs (missing pages, stops before Ch.4/Appendix A) rather than silently working around it | The Ethical AI Rule requires disclosing what is and isn't actually available, not just what would be convenient. Telling the candidate exactly what's missing (and that the missing Appendix A table is likely the single most useful remaining lead) is more useful than quietly noting "partial thesis read" without specifics. |
+| Documented the thesis's own CF-mMIMO scenario scale (K=16, L=20-50 APs) for the default-scenario-scale flag, disclosing its ratio differs from this repo's own | Consistent with the existing DQRL/OREO treatment: report the comparison honestly, including where it doesn't line up as neatly (this thesis's UE:AP ratio is *below* ours, unlike DQRL/OREO which bracketed it). |
+
+### Blockers
+| Blocker | Severity | Plan |
+|---------|----------|------|
+| None | -- | If the candidate can supply the missing pages of the MASc thesis (specifically pages ~75-115+, covering Chapter 4's simulation parameters and Appendix A's AP-per-DU-under-fronthaul-budget table), that is now the single most promising remaining lead for the RU/fronthaul power flag. |
+
+### Tomorrow's Plan
+- [ ] If the candidate wants to keep pursuing the power-model flag, ask for the MASc thesis's remaining pages (75-115+) specifically, rather than a new source
+- [ ] Otherwise, ready to move to whatever the candidate directs next
+
+### Notes
+No code or config changes this round -- documentation-only, same discipline as every other 2026-08-30 entry. This is now the fifth O-RAN literature-check pass in two days; the RU/DU/CU/fronthaul power flag remains the only one of the four O-RAN needs-validation flags still fully "still open" rather than "partially resolved/informed." The sandbox's Python dependency stack (numpy, pytest, etc.) had also reset alongside poppler-utils; rather than a full reinstall for a docstring-only change, verified safety directly via `git diff` (confirmed the edit touches only the module docstring) and `ast.parse()` (confirmed the file still parses as valid Python) -- black/flake8 (installed separately) passed clean.
+
+---
+
 ## Date: 2026-08-30 (3GPP TR 38.801 primary source + real O-RAN power measurements)
 
 ### What I Did Today

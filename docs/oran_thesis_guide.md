@@ -82,7 +82,32 @@ thesis states them as fact:
   7.2b DU/CU figures are confounded by a different-server-class testbed
   choice, so not directly comparable to Split 8's. Their finding that power
   barely scales with PRB load independently corroborates this model's
-  existing load-independent DU/CU power design (no change needed)
+  existing load-independent DU/CU power design (no change needed). Two
+  more sources supplied the same day: Abubakar et al. 2023's own survey
+  conclusion states RU/fronthaul-specific O-RAN power modeling remains an
+  open research gap in the literature at large (a survey-level
+  confirmation this flag's "still open" status is a field-wide gap, not a
+  search failure), and cites a real fronthaul-*power* percentage (not
+  bandwidth) from Lopez-Perez et al. — 2%/30%/60% of total C-RAN power for
+  split options 6/7/8 — that further quantifies (without rescaling) the
+  bandwidth-vs-power gap already noted above, since this model's own
+  implied fronthaul fraction (~11-18% across c=0..2) sits well below the
+  cited 60% at the most-centralized option. A 2025 MASc thesis on CF-mMIMO
+  under O-RAN Split 7.2/8 gave further structural corroboration (its own
+  power model is the same static+load-dependent family) and closed-form
+  fronthaul-rate formulas confirming the bandwidth-monotonicity direction.
+  The candidate then supplied the thesis's remaining pages (Chapter 4 and
+  Appendix A) the same day: Appendix A's own formula-derived fronthaul
+  rates (Split 7.2≈2.764 Gbps, Split 8≈5.898 Gbps at N=8, a ~2.1x ratio,
+  giving 7 vs. 3 max APs/DU under a 20 Gbps budget) *disagree* with the
+  thesis's own Chapter 4 simulation assumptions (10/20 Gbps) and with
+  3GPP TR 38.801's real Option 7-2-vs-8 ratio (~10-16x) — disclosed as a
+  spread across (and within) sources rather than resolved by picking one.
+  Neither the Chapter 4 assumptions nor Appendix A decompose power by
+  RU/DU/CU component (both address fronthaul *bandwidth* only), so this
+  flag's core RU/DU/CU wattage gap remains fully open after 6
+  literature-check passes across two days — the most-open of the four
+  O-RAN needs-validation flags
 - `oran_env/traffic_model.py`'s trapezoidal breakpoints and Poisson rate
   (§10.6, via `config/oran_default.yaml`'s `traffic:` section) —
   **partially resolved** as of a 2026-08-30 check that obtained 3GPP
@@ -96,7 +121,14 @@ thesis states them as fact:
   3GPP's own FTP Model 3. `floor_ratio` and `t1`-`t4` remain unvalidated:
   TR 38.864's own load scenarios are load-level snapshots with no
   time-of-day association, and its scope stops at "medium load," giving no
-  floor:peak ratio or diurnal timing to derive those from
+  floor:peak ratio or diurnal timing to derive those from. A same-day
+  follow-up (a 2025 MASc thesis citing ETSI TR 103 737's 24-hour load
+  weighting: Busy=6h/Medium=10h/Low=8h) gives a genuine, exact confirmation
+  of the *aggregate* day-fraction split this model's `t1=7`/`t4=23` imply
+  (floor=8h matches ETSI's Low exactly; active=16h matches ETSI's
+  Medium+Busy exactly) — upgrading that aggregate split from unvalidated
+  to ETSI-consistent, though the four individual breakpoints (and
+  `floor_ratio` itself) remain underdetermined by this 3-bucket standard
 - The 3GPP split → centralization-level mapping (§10.2) — **partially informed**: the O-RAN Alliance's own 2021 white paper confirms the real specified split is Option 7-2x, not literally Option 2/6/8 (see §10.2's own note); a 2026-08-30 check of Rony et al. 2021 independently confirms the *qualitative direction* of the RU-processing-vs-fronthaul-cost trade-off this mapping assumes (in cost percentages, not power or bandwidth). A same-day follow-up check (a HUBER+SUHNER/CubeOptics infographic reproducing 3GPP TR 38.801's real per-split bandwidth table) went further, giving *quantitative* fronthaul-bandwidth figures for exactly the three mapped options (Option 2 = 3/4 Gbps, Option 6 = 7.1/5.6 Gbps, Option 8 = 157.3/157.3 Gbps) — a real numeric confirmation of the monotonic direction, though the 3-level abstraction itself is still a tractability simplification, not a literature-validated mapping in the sense of matching this model's own power-array ratios (see §10.5's note on the resulting bandwidth-vs-power ratio mismatch). Obtaining 3GPP TR 38.801 itself afterward gave an **exact** cross-validation of these pixel-verified figures from its own Annex A Table A-1 (Option 2 = 4016/3024 Mb/s, Option 6 = 5626.7/7140 Mb/s, Option 8 = 157.3/157.3 Gb/s) plus a full latency table not previously available (§10.2's own note has the details) — the option definitions and bandwidth figures now rest on the primary document itself, not only a secondary reproduction
 - Default scenario scale (`n_ru=4, n_ue=8`, §10.3) — **partially
   informed** after a 2026-08-30 check of the 8 already-supplied O-RAN
@@ -107,4 +139,8 @@ thesis states them as fact:
   scalability challenges for single-agent centralized RL as RU count
   grows — corroborating the tractability rationale, not the exact counts.
   `n_ru=4`/`n_ue=8` themselves remain an unvalidated tractability choice,
-  just one now shown to sit within precedented ranges
+  just one now shown to sit within precedented ranges. A 2025 MASc thesis
+  on CF-mMIMO under O-RAN (`K=16` users, `L=20`-`50` APs) adds a third
+  reference point, though its UE:AP ratio (0.32-0.8) sits *below* this
+  repo's own ratio (2), unlike DQRL/OREO's ratios which bracketed it —
+  disclosed as a genuine difference, not cherry-picked
