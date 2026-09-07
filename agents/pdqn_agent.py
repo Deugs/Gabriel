@@ -235,9 +235,7 @@ class PDQNAgent:
         """Single-pass (P-DQN) evaluation: feed the full, unmasked param vector once."""
         return q_net(features, continuous_params)
 
-    def select_action(
-        self, obs: np.ndarray, evaluate: bool = False
-    ) -> Dict[str, np.ndarray]:
+    def select_action(self, obs: np.ndarray, evaluate: bool = False) -> Dict[str, Any]:
         state_t = torch.FloatTensor(obs).unsqueeze(0).to(self.device)
 
         with torch.no_grad():

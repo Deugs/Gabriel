@@ -185,5 +185,7 @@ def test_discrete_q_loss_bounded_bellman(default_config):
         metrics = agent.update(batch_size=16)
         disc_losses.append(metrics["disc_loss"])
 
-    assert all(not np.isnan(l) and not np.isinf(l) for l in disc_losses)
-    assert all(l >= 0.0 for l in disc_losses), "MSE discrete loss must be non-negative"
+    assert all(not np.isnan(loss) and not np.isinf(loss) for loss in disc_losses)
+    assert all(
+        loss >= 0.0 for loss in disc_losses
+    ), "MSE discrete loss must be non-negative"
