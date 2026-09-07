@@ -2,6 +2,54 @@
 
 > Filled instances of `docs/daily_log_template.md`. Newest entry first.
 
+## Date: 2026-09-07 (full-run readiness check: dependencies, lint config, mypy fixes)
+
+### What I Did Today
+- [x] The candidate asked whether the codebase is ready for a full training run. Investigated rather than assumed: found the full dependency stack (`numpy`, `torch`, `gymnasium`, `pandas`, etc.) was completely missing at session start -- the same environment-reset pattern noted in several O-RAN literature-check entries above, now confirmed to affect the whole stack, not just numpy/pytest. Reinstalled everything from `requirements.txt`, including `cvxpy` (needed a retry after a proxy read-timeout on the first attempt, succeeded on the second).
+- [x] Ran the full test suite clean (137/137 passed, ~10 minutes, only cosmetic `gymnasium` observation-space-bound warnings) and confirmed both `convex`/`ddqn_socp` (the two `cvxpy`-dependent C-RAN baselines) import and construct correctly with a fresh install.
+- [x] Confirmed no GPU is available (CPU-only, 4 cores) and that neither track's actual "full run" (C-RAN's 10-seed x 11-method Phase 4 matrix; O-RAN's own BMPP-DQN + 3-baseline convergence run) has ever been executed -- both are still open, unstarted items, and Phase 4 doesn't even have a chosen episode-count target yet (`config/default.yaml`'s `max_episodes: 5000` is only an upper cap).
+- [x] Presented staged recommendations (smoke test -> evidence-based episode-count pilot -> run the real multi-hour matrix on persistent/GPU compute rather than this ephemeral sandbox -> consider a reduced-seed first pass as a compute-constrained fallback) rather than either declaring the codebase "ready" or "not ready" with no path forward.
+- [x] Per the candidate's choice, fixed lint/type-checking configuration and the two pre-existing `mypy` issues instead of running training yet:
+  - Added `.flake8` (`max-line-length=88` to match `black`'s default, plus `E203`/`W503` ignores) -- flake8 had no config at all before, so it was comparing against its own 79-char default against black-formatted code, producing 547 false-positive `E501` warnings. With the config, that drops to 78 residual `E501`s (pre-existing long comments/docstrings scattered across files not touched today) plus 2 `E741` ambiguous-variable-name findings, which were fixed (see below).
+  - Added `mypy.ini` (`ignore_missing_imports` for `scipy`, `cvxpy`, `wandb` -- none of these ship type stubs or a `py.typed` marker, so mypy was reporting stub-availability noise, not real bugs).
+  - Investigated and fixed the two genuine pre-existing `mypy` findings: `agents/pdqn_agent.py`'s `select_action()` was annotated `-> Dict[str, np.ndarray]` but actually returns a dict also containing an `int` (`action_idx`) -- confirmed downstream callers (`training/train_baselines.py`, `tests/test_new_baselines.py`) genuinely consume it as an int, so the annotation was simply wrong; fixed to `Dict[str, Any]`. `agents/ddqn_agent.py`'s `QNetwork.__init__` built an untyped `layers = []` list that mypy inferred as `List[Linear]` from the first `.append()` call, then flagged the later `LayerNorm` append; fixed by explicitly annotating `layers: List[nn.Module] = []`, the type the list actually needs to hold.
+  - Fixed the 2 `E741` findings (`tests/test_hybrid_agent.py`, ambiguous variable name `l`) by renaming to `loss`.
+  - All four are pure annotation/naming fixes with zero behavior change -- confirmed via `git diff` (minimal, mechanical diffs) and re-running the full test suite (137/137 passed again) and the targeted pdqn/ddqn/ablation/hybrid subset.
+- [x] `mypy` across both tracks is now fully clean (`Success: no issues found in 53 source files`); one pre-existing real `mypy` finding (`evaluation/ablation.py:44`, a `config_overrides` type mismatch caused by an unannotated heterogeneous-looking dict literal) was also fixed by annotating `variants: Dict[str, Dict[str, float]]`.
+
+### Time Spent
+| Activity | Hours |
+|----------|-------|
+| Coding | 0.3 |
+| Writing | 0.15 |
+| Reading | 0.1 |
+| Debugging | 0.2 (reinstalling dependencies, diagnosing the 3 mypy findings) |
+| Running experiments | 0 |
+| **Total** | ~0.75 |
+
+### Decisions Made
+| Decision | Rationale |
+|----------|-----------|
+| Reinstalled the full dependency stack rather than assuming a documentation-only round | The candidate's question was specifically about full-run readiness, which required actually verifying the environment works end-to-end (imports, tests, lint, type-checking), not just checking file diffs as in the preceding literature-check rounds. |
+| Set flake8's `max-line-length=88` to match `black`'s default rather than leaving flake8 unconfigured or raising the limit further | This is the standard, `black`-documented pairing. A small number of comment/docstring lines still exceed 88 chars (`black` doesn't reformat those), left as-is since mass-editing 78 lines across files not otherwise touched today wasn't requested and is low value for the effort. |
+| Fixed `pdqn_agent.py`'s return-type annotation to match its actual (verified) behavior, rather than changing the dict's contents to match the old annotation | The dict genuinely needs to carry an `int` (`action_idx`) alongside `np.ndarray` values -- downstream code already relies on this. The annotation was simply inaccurate; correcting it is a truthful fix, not a behavior change. |
+| Did not reformat two other pre-existing files (`agents/mpdqn_agent.py`, `evaluation/demand_response.py`) that `black --check` also flags | Neither was touched today, and reformatting them wasn't part of what was asked -- flagged here for visibility rather than silently left out or unilaterally changed. |
+
+### Blockers
+| Blocker | Severity | Plan |
+|---------|----------|------|
+| No GPU in this sandbox; neither track's full run has a chosen compute plan yet | Medium -- blocks the actual Phase 4/O-RAN convergence run, not today's lint/dependency work | Candidate to decide: smoke test now, then either run the real matrix on persistent/GPU compute, or accept a reduced-seed first pass here as an interim result |
+| C-RAN Phase 4's per-run episode count is still undecided (`max_episodes: 5000` is only a cap) | Low-Medium | Recommend a short evidence-based pilot (a few seeds, up to ~2000 episodes) to pick the count where reward/critic loss plateau, rather than guessing |
+
+### Tomorrow's Plan
+- [ ] Await the candidate's decision on running the smoke test / episode-count pilot / full matrix
+- [ ] Consider reformatting `agents/mpdqn_agent.py` and `evaluation/demand_response.py` with `black` if/when those files are next touched
+
+### Notes
+This round is a departure from the preceding two days' pattern (literature-check passes on O-RAN needs-validation flags) -- it's the first round in a while touching actual code logic rather than docstrings/documentation. All four fixes were verified as behavior-neutral via `git diff` and a full clean test-suite re-run (137/137) before committing.
+
+---
+
 ## Date: 2026-08-30 (Kuaban et al. O-DU/O-CU analytical models + Trinity Dublin energy-latency paper)
 
 ### What I Did Today
