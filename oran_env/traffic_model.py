@@ -77,6 +77,20 @@ validate the four individual breakpoints, since three aggregate durations
 underdetermine four specific t-values (many rise/plateau/fall splits
 within the same 16-hour window would give the same aggregate durations),
 and it says nothing about lambda_peak, floor_ratio, or packet_size_bits.
+
+**2026-08-30 literature check, part 3**: a Kuaban et al. O-DU power-model
+paper (uploaded as "CCNC_2025.pdf"; see power_model.py's own "part 9" note)
+uses a dual-Gaussian daily traffic-load model (a constant base load
+b=0.1, a daytime peak Ad=0.9/mu_d=14h/sigma_d=3h, an evening peak
+Ae=0.6/mu_e=20h/sigma_e=2h) to drive its own O-DU utilization simulation.
+This is a genuine, real-literature precedent for a dual-Gaussian diurnal
+shape -- but it is the *other* track's shape, not this module's own: it
+matches cran_env/traffic_model.py's dual-Gaussian design, not this
+module's deliberately different trapezoidal design (see this docstring's
+opening paragraph). Cited here only as a cross-track observation, not
+used to change any constant in this module -- this module's trapezoidal
+shape remains a deliberate, documented design choice, not something this
+finding calls into question.
 """
 
 import numpy as np
