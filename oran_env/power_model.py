@@ -367,6 +367,78 @@ O-RUs).
   finding against an unrelated source) is now substantially stronger than
   at any prior pass.
 
+**2026-08-30 literature check, part 9**: obtained two related analytical
+modeling papers by Kuaban, Czachorski, Atmaca, and Czekalski (uploaded as
+"CCNC_2025.pdf" and "MASCOTS_2025_Workshop.pdf" -- these filenames suggest
+their target venues but neither paper's own extracted text states a
+venue/year explicitly, so that is disclosed as inferred, not confirmed):
+"Power models for O-RAN O-DU planning and optimisation" and "Analytical
+Power Efficiency Models for Open Radio Access Network (O-RAN)". Both give
+real, same-quantity numeric constants for the first time on the DU/CU side
+(beyond the RU-side `pa_efficiency` win in part 8), plus one useful
+structural critique.
+- The O-DU paper's own fitted numerical example gives `P_plat,stat = 50 W`
+  (static platform power, excluding CPU cores and the accelerator) --
+  numerically identical to this model's own `p_du_static_w=50.0`, both in
+  quantity (DU static/platform power) and value. This is disclosed
+  carefully, not overclaimed: the paper's own *fuller* DU idle floor
+  (platform 50 W + accelerator `P_acc=20` W + at least one idle core at
+  `P_core,idle=15` W ~= 85 W total) sits well above this model's own total
+  idle DU floor (50 W alone, since `p_du_per_ru_by_split` contributes
+  nothing when no RUs are active) -- so this is a genuine but partial
+  match on one sub-term's label and value, not a full-model match. Its
+  per-core dynamic range (`P_core,idle=15 W` to `P_core,dyn,max=40 W`,
+  with ~2 CPU cores implied per RU from its own `C_RU=1000`
+  cycles/`C_core=500` cycles/s figures) gives an implied per-RU DU-power
+  range of roughly 30-80 W -- order-of-magnitude comparable to, though
+  higher than, this model's own `p_du_per_ru_by_split=[5.0, 10.0, 20.0]`.
+- The analytical-efficiency-models paper's own numerical example uses
+  `eta_PA=0.35` -- a third independent real PA-efficiency value (after
+  this model's own `pa_efficiency=0.25` and the part-8 Rutgers/ONF/ORCID
+  white paper's fitted 29-39%/14-32% ranges), clustering with both and
+  further corroborating (not changing) `pa_efficiency=0.25`.
+- The same paper cites (from Hao et al. 2024) that power amplifiers
+  account for "at least 64%" of an O-RU's *own internal* energy demand
+  (PA/RF vs. baseband/digital-front-end processing at the RU itself, not
+  a share of total RAN power). Computing this model's own analogous
+  PA-share-of-active-RU-power from its default constants (using the
+  now-updated `p_max_dbm=33` dBm) gives ~44% at `c=0` and ~73% at `c=2` --
+  bracketing the cited 64% figure, and closely matching it at high
+  centralization (`c=2`). This is the closest same-quantity match found
+  yet for any RU-internal power-share comparison in this flag's history.
+- The O-DU paper's own eq. (8) includes a fronthaul-overhead factor
+  `epsilon_FH = 8%`, applied multiplicatively to O-DU idle power to
+  represent the always-on cost of fronthaul interface hardware (eCPRI,
+  RoE) embedded in the DU chassis. This is a genuinely new fronthaul
+  quantification -- neither a bandwidth ratio nor a %-of-total-system-
+  power figure, as in every prior fronthaul finding, but a %-of-DU-idle-
+  power figure -- though it is not directly transplantable to this
+  model's own `p_fh_common_w=10.0` (modeled as a wholly separate additive
+  term, not a multiplicative overhead on `p_du_static_w`); no constant was
+  changed from it, disclosed as useful additional context only.
+- Both papers explicitly model O-DU power with a sub-linear resource-
+  pooling scaling factor (`S_PE`, decreasing as active-RU count grows) and
+  O-CU power with a logarithmic-in-user-count term -- neither of which
+  this model's own `compute_du_power()`/`compute_cu_power()` include
+  (both are currently linear in active-RU count). This is a genuine
+  structural gap worth disclosing: real/analytically-modeled O-DU and
+  O-CU power in this literature grows *sub-linearly*, not linearly, with
+  scale, unlike this model's own simpler per-active-RU-additive design.
+  Not changed here -- altering the functional form (not just a constant)
+  is a design decision beyond the scope of a citation-driven fix, and is
+  noted as a candidate future-work item instead.
+- Both papers independently reconfirm (a third and fourth time, after the
+  Bologna thesis and the Rutgers/ONF/ORCID white paper) that O-RUs
+  dominate total O-RAN power while O-DU and O-CU power scale
+  progressively slower/sub-linearly -- further corroboration of the
+  RU-dominance finding already on record, not a new numeric target.
+- The O-DU paper's own dynamic-core-shutdown scheme achieves 30.24%-
+  59.42% cumulative energy savings (RU-count dependent) -- another real
+  precedent, alongside the Bologna thesis's 53-60% CU-scaling savings,
+  that literature demonstrates energy savings well above this repo's own
+  more modest >=15% target (Concept Note Section 4.2) -- supporting
+  context for that target's conservatism, not a constant to adopt here.
+
 This module is fully decoupled from cran_env/power_model.py: no shared code,
 no shared imports.
 """

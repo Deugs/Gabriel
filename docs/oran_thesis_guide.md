@@ -142,11 +142,22 @@ thesis states them as fact:
   arrays — and the paper's absolute Watt figures (RU ~200-670 W, DU
   ~280-310 W, CU ~230 W, real commercial macro-cell-class multi-band
   hardware) remain ~10-50x this model's own small-cell placeholder scale,
-  so nothing was rescaled. This flag remains the most-open of the four
-  O-RAN needs-validation flags after 8 literature-check passes across two
-  days, though its broader context (and the `pa_efficiency` constant
-  specifically) is now substantially better-supported than at any prior
-  pass
+  so nothing was rescaled. A 9th pass (two Kuaban et al. analytical O-DU/
+  O-CU papers) added: a static-platform-power match to `p_du_static_w=50`
+  (their own `P_plat,stat=50 W`, though their fuller idle-DU floor with
+  accelerator+idle-core is higher, ~85 W); a third real PA-efficiency value
+  (0.35) further corroborating `pa_efficiency=0.25`; a PA-share-of-RU-
+  internal-power figure (>=64%, Hao et al. 2024) bracketing this model's
+  own computed PA share (~44-73% across `c=0..2`); a new fronthaul-power
+  quantification (8% of DU idle power) not transplantable given this
+  model's different additive fronthaul decomposition; and a disclosed
+  structural gap — both papers model O-DU/O-CU power as sub-linear in
+  active-RU/user count, unlike this model's own linear-per-active-RU
+  design (a candidate future-work item, not fixed here). This flag remains
+  the most-open of the four O-RAN needs-validation flags after 9
+  literature-check passes across two days, though its broader context
+  (and the `pa_efficiency` constant specifically) is now substantially
+  better-supported than at any prior pass
 - `oran_env/traffic_model.py`'s trapezoidal breakpoints and Poisson rate
   (§10.6, via `config/oran_default.yaml`'s `traffic:` section) —
   **partially resolved** as of a 2026-08-30 check that obtained 3GPP
@@ -168,7 +179,7 @@ thesis states them as fact:
   Medium+Busy exactly) — upgrading that aggregate split from unvalidated
   to ETSI-consistent, though the four individual breakpoints (and
   `floor_ratio` itself) remain underdetermined by this 3-bucket standard
-- The 3GPP split → centralization-level mapping (§10.2) — **partially informed**: the O-RAN Alliance's own 2021 white paper confirms the real specified split is Option 7-2x, not literally Option 2/6/8 (see §10.2's own note); a 2026-08-30 check of Rony et al. 2021 independently confirms the *qualitative direction* of the RU-processing-vs-fronthaul-cost trade-off this mapping assumes (in cost percentages, not power or bandwidth). A same-day follow-up check (a HUBER+SUHNER/CubeOptics infographic reproducing 3GPP TR 38.801's real per-split bandwidth table) went further, giving *quantitative* fronthaul-bandwidth figures for exactly the three mapped options (Option 2 = 3/4 Gbps, Option 6 = 7.1/5.6 Gbps, Option 8 = 157.3/157.3 Gbps) — a real numeric confirmation of the monotonic direction, though the 3-level abstraction itself is still a tractability simplification, not a literature-validated mapping in the sense of matching this model's own power-array ratios (see §10.5's note on the resulting bandwidth-vs-power ratio mismatch). Obtaining 3GPP TR 38.801 itself afterward gave an **exact** cross-validation of these pixel-verified figures from its own Annex A Table A-1 (Option 2 = 4016/3024 Mb/s, Option 6 = 5626.7/7140 Mb/s, Option 8 = 157.3/157.3 Gb/s) plus a full latency table not previously available (§10.2's own note has the details) — the option definitions and bandwidth figures now rest on the primary document itself, not only a secondary reproduction
+- The 3GPP split → centralization-level mapping (§10.2) — **partially informed**: the O-RAN Alliance's own 2021 white paper confirms the real specified split is Option 7-2x, not literally Option 2/6/8 (see §10.2's own note); a 2026-08-30 check of Rony et al. 2021 independently confirms the *qualitative direction* of the RU-processing-vs-fronthaul-cost trade-off this mapping assumes (in cost percentages, not power or bandwidth). A same-day follow-up check (a HUBER+SUHNER/CubeOptics infographic reproducing 3GPP TR 38.801's real per-split bandwidth table) went further, giving *quantitative* fronthaul-bandwidth figures for exactly the three mapped options (Option 2 = 3/4 Gbps, Option 6 = 7.1/5.6 Gbps, Option 8 = 157.3/157.3 Gbps) — a real numeric confirmation of the monotonic direction, though the 3-level abstraction itself is still a tractability simplification, not a literature-validated mapping in the sense of matching this model's own power-array ratios (see §10.5's note on the resulting bandwidth-vs-power ratio mismatch). Obtaining 3GPP TR 38.801 itself afterward gave an **exact** cross-validation of these pixel-verified figures from its own Annex A Table A-1 (Option 2 = 4016/3024 Mb/s, Option 6 = 5626.7/7140 Mb/s, Option 8 = 157.3/157.3 Gb/s) plus a full latency table not previously available (§10.2's own note has the details) — the option definitions and bandwidth figures now rest on the primary document itself, not only a secondary reproduction. A Trinity College Dublin/Aalborg University paper (Tariq et al., arXiv:2608.02082) independently confirms the same qualitative trade-off direction from an unrelated energy-latency optimization angle (processing energy falls, transport latency rises, as baseband/AI-inference placement centralizes from O-RU toward a data center) — a second qualitative-direction confirmation alongside Rony et al. 2021, though it gives no absolute RU/DU/CU Watt figures (its own energy unit is mJ/bit for BBP+AI-inference compute, drawn from an abstracted companion-paper parameterization, not this model's per-component Watts)
 - Default scenario scale (`n_ru=4, n_ue=8`, §10.3) — **partially
   informed** after a 2026-08-30 check of the 8 already-supplied O-RAN
   sources for scenario-scale content (see §10.3's own note): two directly

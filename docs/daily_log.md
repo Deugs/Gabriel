@@ -2,6 +2,51 @@
 
 > Filled instances of `docs/daily_log_template.md`. Newest entry first.
 
+## Date: 2026-08-30 (Kuaban et al. O-DU/O-CU analytical models + Trinity Dublin energy-latency paper)
+
+### What I Did Today
+- [x] The candidate supplied three PDFs in one message: a Trinity College Dublin/Aalborg University arXiv paper on energy-latency trade-offs in O-RAN baseband/AI-inference placement, and two related analytical power-modeling papers by Kuaban, Czachorski, Atmaca, and Czekalski (an O-DU-focused paper and a companion O-RU/O-DU/O-CU analytical-efficiency paper). Read all three in full.
+- [x] Found a genuine, same-value numeric match: the O-DU paper's own fitted static platform power (`P_plat,stat=50 W`) is numerically identical to `oran_env/power_model.py`'s `p_du_static_w=50.0` -- disclosed carefully with the caveat that the paper's fuller idle-DU floor (including its own accelerator and idle-core terms, ~85 W) is higher than this repo's own idle-DU floor taken alone.
+- [x] Found a third independent real PA-efficiency value (`eta_PA=0.35`, from the companion paper's numerical example) further corroborating `pa_efficiency=0.25` (validated for the first time yesterday against the Rutgers/ONF/ORCID white paper's fitted ranges).
+- [x] Computed this repo's own model's PA-share of active-RU power (~44% at `c=0`, ~73% at `c=2`) and found it brackets a cited real figure ("at least 64%" of an O-RU's internal power is PA, from Hao et al. 2024 via the companion paper) -- the closest same-quantity RU-internal-power-share match found across the whole flag's history.
+- [x] Found a new, differently-scoped fronthaul quantification (`epsilon_FH=8%` of O-DU idle power, a fronthaul-interface always-on overhead factor) and explicitly did NOT try to transplant it into this repo's own separately-modeled `p_fh_common_w`, since the two papers structure the fronthaul cost differently (multiplicative overhead on DU idle power vs. this repo's own additive standalone term).
+- [x] Disclosed a genuine structural gap rather than silently ignoring it: both Kuaban et al. papers model O-DU/O-CU power as sub-linear in active-RU/user count (resource-pooling and logarithmic-in-users scaling factors), while this repo's own `compute_du_power()`/`compute_cu_power()` are linear in active-RU count -- noted as a candidate future-work item, not changed, since altering the functional form is a design decision beyond a citation-driven constant fix.
+- [x] Found a fourth (and fifth counting the Trinity Dublin paper's independent angle) real-literature confirmation that RUs dominate O-RAN power while DU/CU scale sub-linearly, and a second independent qualitative confirmation (after Rony et al. 2021) of the split-mapping's centralization trade-off direction, from the Trinity Dublin paper's entirely different energy-latency optimization framework -- explicitly noted that paper gives no absolute RU/DU/CU Watts (its own unit is mJ/bit for BBP+AI-inference compute), so it informs §10.2's direction, not §10.5's numeric constants.
+- [x] Noted the O-DU paper's own dual-Gaussian daily traffic model as a real-literature precedent for that *shape* -- but flagged honestly that it matches the C-RAN track's own traffic-model shape, not this track's deliberately different trapezoidal design, so it was not used to change anything in `oran_env/traffic_model.py`.
+- [x] Updated `oran_env/power_model.py` (docstring, part 9), `oran_env/traffic_model.py` (docstring, part 3), `manuscript/ORAN_BMPP_DQN_Concept_Note_v1.md` (§10.2 and §10.5), and `docs/oran_thesis_guide.md` (power-model and split-mapping flag entries). No numeric constants changed.
+
+### Time Spent
+| Activity | Hours |
+|----------|-------|
+| Coding | 0 |
+| Writing | 0.45 |
+| Reading | 0.4 (13-page arXiv PDF plus two shorter conference/workshop papers, all read in full; some arithmetic on this repo's own constants to compute PA-share percentages) |
+| Debugging | 0 |
+| Running experiments | 0 |
+| **Total** | ~0.85 |
+
+### Decisions Made
+| Decision | Rationale |
+|----------|-----------|
+| Disclosed the `P_plat,stat=50 W` match with the "fuller idle floor is higher" caveat, rather than presenting it as a clean full-model validation | The two models decompose DU idle power differently (this repo bundles everything into one static term; the paper separates platform, accelerator, and per-core idle power) -- presenting the raw number match without that structural caveat would overstate what's actually been validated. |
+| Did not transplant `epsilon_FH=8%` into `p_fh_common_w` | The paper's fronthaul overhead is a multiplicative factor on DU idle power; this repo's fronthaul power is a separate additive term. Converting one into the other would require an arbitrary assumption about what "DU idle power" the 8% should be taken relative to -- not done. |
+| Disclosed the sub-linear-scaling structural gap as a future-work item, not a bug to fix now | Changing `compute_du_power()`/`compute_cu_power()` from linear-per-active-RU to a pooling-discounted sub-linear form is a design change to the model's functional form, not a constant fix backed by a citation -- exactly the kind of change this literature-check series has consistently deferred to explicit design decisions rather than making unilaterally. |
+| Kept the Trinity Dublin paper's contribution scoped to §10.2 (split-mapping direction), not §10.5 (power constants) | Its own energy unit (mJ/bit, combining BBP+AI-inference+transport) is a different quantity than this repo's own per-component Watts, and its numeric parameters are themselves abstracted from a companion paper not supplied here -- it has nothing to offer §10.5's specific ask. |
+
+### Blockers
+| Blocker | Severity | Plan |
+|---------|----------|------|
+| None | -- | The RU/DU/CU/fronthaul wattage flag remains open after 9 passes; only a source that varies functional split option while measuring real, component-decomposed Watts at a small-cell/testbed scale would close it. |
+
+### Tomorrow's Plan
+- [ ] Ready for whatever the candidate directs next
+- [ ] Consider, as a separate design discussion (not a citation-driven fix), whether `compute_du_power()`/`compute_cu_power()` should adopt a sub-linear active-RU/user scaling term, now that two independent papers model real/analytical O-DU/O-CU power that way
+
+### Notes
+Verified this round's `power_model.py`/`traffic_model.py` edits are docstring-only via `git diff` (all added lines fall inside the module docstrings) and `python3 -c "import ast; ast.parse(...)"` on both files (confirms both still parse). `numpy`/`pytest`/`flake8`/`black` remain unavailable in this session; reinstalling the full stack was judged unnecessary for a documentation-only change, consistent with the precedent set in earlier entries today.
+
+---
+
 ## Date: 2026-08-30 (Rutgers WINLAB/ONF/ORCID commercial O-RAN white paper)
 
 ### What I Did Today
