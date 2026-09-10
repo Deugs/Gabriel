@@ -2,6 +2,49 @@
 
 > Filled instances of `docs/daily_log_template.md`. Newest entry first.
 
+## Date: 2026-09-10 (checkpoint-resumable experiment runner)
+
+### What I Did Today
+- [x] Discovered a real failure, not a theoretical risk: the full-suite background run launched on 2026-09-07 (O-RAN's official suite followed by a reduced-seed C-RAN first pass) was silently killed by a container reclaim/restart sometime between 06:27 UTC on 2026-09-08 and 07:20 UTC on 2026-09-10 -- a ~2-day gap. Only 1 seed of 1 baseline algorithm had completed; nothing was saved, since `run_baseline_benchmarks()`/`train_hybrid_agent()` only persist their output once their whole call returns, not incrementally.
+- [x] Per the candidate's instruction ("make the pipeline checkpoint-resumable and keep running here"), built a checkpoint layer rather than just relaunching the same fragile approach:
+  - `training/checkpointed_runner.py`: a generic `run_checkpointed(jobs, manifest_path, job_fn, job_key_fn)` utility. Each job's result is written to disk and recorded in an atomically-written (write-then-rename) JSON manifest immediately after that job completes, so a re-run of the same job list skips everything already marked `"done"` and repeats at most the one job that was in flight when a process was cut off. A failed job is recorded as `"failed"` (not silently treated as done), so it's retried on the next run rather than skipped.
+  - `scripts/run_checkpointed_matrix.py`: builds the full (method, seed) job list for both tracks (C-RAN's 11 methods x seeds; O-RAN's 4 methods x seeds) and wires each job to the existing, already-tested `run_baseline_benchmarks`/`train_hybrid_agent`/`run_oran_baseline_benchmarks`/`train_bmpp_dqn_agent` entry points, scoped to one method+seed at a time -- deliberately a thin wrapper around the existing pipeline, not a new training system.
+  - Added `scripts/__init__.py` (scripts/ previously had no Python package files at all) to resolve a `mypy` module-path ambiguity once a `.py` file was added there.
+- [x] Added `tests/test_checkpointed_runner.py` (5 tests): the resumability contract in isolation (skip-if-done, retry-if-failed, atomic manifest writes) with a fake job function, plus one real end-to-end smoke test that builds the actual C-RAN job wiring for two cheap baseline methods, runs the checkpointed runner twice against the same manifest, and confirms the second run skips both jobs rather than re-executing them.
+- [x] Full suite re-run clean: 142/142 (137 previous + 5 new), `mypy`/`flake8`/`black` all clean across both tracks plus the new `scripts/` package.
+
+### Time Spent
+| Activity | Hours |
+|----------|-------|
+| Coding | 0.6 |
+| Writing | 0.2 |
+| Reading | 0.1 |
+| Debugging | 0.15 (diagnosing the silent container-reclaim failure; a `mypy` dual-module-path error from `scripts/` lacking `__init__.py`) |
+| Running experiments | 0 (this entry; the actual matrix run is launched separately) |
+| **Total** | ~1.05 |
+
+### Decisions Made
+| Decision | Rationale |
+|----------|-----------|
+| Built a checkpoint layer on top of the existing entry points rather than rewriting `run_baseline_benchmarks`/`train_hybrid_agent` to checkpoint internally | Those functions are already tested and used elsewhere (including the official `scripts/run_*_experiments.sh` pipelines) -- wrapping them per-(method, seed) call achieves the same resumability without touching or risking their existing, working behavior. |
+| Checkpoint granularity is one (method, seed) pair, not finer (e.g. per-episode) | This matches the natural unit size already used throughout this session (~10s-40min depending on method/episode count) -- fine enough that losing at most one in-flight unit per interruption is an acceptable cost, coarse enough not to need invasive mid-training checkpointing of optimizer/replay-buffer state. |
+| Recorded failed jobs distinctly from done jobs in the manifest, with automatic retry on the next run | A crash or exception inside a job should not be silently mistaken for successful completion -- that would be worse than the original all-or-nothing failure mode, since it would silently produce an incomplete result set that looks complete. |
+| Added `scripts/__init__.py` rather than avoiding the package import in the test | Making `scripts/` a proper package is the more conventional, durable fix, and resolves the `mypy` ambiguity cleanly rather than working around it. |
+
+### Blockers
+| Blocker | Severity | Plan |
+|---------|----------|------|
+| Container reclaim can still occur mid-job (not just between jobs) | Low-Medium, now mitigated not eliminated | At most one (method, seed) job's partial work is lost per reclaim, not the whole matrix -- re-running the same command resumes from the manifest automatically. |
+
+### Tomorrow's Plan
+- [ ] Launch the real checkpointed O-RAN matrix (`scripts/run_checkpointed_matrix.py --track oran --episodes 500 --seeds 42 123 456`) in the background, with more frequent check-ins than the previous (failed) attempt
+- [ ] Follow with the C-RAN matrix once O-RAN's is confirmed progressing/complete
+
+### Notes
+This is the first round in this session driven by a real observed failure (the 2-day silent container-reclaim loss) rather than a hypothetical risk -- worth stating plainly rather than softening, since it directly validates the caution raised before the original background run was launched.
+
+---
+
 ## Date: 2026-09-07 (full-run readiness check: dependencies, lint config, mypy fixes)
 
 ### What I Did Today
