@@ -21,6 +21,19 @@ established conventions: C-RAN's 3000-episode convergence target and full
 O-RAN's 500-episode cap and 3-seed list (`config/oran_default.yaml`;
 `scripts/run_oran_experiments.sh`) -- override `--episodes`/`--seeds`
 explicitly for a reduced-scope first pass.
+
+Runs one track per invocation by design: PyTorch defaults to using every
+available core, so two unpinned invocations racing for the same cores thrash
+each other rather than truly parallelizing (measured ~1.6x slower in
+aggregate than running one track at a time on this project's own 4-core
+sandbox). On a genuinely multi-core machine, run both tracks as separate,
+non-competing processes by pinning each to half the cores with
+`--num-threads`, e.g. on a 16-core box:
+
+    python3 scripts/run_checkpointed_matrix.py --track cran \
+        --episodes 3000 --num-threads 8 &
+    python3 scripts/run_checkpointed_matrix.py --track oran \
+        --episodes 500 --num-threads 8 &
 """
 
 import argparse
@@ -151,7 +164,39 @@ def main():
     parser.add_argument("--seeds", type=int, nargs="+", default=None)
     parser.add_argument("--save-dir", default=None, help="Root save directory")
     parser.add_argument("--manifest", default=None, help="Checkpoint manifest path")
+    parser.add_argument(
+        "--num-threads",
+        type=int,
+        default=None,
+        help=(
+            "Pin this process to N CPU threads instead of PyTorch's default "
+            "(all available cores). Needed to run both tracks as genuinely "
+            "parallel, non-competing processes on a multi-core machine -- "
+            "e.g. `--track cran --num-threads 8` and `--track oran "
+            "--num-threads 8` together on a 16-core box. Without this, two "
+            "unpinned invocations both try to use every core and thrash "
+            "each other (measured ~1.6x slower in aggregate on this "
+            "project's own 4-core sandbox -- see docs/daily_log.md's "
+            "2026-09-07 entry). Omit for the default, single-track-at-a-time "
+            "usage this script was originally built for."
+        ),
+    )
     args = parser.parse_args()
+
+    if args.num_threads is not None:
+        # Must happen before torch is imported anywhere (including inside
+        # job_fn, which imports it lazily per job) -- setting these env vars
+        # after import is too late for the underlying BLAS thread pools.
+        for var in (
+            "OMP_NUM_THREADS",
+            "MKL_NUM_THREADS",
+            "OPENBLAS_NUM_THREADS",
+            "NUMEXPR_NUM_THREADS",
+        ):
+            os.environ[var] = str(args.num_threads)
+        import torch
+
+        torch.set_num_threads(args.num_threads)
 
     if args.track == "cran":
         methods = CRAN_METHODS

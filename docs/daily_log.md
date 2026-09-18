@@ -2,6 +2,44 @@
 
 > Filled instances of `docs/daily_log_template.md`. Newest entry first.
 
+## Date: 2026-09-18 (parallel multi-track support for the checkpointed runner)
+
+### What I Did Today
+- [x] Continued the checkpointed O-RAN matrix started 2026-09-10 via the scheduled-check-in approach (the candidate's explicit choice over continuous active babysitting, after empirically confirming the sandbox reclaims mid-run regardless of babysitting style once idle): resumed twice more across two gaps (once ~13 hours, once overnight), each time correctly skipping the 6 already-completed jobs per the manifest and continuing from `mpdqn/seed42`.
+- [x] The candidate asked whether the runner splits CPUs between C-RAN and O-RAN for true parallel execution on a multi-core machine -- it did not, by design (this sandbox's own 4 cores make that counterproductive, per the 2026-09-07 finding that unpinned parallel jobs thrash each other). Added `--num-threads` to `scripts/run_checkpointed_matrix.py`: pins the process to N threads (via `OMP_NUM_THREADS`/`MKL_NUM_THREADS`/`OPENBLAS_NUM_THREADS`/`NUMEXPR_NUM_THREADS` env vars, set before any lazy `torch` import, plus `torch.set_num_threads()`), so two invocations (one per track) can now run as genuinely non-competing processes on a bigger machine, e.g. `--num-threads 8` each on a 16-core box.
+- [x] Verified live, not just by lint: launched a thread-pinned (`--num-threads 2`) C-RAN smoke test alongside the real, still-running O-RAN matrix and confirmed via `ps aux` that the pinned process used ~2 cores' worth of CPU, not all 4 -- direct behavioral confirmation, not just a code read.
+- [x] `flake8`/`mypy`/`black` all clean on the modified file.
+
+### Time Spent
+| Activity | Hours |
+|----------|-------|
+| Coding | 0.2 |
+| Writing | 0.05 |
+| Reading | 0 |
+| Debugging | 0 |
+| Running experiments | 0.1 (monitoring the checkpointed matrix's resume cycles + the live thread-pinning smoke test) |
+| **Total** | ~0.35 |
+
+### Decisions Made
+| Decision | Rationale |
+|----------|-----------|
+| Made `--num-threads` opt-in (default: unset, PyTorch's normal all-cores behavior) rather than changing the script's default | This script's existing single-track-at-a-time usage (including the real O-RAN matrix currently running) already works correctly unpinned -- pinning only matters when deliberately running two invocations in parallel, so it shouldn't change behavior for anyone not doing that. |
+| Verified the pinning live against the actual running matrix rather than only in isolation | A code read confirms the env vars/API call are correct; only watching real `ps aux` CPU-share numbers while both processes ran concurrently confirms the *intended effect* (non-competing core usage) actually happens on this hardware. |
+
+### Blockers
+| Blocker | Severity | Plan |
+|---------|----------|------|
+| None new | -- | O-RAN matrix continues at 6/12 as of this entry; MPDQN remains the slow algorithm (consistent with the 2026-09-07/09-10 findings) |
+
+### Tomorrow's Plan
+- [ ] Continue the scheduled-check-in resume cycle for the O-RAN matrix until all 12 jobs complete
+- [ ] Then decide scope (full 10-seed vs reduced 3-seed) for the C-RAN matrix
+
+### Notes
+No numeric constants or existing behavior changed -- this is a pure opt-in addition, requested specifically to make the already-built checkpointed runner useful on hardware better than this session's own 4-core sandbox.
+
+---
+
 ## Date: 2026-09-10 (checkpoint-resumable experiment runner)
 
 ### What I Did Today
