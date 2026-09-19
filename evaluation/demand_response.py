@@ -87,9 +87,7 @@ def run_demand_response_evaluation(
 
         results[method] = {}
         for mult in demand_multipliers:
-            metrics = _evaluate_under_demand_multiplier(
-                cfg, agent, mult, eval_episodes
-            )
+            metrics = _evaluate_under_demand_multiplier(cfg, agent, mult, eval_episodes)
             results[method][mult] = metrics
             print(
                 f"  demand x{mult:.2f} | EE={metrics['ee_mbit_per_joule']:.3f} Mbit/J | "

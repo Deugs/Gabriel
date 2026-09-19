@@ -12,10 +12,9 @@ documented case for branching (Section 10.3.1/B3) — MP-DQN without
 branching does not scale any better than P-DQN, it is only less biased.
 """
 
-from typing import Any, Dict, Optional, Union
+from typing import Any, Optional, Union
 
 import torch
-import torch.nn as nn
 
 from agents.pdqn_agent import JointDiscreteQNetwork, PDQNAgent
 
@@ -42,8 +41,10 @@ class MPDQNAgent(PDQNAgent):
         action_idx = torch.arange(self.n_joint_actions)
         rrh_idx = torch.arange(self.n_rrh)
         self.action_bits = (
-            (action_idx.unsqueeze(1) >> rrh_idx.unsqueeze(0)) & 1
-        ).float().to(self.device)  # (n_joint_actions, n_rrh)
+            ((action_idx.unsqueeze(1) >> rrh_idx.unsqueeze(0)) & 1)
+            .float()
+            .to(self.device)
+        )  # (n_joint_actions, n_rrh)
 
     def _compute_q_all_actions(
         self,

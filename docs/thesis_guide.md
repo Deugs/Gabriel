@@ -317,6 +317,18 @@ end for
 - Zero-shot evaluation on the weekend/suburban traffic profile after training only on weekday/urban (`evaluation/generalization.py`)
 - Discussion: EE/QoS degradation relative to the matched (weekday-trained, weekday-evaluated) case
 
+#### 4.9 Demand-Response Analysis (~300 words, new — implemented but previously undocumented here)
+- Frozen-policy sweep across demand multipliers {0.5, 1.0, 1.5, 2.0, 2.5} (`evaluation/demand_response.py`), comparable to Iqbal et al.'s Figs. 3 and 5
+- Discussion: EE and mean power response as demand scales, for each method
+
+#### 4.10 Power-vs-Time-of-Day Profile (~300 words, new — implemented but previously undocumented here)
+- Frozen-policy rollout bucketed by hour-of-day (`evaluation/power_time_profile.py`), comparable to Iqbal et al.'s Fig. 4
+- Discussion: how each method's diurnal power profile tracks (or fails to track) the tidal traffic pattern
+
+#### 4.11 Reward-Weight Sensitivity (~300 words, new — implemented but previously undocumented here; Section 12.6/S5)
+- Grid sweep of the training-time switching-cost weight `gamma_switch` over {0.01, 0.05, 0.1, 0.5, 1.0}, retraining the proposed agent from scratch at each point (`evaluation/reward_sensitivity.py`)
+- Discussion: EE/QoS/switching-frequency trade-off as `gamma_switch` varies — justifies the default value used everywhere else in this chapter
+
 **Required Figures** (minimum):
 1. Fig 4.1: Convergence curves (all 11 methods, 10 seeds)
 2. Fig 4.2: 24-hour energy profile comparison
@@ -326,6 +338,9 @@ end for
 6. Fig 4.6: Scalability: training time and inference latency vs. network size
 7. Fig 4.7: CSI-robustness degradation curve (EE and QoS-violation rate vs. sigma)
 8. Fig 4.8: Cross-profile generalization bar chart (weekday-matched vs. weekend-generalization)
+9. Fig 4.9: Demand-response curve (EE and power vs. demand multiplier)
+10. Fig 4.10: Power-vs-time-of-day diurnal profile, all methods
+11. Fig 4.11: Reward-weight (gamma_switch) sensitivity curve
 
 **Required Tables**:
 1. Table 4.1: Simulation parameters

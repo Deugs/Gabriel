@@ -35,7 +35,7 @@ This document maintains traceability between thesis equations and their code imp
 | (3.14) | Action space definition | `cran_env/cran_env.py` | `CRANEnv.action_space` | Implemented |
 | (3.15) | Reward function | `cran_env/cran_env.py` | `CRANEnv.step()` | Implemented |
 | (3.16) | Transition dynamics | `cran_env/cran_env.py` | `CRANEnv.step()` | Implemented |
-| (3.17) | Optimization objective | `training/train_hybrid.py` | `train_hybrid_agent()` | Pending |
+| (3.17) | Optimization objective | `training/train_hybrid.py` | `train_hybrid_agent()` | Implemented |
 
 ---
 
