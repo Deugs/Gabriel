@@ -33,7 +33,7 @@ class QNetwork(nn.Module):
 
         self.n_rrh = n_rrh
 
-        layers = []
+        layers: List[nn.Module] = []
         prev_dim = state_dim
         for dim in hidden_dims:
             layers.append(nn.Linear(prev_dim, dim))
