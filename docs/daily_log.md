@@ -2,6 +2,49 @@
 
 > Filled instances of `docs/daily_log_template.md`. Newest entry first.
 
+## Date: 2026-09-19 (found and fixed MPDQN's real performance bug)
+
+### What I Did Today
+- [x] `mpdqn/seed42` (O-RAN's checkpointed matrix) had, across several resume cycles and one continuous 93-minute uninterrupted stretch, never completed the same 500 episodes that DQN/DDPG/BMPP-DQN each finish in a few minutes -- a ~20-30x+ gap far too large to be just "MP-DQN's multi-pass architecture does more forward passes." Per the candidate's choice ("profile it now"), investigated properly instead of continuing to wait or arbitrarily cutting episodes.
+- [x] `cProfile`'d `ORANMPDQNAgent.update()` directly (not a guess): found `update()` averaged ~0.51s/call, with `run_backward` alone taking ~94ms/call. Traced this to `update()`'s `param_loss` computation: it evaluated Q-values for **all 1296 joint actions** (`2**n_ru * n_splits**n_ru` at this repo's `n_ru=4`/`n_splits=3`) with full gradient tracking, then used `.gather()` to pick out only the one greedy action -- building and backpropagating through a computation graph ~1296x larger than the loss actually needs.
+- [x] Fixed `oran_agents/mpdqn_agent.py`'s `update()`: find the greedy action under `no_grad()` first (cheap -- no backward graph), then re-evaluate only that one action with gradients enabled. Proved this is an exact algebraic identity (not an approximation) via a new test (`tests/test_oran_agents.py::test_mpdqn_param_loss_optimization_is_exactly_equivalent`) that reimplements the old formula directly and asserts the loss value and every gradient w.r.t. `param_net`'s parameters match to floating-point precision. Re-profiled: `update()` dropped from ~508ms to ~292ms/call (1.7x), `run_backward` from ~94ms to near-zero.
+- [x] Found the **identical bug**, independently reimplemented, in the C-RAN track's shared `agents/pdqn_agent.py::PDQNAgent.update()` (inherited verbatim by `MPDQNAgent`) -- and two more instances of the same pattern there (the target-Q computation and the critic-loss computation both evaluated all actions to use only one already-known action). Refactored via two new overridable hook methods (`_compute_q_for_known_action`, `_compute_greedy_q_with_grad`) with behavior-preserving defaults for flat P-DQN (already O(1), no change) and optimized overrides in `MPDQNAgent` (masked single-action evaluation, mirroring the O-RAN fix). Added an equivalence test (`tests/test_new_baselines.py::test_mpdqn_known_action_and_greedy_optimizations_are_exactly_equivalent`) proving both overrides match the naive formula exactly.
+- [x] Honestly measured C-RAN's own post-fix cost at its real scale (`n_rrh=12` -> 4096 joint actions): the wasteful backward-pass cost is gone, but the *inherent* forward-only cost of evaluating a 4096-action space remains large -- projected ~87 hours for a full 3000-episode/seed run. This is disclosed as expected, not a remaining bug: the module's own docstring already states MP-DQN at this scale is "deliberately intractable... the baseline the proposed method's branching decomposition is meant to outperform on scalability, not a scaled-down version of it." The fix removes an *accidental* inefficiency; it does not and should not eliminate the *intentional* one.
+- [x] Full suite re-run clean: 144/144 (142 previous + 2 new equivalence tests). Also removed two genuinely-unused pre-existing imports (`typing.Dict`, `torch.nn`) from `agents/mpdqn_agent.py` while already editing that file. `flake8`/`mypy`/`black` all clean.
+- [x] Resumed the checkpointed O-RAN matrix with the fix in place. Correcting an overly-optimistic claim made earlier while writing this entry: `update()` runs on nearly every one of ~50,000 total steps (500 episodes x 100 steps, minus the ~128-step buffer-fill delay), so at the measured 292ms/call this is still a genuinely long ~4-hour computation per seed (~12h for all 3 `mpdqn` seeds) -- not "well under an hour." The real, honest improvement is that this is now a *bounded, finishable* multi-hour job instead of one that 93 minutes of continuous execution couldn't finish even once; it is not a small fix.
+
+### Time Spent
+| Activity | Hours |
+|----------|-------|
+| Coding | 0.7 |
+| Writing | 0.25 |
+| Reading | 0.15 |
+| Debugging | 0.3 (cProfile investigation, tracing the exact bottleneck, verifying the C-RAN side shares the same bug) |
+| Running experiments | 0.2 (profiling runs, equivalence tests, before/after timing measurements) |
+| **Total** | ~1.6 |
+
+### Decisions Made
+| Decision | Rationale |
+|----------|-----------|
+| Investigated with `cProfile` rather than guessing at the cause | "MP-DQN is slower than DQN" was already known/expected; the question was whether the *magnitude* (20-30x+) was inherent or a fixable inefficiency. Only direct profiling could distinguish "architecturally expensive" from "accidentally wasteful," and it turned out to be mostly the latter for O-RAN's smaller action space. |
+| Required an exact-equivalence test (loss value + every gradient) before trusting either fix, not just "it still runs and doesn't crash" | This changes core RL training math (what the critic and continuous-parameter networks actually learn from). A silent numerical drift here wouldn't crash anything -- it would just quietly corrupt every future baseline comparison. Proving algebraic identity against a hand-reimplemented reference is the only way to rule that out with confidence. |
+| Fixed the shared C-RAN `PDQNAgent.update()` via overridable hooks with behavior-preserving defaults, rather than duplicating `update()` in `MPDQNAgent` | Duplicating a ~70-line training method risks the two copies drifting apart under future changes. Hooks that default to the exact original behavior (verified: PDQN's own tests still pass unchanged) and are overridden only where a genuine optimization applies is safer and keeps the two algorithms' shared logic in one place. |
+| Did not attempt to make C-RAN's MPDQN fast at `n_rrh=12` scale | The remaining ~87h cost is inherent to evaluating a 4096-action space every step, which the module's own docstring states is the *deliberate point* of including this baseline (to demonstrate why branching is necessary). Hacking around that would undermine the comparison this baseline exists to make. |
+
+### Blockers
+| Blocker | Severity | Plan |
+|---------|----------|------|
+| C-RAN's MPDQN remains inherently expensive (~87h projected for a full run) even after removing the accidental inefficiency | Medium, but expected/by-design | When the real C-RAN matrix is eventually run, budget for this specific baseline separately (e.g. fewer seeds, or accept it as the slowest method by design) rather than expecting parity with the other 10 methods |
+
+### Tomorrow's Plan
+- [ ] Continue the checkpointed O-RAN matrix's scheduled-check-in cycle; `mpdqn`'s 3 seeds should now complete far faster
+- [ ] Report final O-RAN results once all 12 jobs are done
+
+### Notes
+This is the first round this session that found and fixed a genuine, pre-existing performance bug (not a documentation gap or a missing config wire-up) -- discovered only because the checkpointed matrix's real, sustained execution surfaced it in a way no unit test or short smoke test had. Both fixes are provably exact, not just "probably fine."
+
+---
+
 ## Date: 2026-09-18 (parallel multi-track support for the checkpointed runner)
 
 ### What I Did Today

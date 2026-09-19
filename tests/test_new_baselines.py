@@ -129,6 +129,62 @@ def test_mpdqn_masks_inactive_rrh_params(small_config):
     assert torch.allclose(q_a[0, 0], q_b[0, 0], atol=1e-5)
 
 
+def test_mpdqn_known_action_and_greedy_optimizations_are_exactly_equivalent(
+    small_config,
+):
+    """agents/mpdqn_agent.py's `_compute_q_for_known_action`/
+    `_compute_greedy_q_with_grad` overrides avoid an O(n_joint_actions)
+    forward+backward cost (evaluating and backpropagating through every
+    joint action just to use one) that was the root cause of MP-DQN taking
+    dramatically longer per update() than every other baseline. This test
+    proves both overrides are exact algebraic identities, not
+    approximations: it reimplements the naive "evaluate all actions, then
+    gather one" formula directly and asserts the values (and, for the
+    gradient-carrying path, every gradient w.r.t. the continuous
+    parameters) match the optimized override to floating-point precision.
+    """
+    import torch
+
+    agent = MPDQNAgent(
+        state_dim=12, n_rrh=4, p_max_w=1.0, config=small_config, device="cpu"
+    )
+    batch = 5
+    feat = torch.randn(batch, agent.encoder.output_dim)
+
+    # -- _compute_q_for_known_action: known action, no gradient needed --
+    known_action_idx = torch.randint(0, agent.n_joint_actions, (batch,))
+    cont_params = torch.rand(batch, agent.n_rrh, 2)
+    q_naive = agent._compute_q_all_actions(agent.q_net, feat, cont_params).gather(
+        -1, known_action_idx.unsqueeze(-1)
+    )
+    q_optimized = agent._compute_q_for_known_action(
+        agent.q_net, feat, cont_params, known_action_idx
+    )
+    assert torch.allclose(q_naive, q_optimized, atol=1e-6)
+
+    # -- _compute_greedy_q_with_grad: greedy action, gradient must match --
+    torch.manual_seed(0)
+    p_ratio_old, bw_share_old = agent.param_net(feat)
+    pred_params_old = torch.stack([p_ratio_old, bw_share_old], dim=-1)
+    q_pred_all = agent._compute_q_all_actions(agent.q_net, feat, pred_params_old)
+    greedy_idx_old = q_pred_all.argmax(dim=-1, keepdim=True).detach()
+    param_loss_old = -q_pred_all.gather(-1, greedy_idx_old).mean()
+    grads_old = torch.autograd.grad(param_loss_old, list(agent.param_net.parameters()))
+
+    agent.param_net.zero_grad()
+    p_ratio_new, bw_share_new = agent.param_net(feat)
+    pred_params_new = torch.stack([p_ratio_new, bw_share_new], dim=-1)
+    q_pred_sel, _greedy_idx_new = agent._compute_greedy_q_with_grad(
+        agent.q_net, feat, pred_params_new
+    )
+    param_loss_new = -q_pred_sel.mean()
+    grads_new = torch.autograd.grad(param_loss_new, list(agent.param_net.parameters()))
+
+    assert torch.allclose(param_loss_old, param_loss_new, atol=1e-6)
+    for g_old, g_new in zip(grads_old, grads_new):
+        assert torch.allclose(g_old, g_new, atol=1e-6)
+
+
 def test_ddpg_action_selection_and_update(small_config):
     env = CRANEnv(small_config)
     obs, _ = env.reset(seed=42)

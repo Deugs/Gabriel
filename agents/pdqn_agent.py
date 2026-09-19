@@ -235,6 +235,61 @@ class PDQNAgent:
         """Single-pass (P-DQN) evaluation: feed the full, unmasked param vector once."""
         return q_net(features, continuous_params)
 
+    def _compute_q_for_known_action(
+        self,
+        q_net: JointDiscreteQNetwork,
+        features: torch.Tensor,
+        continuous_params: torch.Tensor,
+        action_idx: torch.Tensor,
+    ) -> torch.Tensor:
+        """Q(s, a) for an action index ALREADY KNOWN (e.g. the replayed
+        action from the buffer, or one already selected by another
+        network) -- avoids evaluating the full action space when only one
+        action's value is actually used.
+
+        Default (flat, single-pass P-DQN): `_compute_q_all_actions` is
+        already O(1) here (one Linear-head forward from a single feature
+        vector), so gathering the known action afterward costs nothing
+        extra -- identical to the original inline code. `MPDQNAgent`
+        overrides this to skip its O(n_joint_actions) multi-pass cost when
+        the action doesn't need to be searched for.
+
+        Args:
+            action_idx: (batch,) LongTensor.
+        Returns:
+            (batch, 1) tensor.
+        """
+        q_all = self._compute_q_all_actions(q_net, features, continuous_params)
+        return q_all.gather(-1, action_idx.unsqueeze(-1))
+
+    def _compute_greedy_q_with_grad(
+        self,
+        q_net: JointDiscreteQNetwork,
+        features: torch.Tensor,
+        continuous_params: torch.Tensor,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Q-value of the GREEDY action w.r.t. `continuous_params`, with
+        gradients flowing to `continuous_params` (not to the greedy-action
+        search itself) -- used for the continuous-parameter policy
+        gradient loss.
+
+        Default (flat P-DQN): already O(1) to evaluate all actions, so
+        there's no benefit to splitting the greedy search from the
+        gradient-carrying evaluation -- identical to the original inline
+        code. `MPDQNAgent` overrides this to find the greedy action under
+        `no_grad()` first (cheap: no backward graph), then re-evaluate
+        only that one action with gradients enabled, avoiding an
+        O(n_joint_actions)-times-larger backward pass than the loss
+        actually needs.
+
+        Returns:
+            (q_value (batch, 1) with grad to continuous_params,
+             greedy_action_idx (batch,)).
+        """
+        q_all = self._compute_q_all_actions(q_net, features, continuous_params)
+        greedy_idx = q_all.argmax(dim=-1, keepdim=True).detach()
+        return q_all.gather(-1, greedy_idx), greedy_idx.squeeze(-1)
+
     def select_action(self, obs: np.ndarray, evaluate: bool = False) -> Dict[str, Any]:
         state_t = torch.FloatTensor(obs).unsqueeze(0).to(self.device)
 
@@ -298,18 +353,16 @@ class PDQNAgent:
             )
             next_action_idxs = next_q_online.argmax(dim=-1)
 
-            next_q_target = self._compute_q_all_actions(
-                self.q_net_target, next_feat, next_cont_params
-            )
-            next_q_sel = next_q_target.gather(
-                -1, next_action_idxs.unsqueeze(-1)
+            next_q_sel = self._compute_q_for_known_action(
+                self.q_net_target, next_feat, next_cont_params, next_action_idxs
             )  # (batch, 1)
 
             y_target = rewards + self.gamma * (1.0 - dones) * next_q_sel
 
         feat = self.encoder(states)
-        q_all = self._compute_q_all_actions(self.q_net, feat, cont_params)
-        q_sel = q_all.gather(-1, action_idxs.unsqueeze(-1))
+        q_sel = self._compute_q_for_known_action(
+            self.q_net, feat, cont_params, action_idxs
+        )
 
         critic_loss = F.mse_loss(q_sel, y_target)
 
@@ -324,11 +377,10 @@ class PDQNAgent:
         feat_for_param = self.encoder(states)
         p_ratio, bw_share = self.param_net(feat_for_param)
         pred_params = torch.stack([p_ratio, bw_share], dim=-1)
-        q_pred = self._compute_q_all_actions(
+        q_pred_sel, _greedy_action_idx = self._compute_greedy_q_with_grad(
             self.q_net, feat_for_param.detach(), pred_params
         )
-        greedy_action_idx = q_pred.argmax(dim=-1, keepdim=True).detach()
-        param_loss = -q_pred.gather(-1, greedy_action_idx).mean()
+        param_loss = -q_pred_sel.mean()
 
         self.param_opt.zero_grad()
         param_loss.backward()

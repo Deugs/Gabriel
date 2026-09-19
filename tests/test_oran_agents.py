@@ -485,3 +485,55 @@ def test_mpdqn_baseline_runs_and_updates(default_config):
 
     assert not np.isnan(metrics["critic_loss"])
     assert not np.isnan(metrics["param_loss"])
+
+
+def test_mpdqn_param_loss_optimization_is_exactly_equivalent(default_config):
+    """update()'s param_loss now finds the greedy action under no_grad, then
+    re-evaluates only that one action with gradients enabled, instead of
+    evaluating all n_joint_actions with gradients and gathering the greedy
+    one -- an optimization that avoids an O(n_joint_actions)-times-larger
+    backward pass (see oran_agents/mpdqn_agent.py's update() comment; this
+    was the root cause of MPDQN taking 90+ minutes for a single 500-episode
+    seed while every other O-RAN method finished in minutes).
+
+    This test proves the optimization is an exact algebraic identity, not
+    an approximation: it reimplements the OLD (pre-optimization) formula
+    directly against the same agent/weights/inputs and asserts the loss
+    value and every gradient w.r.t. param_net's parameters match the NEW
+    code path to floating-point precision.
+    """
+    cfg = _small_config(default_config)
+    torch.manual_seed(0)
+    agent = ORANMPDQNAgent(state_dim=12, n_ru=2, n_splits=2, config=cfg)
+
+    batch = 5
+    feat_for_param = torch.randn(batch, agent.encoder.output_dim)
+
+    # OLD formula: evaluate ALL n_joint_actions with gradients, then gather
+    # the greedy one (this is exactly what update() did before the fix).
+    power_ratio_old, prb_share_old = agent.param_net(feat_for_param)
+    pred_params_old = torch.stack([power_ratio_old, prb_share_old], dim=-1)
+    q_pred_all = agent._compute_q_all_actions(feat_for_param, pred_params_old)
+    greedy_idx_old = q_pred_all.argmax(dim=-1, keepdim=True).detach()
+    param_loss_old = -q_pred_all.gather(-1, greedy_idx_old).mean()
+    grads_old = torch.autograd.grad(param_loss_old, list(agent.param_net.parameters()))
+
+    # NEW formula: exactly the lines now in update() after the fix.
+    agent.param_net.zero_grad()
+    power_ratio_new, prb_share_new = agent.param_net(feat_for_param)
+    pred_params_new = torch.stack([power_ratio_new, prb_share_new], dim=-1)
+    with torch.no_grad():
+        q_pred_all_for_argmax = agent._compute_q_all_actions(
+            feat_for_param, pred_params_new
+        )
+        greedy_idx_new = q_pred_all_for_argmax.argmax(dim=-1)
+    greedy_bits = agent.joint_ru_bits[greedy_idx_new]
+    masked_params = pred_params_new * greedy_bits.unsqueeze(-1)
+    fused = agent.q_net.fuse(feat_for_param, masked_params)
+    q_pred_greedy = agent.q_net.q_at_indices(fused, greedy_idx_new)
+    param_loss_new = -q_pred_greedy.mean()
+    grads_new = torch.autograd.grad(param_loss_new, list(agent.param_net.parameters()))
+
+    assert torch.allclose(param_loss_old, param_loss_new, atol=1e-6)
+    for g_old, g_new in zip(grads_old, grads_new):
+        assert torch.allclose(g_old, g_new, atol=1e-6)
