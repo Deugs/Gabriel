@@ -47,27 +47,139 @@ literature-style placeholders chosen for internal consistency (e.g.
 monotonicity), not verified physical constants — resolve/cite before the
 thesis states them as fact:
 - `oran_env/power_model.py`'s RU/DU/CU/fronthaul power constants (§10.5) —
-  **still open** after 2026-08-29 and 2026-08-30 checks against 8
+  **still open** after 2026-08-29 and 2026-08-30 checks against 13
   O-RAN-context sources total (see §10.5's own notes); some order-of-
   magnitude/qualitative support now exists, but no source gives a matching
-  per-split numeric table. The 2026-08-30 pass additionally surfaced a
+  per-split numeric table. The 2026-08-30 passes additionally surfaced a
   genuine **scale mismatch** worth disclosing in the thesis: real measured
   macro-cell O-RU power (~200-550 W, Open RAN Handbook 2nd Ed.) and
   enterprise-server O-DU/O-CU host power (~625-780 W, Hoffmann et al.
   presentation) both run 20-100x above this model's own placeholder scale
   — neither source says what scale a small `n_ru=4` scenario should use,
-  so nothing was rescaled from this finding alone
+  so nothing was rescaled from this finding alone. Obtaining 3GPP TR 38.864
+  itself (the actual document, not a secondary citation) independently
+  confirms the static+dynamic model *family* is right, but its own power
+  table is in relative units with no absolute-Watt anchor, so it still
+  couldn't be used to set any Watt-valued constant here. A real small-cell
+  O-RU datasheet (Benetel RAN550, Split 7.2x) later narrowed the scale
+  mismatch to 5-14x (from 20-100x) with its "typical power consumption:
+  40 W" figure, still not decomposed into this model's RU/DU/CU/fronthaul
+  shares — but its "max TX output power: 2 W (33 dBm)" *did* directly fix
+  one constant: `power.ru.p_max_dbm` (30 → 33 dBm), the one exception to
+  "still open" in this flag. A HUBER+SUHNER/CubeOptics infographic
+  reproducing 3GPP TR 38.801's real per-split fronthaul bandwidth table
+  also quantitatively confirmed this model's `p_fh_per_ru_by_split`
+  monotonic *direction* for the three mapped options, while revealing its
+  1:2:5 ratio is far shallower than the real bandwidth-ratio these figures
+  imply (~1:1.4-2.4:39-52) — not used to rescale it, since fronthaul power
+  isn't established to scale linearly with bandwidth (see §10.2). Most
+  recently, Al-Tahmeesschi et al. 2025 gave the first real, RU/DU/CU-
+  *decomposed* O-RAN power measurements found in either round, on a Split 8
+  testbed that's an exact match to this model's `c=2`: measured RU power
+  ~43-45 W (narrowing the scale mismatch to ~4x, the closest yet) and
+  combined DU+CU power ~119.5-141.6 W — still not decomposable into this
+  model's separate constants without guessing, and their separate Split
+  7.2b DU/CU figures are confounded by a different-server-class testbed
+  choice, so not directly comparable to Split 8's. Their finding that power
+  barely scales with PRB load independently corroborates this model's
+  existing load-independent DU/CU power design (no change needed). Two
+  more sources supplied the same day: Abubakar et al. 2023's own survey
+  conclusion states RU/fronthaul-specific O-RAN power modeling remains an
+  open research gap in the literature at large (a survey-level
+  confirmation this flag's "still open" status is a field-wide gap, not a
+  search failure), and cites a real fronthaul-*power* percentage (not
+  bandwidth) from Lopez-Perez et al. — 2%/30%/60% of total C-RAN power for
+  split options 6/7/8 — that further quantifies (without rescaling) the
+  bandwidth-vs-power gap already noted above, since this model's own
+  implied fronthaul fraction (~11-18% across c=0..2) sits well below the
+  cited 60% at the most-centralized option. A 2025 MASc thesis on CF-mMIMO
+  under O-RAN Split 7.2/8 gave further structural corroboration (its own
+  power model is the same static+load-dependent family) and closed-form
+  fronthaul-rate formulas confirming the bandwidth-monotonicity direction.
+  The candidate then supplied the thesis's remaining pages (Chapter 4 and
+  Appendix A) the same day: Appendix A's own formula-derived fronthaul
+  rates (Split 7.2≈2.764 Gbps, Split 8≈5.898 Gbps at N=8, a ~2.1x ratio,
+  giving 7 vs. 3 max APs/DU under a 20 Gbps budget) *disagree* with the
+  thesis's own Chapter 4 simulation assumptions (10/20 Gbps) and with
+  3GPP TR 38.801's real Option 7-2-vs-8 ratio (~10-16x) — disclosed as a
+  spread across (and within) sources rather than resolved by picking one.
+  Neither the Chapter 4 assumptions nor Appendix A decompose power by
+  RU/DU/CU component (both address fronthaul *bandwidth* only), so this
+  flag's core RU/DU/CU wattage gap remains fully open after 6
+  literature-check passes across two days. A 7th pass (a different
+  master's thesis, Caterina Leonelli/Bologna, on O-RAN CU energy scaling)
+  added a new, quantified finding in the opposite direction: its cited
+  survey figure that non-massive-MIMO/massive-MIMO base stations spend
+  66%/82% of total RAN energy on the RU alone implies this model's own
+  RU-share (~16-36% across c=0..2, computed from its default constants)
+  likely *under*-weights RU relative to DU/CU/fronthaul, not just
+  under-weights fronthaul as found earlier — still not used to rescale
+  anything, since the cited percentage is for a differently-scoped
+  real-hardware total. That thesis's own real measured energy data
+  (Chapter 4, a live OpenAirInterface/Scaphandre-RAPL testbed) uses no
+  real RU hardware at all and decomposes energy by accounting category
+  (Host/Activation/Service), not by RAN component — so it still gives no
+  RU/DU/CU wattage table. An 8th pass (a Rutgers WINLAB/ONF/ORCID Lab white
+  paper on a real commercial O-RAN test line) is the strongest source found
+  yet: real, separately-decomposed RU/DU/CU absolute-Watt measurements
+  (not just RU vs. combined DU+CU), a validated multi-band power-model
+  formula in the same static+per-chain family this model already uses,
+  and — for the first time in this flag's history — genuine,
+  scale-invariant validation of one constant with no scale-mismatch
+  caveat: this model's `pa_efficiency=0.25` falls squarely inside the
+  paper's own fitted PA-efficiency ranges (29-39% and 14-32% for its two
+  bands). It also resolves an apparent tension between the two previously-
+  cited RU-share figures: computed directly from its own test cases,
+  RU-share-of-total-power ranges from ~29-47% at small RU/band counts
+  (closer to this model's own implied ~16-36%) up to ~80-81% at full
+  commercial multi-RU scale — independently cross-validating the Bologna
+  thesis's 82% figure almost exactly at the large-scale end, showing
+  RU-share scales with RU/band count rather than being a fixed ratio.
+  Still, the paper's test cases vary RF gain/MIMO order/traffic load/band
+  count, never 3GPP split option, and give no separately-metered fronthaul
+  figure, so they cannot inform the split-dependent
+  `p_ru_proc_by_split`/`p_du_per_ru_by_split`/`p_fh_per_ru_by_split`
+  arrays — and the paper's absolute Watt figures (RU ~200-670 W, DU
+  ~280-310 W, CU ~230 W, real commercial macro-cell-class multi-band
+  hardware) remain ~10-50x this model's own small-cell placeholder scale,
+  so nothing was rescaled. A 9th pass (two Kuaban et al. analytical O-DU/
+  O-CU papers) added: a static-platform-power match to `p_du_static_w=50`
+  (their own `P_plat,stat=50 W`, though their fuller idle-DU floor with
+  accelerator+idle-core is higher, ~85 W); a third real PA-efficiency value
+  (0.35) further corroborating `pa_efficiency=0.25`; a PA-share-of-RU-
+  internal-power figure (>=64%, Hao et al. 2024) bracketing this model's
+  own computed PA share (~44-73% across `c=0..2`); a new fronthaul-power
+  quantification (8% of DU idle power) not transplantable given this
+  model's different additive fronthaul decomposition; and a disclosed
+  structural gap — both papers model O-DU/O-CU power as sub-linear in
+  active-RU/user count, unlike this model's own linear-per-active-RU
+  design (a candidate future-work item, not fixed here). This flag remains
+  the most-open of the four O-RAN needs-validation flags after 9
+  literature-check passes across two days, though its broader context
+  (and the `pa_efficiency` constant specifically) is now substantially
+  better-supported than at any prior pass
 - `oran_env/traffic_model.py`'s trapezoidal breakpoints and Poisson rate
   (§10.6, via `config/oran_default.yaml`'s `traffic:` section) —
-  **still open** after a 2026-08-30 check of all 8 previously-supplied
-  O-RAN sources for traffic-shape content specifically (see §10.6's own
-  note); one source (Lassoued & Boujnah 2026) gives a real diurnal
-  traffic-load curve whose shape and rough breakpoint timing broadly
-  match this module's `t1`/`t4`, but it's a generic macro-cellular
-  occupation-rate curve, not a 5G/O-RAN Poisson arrival-rate source, so
-  no numeric constant (`lambda_peak`, `floor_ratio`, `packet_size_bits`,
-  exact `t1`-`t4`) has been validated or changed
-- The 3GPP split → centralization-level mapping (§10.2) — **partially informed**: the O-RAN Alliance's own 2021 white paper confirms the real specified split is Option 7-2x, not literally Option 2/6/8 (see §10.2's own note); a 2026-08-30 check of Rony et al. 2021 independently confirms the *qualitative direction* of the RU-processing-vs-fronthaul-cost trade-off this mapping assumes (in cost percentages, not power or bandwidth), but the 3-level abstraction itself is still a tractability simplification, not a literature-validated numeric mapping
+  **partially resolved** as of a 2026-08-30 check that obtained 3GPP
+  TR 38.864 itself (see §10.6's own note): its Annex A's FTP Model 3 (0.5
+  MB packet size, 200 ms mean inter-arrival time — a real, standard 3GPP
+  Poisson traffic model) is a genuine primary-source match in the right
+  units, so `lambda_peak` (5.0 → 0.5) and `packet_size_bits` (1.0e6 →
+  4.0e6) have been updated to derive directly from it — not a guess. This
+  also corrects the same day's earlier, more tentative finding that this
+  module's temporal-Poisson-arrival design wasn't precedented; it is, by
+  3GPP's own FTP Model 3. `floor_ratio` and `t1`-`t4` remain unvalidated:
+  TR 38.864's own load scenarios are load-level snapshots with no
+  time-of-day association, and its scope stops at "medium load," giving no
+  floor:peak ratio or diurnal timing to derive those from. A same-day
+  follow-up (a 2025 MASc thesis citing ETSI TR 103 737's 24-hour load
+  weighting: Busy=6h/Medium=10h/Low=8h) gives a genuine, exact confirmation
+  of the *aggregate* day-fraction split this model's `t1=7`/`t4=23` imply
+  (floor=8h matches ETSI's Low exactly; active=16h matches ETSI's
+  Medium+Busy exactly) — upgrading that aggregate split from unvalidated
+  to ETSI-consistent, though the four individual breakpoints (and
+  `floor_ratio` itself) remain underdetermined by this 3-bucket standard
+- The 3GPP split → centralization-level mapping (§10.2) — **partially informed**: the O-RAN Alliance's own 2021 white paper confirms the real specified split is Option 7-2x, not literally Option 2/6/8 (see §10.2's own note); a 2026-08-30 check of Rony et al. 2021 independently confirms the *qualitative direction* of the RU-processing-vs-fronthaul-cost trade-off this mapping assumes (in cost percentages, not power or bandwidth). A same-day follow-up check (a HUBER+SUHNER/CubeOptics infographic reproducing 3GPP TR 38.801's real per-split bandwidth table) went further, giving *quantitative* fronthaul-bandwidth figures for exactly the three mapped options (Option 2 = 3/4 Gbps, Option 6 = 7.1/5.6 Gbps, Option 8 = 157.3/157.3 Gbps) — a real numeric confirmation of the monotonic direction, though the 3-level abstraction itself is still a tractability simplification, not a literature-validated mapping in the sense of matching this model's own power-array ratios (see §10.5's note on the resulting bandwidth-vs-power ratio mismatch). Obtaining 3GPP TR 38.801 itself afterward gave an **exact** cross-validation of these pixel-verified figures from its own Annex A Table A-1 (Option 2 = 4016/3024 Mb/s, Option 6 = 5626.7/7140 Mb/s, Option 8 = 157.3/157.3 Gb/s) plus a full latency table not previously available (§10.2's own note has the details) — the option definitions and bandwidth figures now rest on the primary document itself, not only a secondary reproduction. A Trinity College Dublin/Aalborg University paper (Tariq et al., arXiv:2608.02082) independently confirms the same qualitative trade-off direction from an unrelated energy-latency optimization angle (processing energy falls, transport latency rises, as baseband/AI-inference placement centralizes from O-RU toward a data center) — a second qualitative-direction confirmation alongside Rony et al. 2021, though it gives no absolute RU/DU/CU Watt figures (its own energy unit is mJ/bit for BBP+AI-inference compute, drawn from an abstracted companion-paper parameterization, not this model's per-component Watts)
 - Default scenario scale (`n_ru=4, n_ue=8`, §10.3) — **partially
   informed** after a 2026-08-30 check of the 8 already-supplied O-RAN
   sources for scenario-scale content (see §10.3's own note): two directly
@@ -77,4 +189,13 @@ thesis states them as fact:
   scalability challenges for single-agent centralized RL as RU count
   grows — corroborating the tractability rationale, not the exact counts.
   `n_ru=4`/`n_ue=8` themselves remain an unvalidated tractability choice,
-  just one now shown to sit within precedented ranges
+  just one now shown to sit within precedented ranges. A 2025 MASc thesis
+  on CF-mMIMO under O-RAN (`K=16` users, `L=20`-`50` APs) adds a third
+  reference point, though its UE:AP ratio (0.32-0.8) sits *below* this
+  repo's own ratio (2), unlike DQRL/OREO's ratios which bracketed it —
+  disclosed as a genuine difference, not cherry-picked. A fourth source
+  (the Caterina Leonelli/Bologna O-RAN CU-scaling thesis) gives the
+  closest exact-count match found yet: its own testbed uses exactly
+  `n_ru=4` (matching this repo's own count precisely), with `n_ue=4` (a
+  UE:RU ratio of 1.0, at the low end of the DQRL/OREO bracket) — a further
+  data point, not a validation of `n_ue=8` specifically

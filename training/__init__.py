@@ -1,5 +1,6 @@
 """Training infrastructure package for C-RAN simulation."""
 
+from training.checkpointed_runner import run_checkpointed
 from training.hyperparam_search import HyperparameterSearch, run_proxy_sensitivity_sweep
 from training.train_ann_gsbf import train_ann_predictor
 from training.train_baselines import run_baseline_benchmarks
@@ -12,4 +13,5 @@ __all__ = [
     "HyperparameterSearch",
     "run_proxy_sensitivity_sweep",
     "train_ann_predictor",
+    "run_checkpointed",
 ]

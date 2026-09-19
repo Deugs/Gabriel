@@ -160,6 +160,21 @@ def test_power_model_per_split_arrays_read_from_config(default_config):
     assert list(env.power.p_fh_per_ru_by_split) == [7.0, 8.0, 9.0]
 
 
+def test_p_max_dbm_matches_ran550_datasheet(default_config):
+    """p_max_dbm=33 (2 W) is derived from the Benetel RAN550's real max TX
+    output power (total EIRP) for a Split-7.2x indoor small-cell O-RU, not
+    a guess -- see oran_env/power_model.py's docstring."""
+    assert default_config["power"]["ru"]["p_max_dbm"] == pytest.approx(33.0)
+
+    env = ORANEnv(default_config)
+    assert env.p_max_dbm == pytest.approx(33.0)
+    # 33 dBm converts to ~1.995 W exactly; the datasheet states "2 W" as a
+    # rounded figure, so this checks the conversion is in that ballpark
+    # rather than requiring bit-exact agreement with the rounded marketing
+    # number.
+    assert env.p_max_w == pytest.approx(2.0, rel=1e-2)
+
+
 def test_power_model_switching_cost_counts_flips_and_split_changes():
     pm = ORANPowerModel(n_ru=3)
     prev_active = np.array([True, True, False])
@@ -170,6 +185,19 @@ def test_power_model_switching_cost_counts_flips_and_split_changes():
     cost = pm.compute_switching_cost(prev_active, curr_active, prev_split, curr_split)
     expected = 2 * pm.p_switch_ru_w + 1 * pm.p_switch_split_w
     assert cost == pytest.approx(expected)
+
+
+def test_traffic_model_defaults_match_3gpp_ftp_model_3(default_config):
+    """lambda_peak/packet_size_bits are derived from 3GPP TR 38.864 Annex A's
+    FTP Model 3 (0.5 MB packet size, 200 ms mean inter-arrival time), not a
+    guess -- see oran_env/traffic_model.py's docstring."""
+    tm = ORANTrafficModel(n_ue=1)
+    assert tm.lambda_peak == pytest.approx(0.5)
+    assert tm.packet_size_bits == pytest.approx(4.0e6)
+
+    traffic_cfg = default_config["traffic"]
+    assert traffic_cfg["lambda_peak"] == pytest.approx(0.5)
+    assert traffic_cfg["packet_size_bits"] == pytest.approx(4.0e6)
 
 
 def test_traffic_model_trapezoidal_shape():

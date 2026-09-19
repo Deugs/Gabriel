@@ -22,7 +22,7 @@ def run_ablation_study(
     # one component at a time, each via the reward weight that genuinely
     # controls it (cran_env.py's r(t) = EE(t) - beta_qos*qos_penalty -
     # gamma_switch*switch_penalty - gamma_fronthaul*fronthaul_penalty).
-    variants = {
+    variants: Dict[str, Dict[str, float]] = {
         "1. Full Proposed (Branching MP-DQN + TD3)": {},
         "2. No Switching Cost": {"gamma_switch": 0.0},
         "3. No Fronthaul Reward Term": {"gamma_fronthaul": 0.0},

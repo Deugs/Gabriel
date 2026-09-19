@@ -31,23 +31,35 @@ channel:
 
 # ============================================================
 # Traffic Model (trapezoidal daily envelope x Poisson per-UE arrivals,
-# Concept Note Section 5.1; all numeric knobs below are needs-validation
-# placeholders per Section 10.3)
+# Concept Note Section 5.1; needs-validation placeholders per Section 10.6.
+# 2026-08-30: lambda_peak/packet_size_bits below are now derived directly
+# from 3GPP TR 38.864 Annex A's FTP Model 3 (0.5 MB packet size, 200 ms
+# mean inter-arrival time -- a real, standard 3GPP Poisson traffic model),
+# not a guess -- see Section 10.6's own note. floor_ratio and t1-t4 remain
+# unvalidated placeholders: TR 38.864's own load scenarios (Table A-1) are
+# instantaneous PRB-utilization snapshots, not tied to time-of-day, and its
+# own study scope stops at "medium load" (<=50%), so it gives no floor:peak
+# ratio or diurnal timing to derive these from.
 # ============================================================
 traffic:
-  lambda_peak: 5.0           # peak Poisson rate, packets/step, per UE
+  # 3GPP TR 38.864 Annex A FTP Model 3: 200ms mean inter-arrival = 5
+  # arrivals/s = 0.5 per 0.1s step (peak Poisson rate, per UE)
+  lambda_peak: 0.5
   floor_ratio: 0.2           # off-peak floor as a fraction of lambda_peak
-  packet_size_bits: 1.0e6
+                             # -- still an unvalidated placeholder (see note above)
+  # 3GPP TR 38.864 Annex A FTP Model 3: 0.5 MB packet/file size = 4e6 bits
+  packet_size_bits: 4.0e+6
   step_duration_s: 0.1       # matches the 10-100ms Near-RT RIC decision rate
-  t1: 7.0                    # rise start (hour of day)
-  t2: 10.0                   # plateau start
-  t3: 20.0                   # plateau end
-  t4: 23.0                   # fall end
+  t1: 7.0                    # rise start (hour of day) -- still unvalidated
+  t2: 10.0                   # plateau start -- still unvalidated
+  t3: 20.0                   # plateau end -- still unvalidated
+  t4: 23.0                   # fall end -- still unvalidated
 
 # ============================================================
 # Power Model (RU/DU/CU/fronthaul, monotonic in split centralization level;
-# all constants below are needs-validation literature-style placeholders,
-# Concept Note Section 10.5)
+# Concept Note Section 10.5). Most constants below remain needs-validation
+# literature-style placeholders; p_max_dbm (below) is the one exception,
+# now derived from a real small-cell O-RU datasheet -- see its own comment.
 # ============================================================
 power:
   ru:
@@ -55,7 +67,12 @@ power:
     p_switch_w: 2.0           # RU activation-flip switching cost
     p_switch_split_w: 1.0     # RU split-change switching cost
     pa_efficiency: 0.25
-    p_max_dbm: 30
+    # 2026-08-30: 33 dBm = 2 W, matching the Benetel RAN550's real max TX
+    # output power (total EIRP) for a Split-7.2x indoor small-cell O-RU
+    # (was 30 dBm/1 W, an unvalidated placeholder) -- see Concept Note
+    # Section 10.5's own note. Not a guess: same physical quantity, same
+    # units, a real commercial small-cell O-RU datasheet.
+    p_max_dbm: 33
     # Active-RU processing power per split centralization level c=0/1/2
     # (Concept Note Section 10.2), c=0 (Option 2) = most RU-side processing
     # down to c=2 (Option 8) = least. Previously not exposed here at all --

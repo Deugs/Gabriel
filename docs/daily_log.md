@@ -2,6 +2,466 @@
 
 > Filled instances of `docs/daily_log_template.md`. Newest entry first.
 
+## Date: 2026-09-18 (parallel multi-track support for the checkpointed runner)
+
+### What I Did Today
+- [x] Continued the checkpointed O-RAN matrix started 2026-09-10 via the scheduled-check-in approach (the candidate's explicit choice over continuous active babysitting, after empirically confirming the sandbox reclaims mid-run regardless of babysitting style once idle): resumed twice more across two gaps (once ~13 hours, once overnight), each time correctly skipping the 6 already-completed jobs per the manifest and continuing from `mpdqn/seed42`.
+- [x] The candidate asked whether the runner splits CPUs between C-RAN and O-RAN for true parallel execution on a multi-core machine -- it did not, by design (this sandbox's own 4 cores make that counterproductive, per the 2026-09-07 finding that unpinned parallel jobs thrash each other). Added `--num-threads` to `scripts/run_checkpointed_matrix.py`: pins the process to N threads (via `OMP_NUM_THREADS`/`MKL_NUM_THREADS`/`OPENBLAS_NUM_THREADS`/`NUMEXPR_NUM_THREADS` env vars, set before any lazy `torch` import, plus `torch.set_num_threads()`), so two invocations (one per track) can now run as genuinely non-competing processes on a bigger machine, e.g. `--num-threads 8` each on a 16-core box.
+- [x] Verified live, not just by lint: launched a thread-pinned (`--num-threads 2`) C-RAN smoke test alongside the real, still-running O-RAN matrix and confirmed via `ps aux` that the pinned process used ~2 cores' worth of CPU, not all 4 -- direct behavioral confirmation, not just a code read.
+- [x] `flake8`/`mypy`/`black` all clean on the modified file.
+
+### Time Spent
+| Activity | Hours |
+|----------|-------|
+| Coding | 0.2 |
+| Writing | 0.05 |
+| Reading | 0 |
+| Debugging | 0 |
+| Running experiments | 0.1 (monitoring the checkpointed matrix's resume cycles + the live thread-pinning smoke test) |
+| **Total** | ~0.35 |
+
+### Decisions Made
+| Decision | Rationale |
+|----------|-----------|
+| Made `--num-threads` opt-in (default: unset, PyTorch's normal all-cores behavior) rather than changing the script's default | This script's existing single-track-at-a-time usage (including the real O-RAN matrix currently running) already works correctly unpinned -- pinning only matters when deliberately running two invocations in parallel, so it shouldn't change behavior for anyone not doing that. |
+| Verified the pinning live against the actual running matrix rather than only in isolation | A code read confirms the env vars/API call are correct; only watching real `ps aux` CPU-share numbers while both processes ran concurrently confirms the *intended effect* (non-competing core usage) actually happens on this hardware. |
+
+### Blockers
+| Blocker | Severity | Plan |
+|---------|----------|------|
+| None new | -- | O-RAN matrix continues at 6/12 as of this entry; MPDQN remains the slow algorithm (consistent with the 2026-09-07/09-10 findings) |
+
+### Tomorrow's Plan
+- [ ] Continue the scheduled-check-in resume cycle for the O-RAN matrix until all 12 jobs complete
+- [ ] Then decide scope (full 10-seed vs reduced 3-seed) for the C-RAN matrix
+
+### Notes
+No numeric constants or existing behavior changed -- this is a pure opt-in addition, requested specifically to make the already-built checkpointed runner useful on hardware better than this session's own 4-core sandbox.
+
+---
+
+## Date: 2026-09-10 (checkpoint-resumable experiment runner)
+
+### What I Did Today
+- [x] Discovered a real failure, not a theoretical risk: the full-suite background run launched on 2026-09-07 (O-RAN's official suite followed by a reduced-seed C-RAN first pass) was silently killed by a container reclaim/restart sometime between 06:27 UTC on 2026-09-08 and 07:20 UTC on 2026-09-10 -- a ~2-day gap. Only 1 seed of 1 baseline algorithm had completed; nothing was saved, since `run_baseline_benchmarks()`/`train_hybrid_agent()` only persist their output once their whole call returns, not incrementally.
+- [x] Per the candidate's instruction ("make the pipeline checkpoint-resumable and keep running here"), built a checkpoint layer rather than just relaunching the same fragile approach:
+  - `training/checkpointed_runner.py`: a generic `run_checkpointed(jobs, manifest_path, job_fn, job_key_fn)` utility. Each job's result is written to disk and recorded in an atomically-written (write-then-rename) JSON manifest immediately after that job completes, so a re-run of the same job list skips everything already marked `"done"` and repeats at most the one job that was in flight when a process was cut off. A failed job is recorded as `"failed"` (not silently treated as done), so it's retried on the next run rather than skipped.
+  - `scripts/run_checkpointed_matrix.py`: builds the full (method, seed) job list for both tracks (C-RAN's 11 methods x seeds; O-RAN's 4 methods x seeds) and wires each job to the existing, already-tested `run_baseline_benchmarks`/`train_hybrid_agent`/`run_oran_baseline_benchmarks`/`train_bmpp_dqn_agent` entry points, scoped to one method+seed at a time -- deliberately a thin wrapper around the existing pipeline, not a new training system.
+  - Added `scripts/__init__.py` (scripts/ previously had no Python package files at all) to resolve a `mypy` module-path ambiguity once a `.py` file was added there.
+- [x] Added `tests/test_checkpointed_runner.py` (5 tests): the resumability contract in isolation (skip-if-done, retry-if-failed, atomic manifest writes) with a fake job function, plus one real end-to-end smoke test that builds the actual C-RAN job wiring for two cheap baseline methods, runs the checkpointed runner twice against the same manifest, and confirms the second run skips both jobs rather than re-executing them.
+- [x] Full suite re-run clean: 142/142 (137 previous + 5 new), `mypy`/`flake8`/`black` all clean across both tracks plus the new `scripts/` package.
+
+### Time Spent
+| Activity | Hours |
+|----------|-------|
+| Coding | 0.6 |
+| Writing | 0.2 |
+| Reading | 0.1 |
+| Debugging | 0.15 (diagnosing the silent container-reclaim failure; a `mypy` dual-module-path error from `scripts/` lacking `__init__.py`) |
+| Running experiments | 0 (this entry; the actual matrix run is launched separately) |
+| **Total** | ~1.05 |
+
+### Decisions Made
+| Decision | Rationale |
+|----------|-----------|
+| Built a checkpoint layer on top of the existing entry points rather than rewriting `run_baseline_benchmarks`/`train_hybrid_agent` to checkpoint internally | Those functions are already tested and used elsewhere (including the official `scripts/run_*_experiments.sh` pipelines) -- wrapping them per-(method, seed) call achieves the same resumability without touching or risking their existing, working behavior. |
+| Checkpoint granularity is one (method, seed) pair, not finer (e.g. per-episode) | This matches the natural unit size already used throughout this session (~10s-40min depending on method/episode count) -- fine enough that losing at most one in-flight unit per interruption is an acceptable cost, coarse enough not to need invasive mid-training checkpointing of optimizer/replay-buffer state. |
+| Recorded failed jobs distinctly from done jobs in the manifest, with automatic retry on the next run | A crash or exception inside a job should not be silently mistaken for successful completion -- that would be worse than the original all-or-nothing failure mode, since it would silently produce an incomplete result set that looks complete. |
+| Added `scripts/__init__.py` rather than avoiding the package import in the test | Making `scripts/` a proper package is the more conventional, durable fix, and resolves the `mypy` ambiguity cleanly rather than working around it. |
+
+### Blockers
+| Blocker | Severity | Plan |
+|---------|----------|------|
+| Container reclaim can still occur mid-job (not just between jobs) | Low-Medium, now mitigated not eliminated | At most one (method, seed) job's partial work is lost per reclaim, not the whole matrix -- re-running the same command resumes from the manifest automatically. |
+
+### Tomorrow's Plan
+- [ ] Launch the real checkpointed O-RAN matrix (`scripts/run_checkpointed_matrix.py --track oran --episodes 500 --seeds 42 123 456`) in the background, with more frequent check-ins than the previous (failed) attempt
+- [ ] Follow with the C-RAN matrix once O-RAN's is confirmed progressing/complete
+
+### Notes
+This is the first round in this session driven by a real observed failure (the 2-day silent container-reclaim loss) rather than a hypothetical risk -- worth stating plainly rather than softening, since it directly validates the caution raised before the original background run was launched.
+
+---
+
+## Date: 2026-09-07 (full-run readiness check: dependencies, lint config, mypy fixes)
+
+### What I Did Today
+- [x] The candidate asked whether the codebase is ready for a full training run. Investigated rather than assumed: found the full dependency stack (`numpy`, `torch`, `gymnasium`, `pandas`, etc.) was completely missing at session start -- the same environment-reset pattern noted in several O-RAN literature-check entries above, now confirmed to affect the whole stack, not just numpy/pytest. Reinstalled everything from `requirements.txt`, including `cvxpy` (needed a retry after a proxy read-timeout on the first attempt, succeeded on the second).
+- [x] Ran the full test suite clean (137/137 passed, ~10 minutes, only cosmetic `gymnasium` observation-space-bound warnings) and confirmed both `convex`/`ddqn_socp` (the two `cvxpy`-dependent C-RAN baselines) import and construct correctly with a fresh install.
+- [x] Confirmed no GPU is available (CPU-only, 4 cores) and that neither track's actual "full run" (C-RAN's 10-seed x 11-method Phase 4 matrix; O-RAN's own BMPP-DQN + 3-baseline convergence run) has ever been executed -- both are still open, unstarted items, and Phase 4 doesn't even have a chosen episode-count target yet (`config/default.yaml`'s `max_episodes: 5000` is only an upper cap).
+- [x] Presented staged recommendations (smoke test -> evidence-based episode-count pilot -> run the real multi-hour matrix on persistent/GPU compute rather than this ephemeral sandbox -> consider a reduced-seed first pass as a compute-constrained fallback) rather than either declaring the codebase "ready" or "not ready" with no path forward.
+- [x] Per the candidate's choice, fixed lint/type-checking configuration and the two pre-existing `mypy` issues instead of running training yet:
+  - Added `.flake8` (`max-line-length=88` to match `black`'s default, plus `E203`/`W503` ignores) -- flake8 had no config at all before, so it was comparing against its own 79-char default against black-formatted code, producing 547 false-positive `E501` warnings. With the config, that drops to 78 residual `E501`s (pre-existing long comments/docstrings scattered across files not touched today) plus 2 `E741` ambiguous-variable-name findings, which were fixed (see below).
+  - Added `mypy.ini` (`ignore_missing_imports` for `scipy`, `cvxpy`, `wandb` -- none of these ship type stubs or a `py.typed` marker, so mypy was reporting stub-availability noise, not real bugs).
+  - Investigated and fixed the two genuine pre-existing `mypy` findings: `agents/pdqn_agent.py`'s `select_action()` was annotated `-> Dict[str, np.ndarray]` but actually returns a dict also containing an `int` (`action_idx`) -- confirmed downstream callers (`training/train_baselines.py`, `tests/test_new_baselines.py`) genuinely consume it as an int, so the annotation was simply wrong; fixed to `Dict[str, Any]`. `agents/ddqn_agent.py`'s `QNetwork.__init__` built an untyped `layers = []` list that mypy inferred as `List[Linear]` from the first `.append()` call, then flagged the later `LayerNorm` append; fixed by explicitly annotating `layers: List[nn.Module] = []`, the type the list actually needs to hold.
+  - Fixed the 2 `E741` findings (`tests/test_hybrid_agent.py`, ambiguous variable name `l`) by renaming to `loss`.
+  - All four are pure annotation/naming fixes with zero behavior change -- confirmed via `git diff` (minimal, mechanical diffs) and re-running the full test suite (137/137 passed again) and the targeted pdqn/ddqn/ablation/hybrid subset.
+- [x] `mypy` across both tracks is now fully clean (`Success: no issues found in 53 source files`); one pre-existing real `mypy` finding (`evaluation/ablation.py:44`, a `config_overrides` type mismatch caused by an unannotated heterogeneous-looking dict literal) was also fixed by annotating `variants: Dict[str, Dict[str, float]]`.
+
+### Time Spent
+| Activity | Hours |
+|----------|-------|
+| Coding | 0.3 |
+| Writing | 0.15 |
+| Reading | 0.1 |
+| Debugging | 0.2 (reinstalling dependencies, diagnosing the 3 mypy findings) |
+| Running experiments | 0 |
+| **Total** | ~0.75 |
+
+### Decisions Made
+| Decision | Rationale |
+|----------|-----------|
+| Reinstalled the full dependency stack rather than assuming a documentation-only round | The candidate's question was specifically about full-run readiness, which required actually verifying the environment works end-to-end (imports, tests, lint, type-checking), not just checking file diffs as in the preceding literature-check rounds. |
+| Set flake8's `max-line-length=88` to match `black`'s default rather than leaving flake8 unconfigured or raising the limit further | This is the standard, `black`-documented pairing. A small number of comment/docstring lines still exceed 88 chars (`black` doesn't reformat those), left as-is since mass-editing 78 lines across files not otherwise touched today wasn't requested and is low value for the effort. |
+| Fixed `pdqn_agent.py`'s return-type annotation to match its actual (verified) behavior, rather than changing the dict's contents to match the old annotation | The dict genuinely needs to carry an `int` (`action_idx`) alongside `np.ndarray` values -- downstream code already relies on this. The annotation was simply inaccurate; correcting it is a truthful fix, not a behavior change. |
+| Did not reformat two other pre-existing files (`agents/mpdqn_agent.py`, `evaluation/demand_response.py`) that `black --check` also flags | Neither was touched today, and reformatting them wasn't part of what was asked -- flagged here for visibility rather than silently left out or unilaterally changed. |
+
+### Blockers
+| Blocker | Severity | Plan |
+|---------|----------|------|
+| No GPU in this sandbox; neither track's full run has a chosen compute plan yet | Medium -- blocks the actual Phase 4/O-RAN convergence run, not today's lint/dependency work | Candidate to decide: smoke test now, then either run the real matrix on persistent/GPU compute, or accept a reduced-seed first pass here as an interim result |
+| C-RAN Phase 4's per-run episode count is still undecided (`max_episodes: 5000` is only a cap) | Low-Medium | Recommend a short evidence-based pilot (a few seeds, up to ~2000 episodes) to pick the count where reward/critic loss plateau, rather than guessing |
+
+### Tomorrow's Plan
+- [ ] Await the candidate's decision on running the smoke test / episode-count pilot / full matrix
+- [ ] Consider reformatting `agents/mpdqn_agent.py` and `evaluation/demand_response.py` with `black` if/when those files are next touched
+
+### Notes
+This round is a departure from the preceding two days' pattern (literature-check passes on O-RAN needs-validation flags) -- it's the first round in a while touching actual code logic rather than docstrings/documentation. All four fixes were verified as behavior-neutral via `git diff` and a full clean test-suite re-run (137/137) before committing.
+
+---
+
+## Date: 2026-08-30 (Kuaban et al. O-DU/O-CU analytical models + Trinity Dublin energy-latency paper)
+
+### What I Did Today
+- [x] The candidate supplied three PDFs in one message: a Trinity College Dublin/Aalborg University arXiv paper on energy-latency trade-offs in O-RAN baseband/AI-inference placement, and two related analytical power-modeling papers by Kuaban, Czachorski, Atmaca, and Czekalski (an O-DU-focused paper and a companion O-RU/O-DU/O-CU analytical-efficiency paper). Read all three in full.
+- [x] Found a genuine, same-value numeric match: the O-DU paper's own fitted static platform power (`P_plat,stat=50 W`) is numerically identical to `oran_env/power_model.py`'s `p_du_static_w=50.0` -- disclosed carefully with the caveat that the paper's fuller idle-DU floor (including its own accelerator and idle-core terms, ~85 W) is higher than this repo's own idle-DU floor taken alone.
+- [x] Found a third independent real PA-efficiency value (`eta_PA=0.35`, from the companion paper's numerical example) further corroborating `pa_efficiency=0.25` (validated for the first time yesterday against the Rutgers/ONF/ORCID white paper's fitted ranges).
+- [x] Computed this repo's own model's PA-share of active-RU power (~44% at `c=0`, ~73% at `c=2`) and found it brackets a cited real figure ("at least 64%" of an O-RU's internal power is PA, from Hao et al. 2024 via the companion paper) -- the closest same-quantity RU-internal-power-share match found across the whole flag's history.
+- [x] Found a new, differently-scoped fronthaul quantification (`epsilon_FH=8%` of O-DU idle power, a fronthaul-interface always-on overhead factor) and explicitly did NOT try to transplant it into this repo's own separately-modeled `p_fh_common_w`, since the two papers structure the fronthaul cost differently (multiplicative overhead on DU idle power vs. this repo's own additive standalone term).
+- [x] Disclosed a genuine structural gap rather than silently ignoring it: both Kuaban et al. papers model O-DU/O-CU power as sub-linear in active-RU/user count (resource-pooling and logarithmic-in-users scaling factors), while this repo's own `compute_du_power()`/`compute_cu_power()` are linear in active-RU count -- noted as a candidate future-work item, not changed, since altering the functional form is a design decision beyond a citation-driven constant fix.
+- [x] Found a fourth (and fifth counting the Trinity Dublin paper's independent angle) real-literature confirmation that RUs dominate O-RAN power while DU/CU scale sub-linearly, and a second independent qualitative confirmation (after Rony et al. 2021) of the split-mapping's centralization trade-off direction, from the Trinity Dublin paper's entirely different energy-latency optimization framework -- explicitly noted that paper gives no absolute RU/DU/CU Watts (its own unit is mJ/bit for BBP+AI-inference compute), so it informs §10.2's direction, not §10.5's numeric constants.
+- [x] Noted the O-DU paper's own dual-Gaussian daily traffic model as a real-literature precedent for that *shape* -- but flagged honestly that it matches the C-RAN track's own traffic-model shape, not this track's deliberately different trapezoidal design, so it was not used to change anything in `oran_env/traffic_model.py`.
+- [x] Updated `oran_env/power_model.py` (docstring, part 9), `oran_env/traffic_model.py` (docstring, part 3), `manuscript/ORAN_BMPP_DQN_Concept_Note_v1.md` (§10.2 and §10.5), and `docs/oran_thesis_guide.md` (power-model and split-mapping flag entries). No numeric constants changed.
+
+### Time Spent
+| Activity | Hours |
+|----------|-------|
+| Coding | 0 |
+| Writing | 0.45 |
+| Reading | 0.4 (13-page arXiv PDF plus two shorter conference/workshop papers, all read in full; some arithmetic on this repo's own constants to compute PA-share percentages) |
+| Debugging | 0 |
+| Running experiments | 0 |
+| **Total** | ~0.85 |
+
+### Decisions Made
+| Decision | Rationale |
+|----------|-----------|
+| Disclosed the `P_plat,stat=50 W` match with the "fuller idle floor is higher" caveat, rather than presenting it as a clean full-model validation | The two models decompose DU idle power differently (this repo bundles everything into one static term; the paper separates platform, accelerator, and per-core idle power) -- presenting the raw number match without that structural caveat would overstate what's actually been validated. |
+| Did not transplant `epsilon_FH=8%` into `p_fh_common_w` | The paper's fronthaul overhead is a multiplicative factor on DU idle power; this repo's fronthaul power is a separate additive term. Converting one into the other would require an arbitrary assumption about what "DU idle power" the 8% should be taken relative to -- not done. |
+| Disclosed the sub-linear-scaling structural gap as a future-work item, not a bug to fix now | Changing `compute_du_power()`/`compute_cu_power()` from linear-per-active-RU to a pooling-discounted sub-linear form is a design change to the model's functional form, not a constant fix backed by a citation -- exactly the kind of change this literature-check series has consistently deferred to explicit design decisions rather than making unilaterally. |
+| Kept the Trinity Dublin paper's contribution scoped to §10.2 (split-mapping direction), not §10.5 (power constants) | Its own energy unit (mJ/bit, combining BBP+AI-inference+transport) is a different quantity than this repo's own per-component Watts, and its numeric parameters are themselves abstracted from a companion paper not supplied here -- it has nothing to offer §10.5's specific ask. |
+
+### Blockers
+| Blocker | Severity | Plan |
+|---------|----------|------|
+| None | -- | The RU/DU/CU/fronthaul wattage flag remains open after 9 passes; only a source that varies functional split option while measuring real, component-decomposed Watts at a small-cell/testbed scale would close it. |
+
+### Tomorrow's Plan
+- [ ] Ready for whatever the candidate directs next
+- [ ] Consider, as a separate design discussion (not a citation-driven fix), whether `compute_du_power()`/`compute_cu_power()` should adopt a sub-linear active-RU/user scaling term, now that two independent papers model real/analytical O-DU/O-CU power that way
+
+### Notes
+Verified this round's `power_model.py`/`traffic_model.py` edits are docstring-only via `git diff` (all added lines fall inside the module docstrings) and `python3 -c "import ast; ast.parse(...)"` on both files (confirms both still parse). `numpy`/`pytest`/`flake8`/`black` remain unavailable in this session; reinstalling the full stack was judged unnecessary for a documentation-only change, consistent with the precedent set in earlier entries today.
+
+---
+
+## Date: 2026-08-30 (Rutgers WINLAB/ONF/ORCID commercial O-RAN white paper)
+
+### What I Did Today
+- [x] The candidate supplied a new white paper: Shankaranarayanan et al. (Rutgers WINLAB / Open Networking Foundation / ORCID Lab), "Energy Efficiency Testing and Modeling of a Commercial O-RAN System" (Feb 2026). Read it in full.
+- [x] This is the single strongest source found across all eight literature-check passes on the power-model flag: it gives real, separately-decomposed RU/DU/CU power measurements (not just RU vs. a combined DU+CU, as with Al-Tahmeesschi et al.) for a genuinely commercial, high-power, multi-band O-RAN test line (an AWS-hosted O-CU, a dedicated-server O-DU, and up to six multi-band O-RUs).
+- [x] Found the first constant in this flag's entire history to be genuinely validated with no scale-mismatch caveat: `pa_efficiency=0.25` (a dimensionless ratio, not an absolute Watt figure) falls squarely inside the paper's own fitted PA-efficiency ranges (29-39% and 14-32% for its two bands). Not changed, since it already sits inside the validated range.
+- [x] Computed RU-share-of-total-power directly from the paper's own test-case tables (~29-47% at small RU/band counts, rising to ~80-81% at full six-RU/three-sector commercial scale) and found it bridges, rather than contradicts, two previously-conflicting findings: this repo's own model's implied RU-share (~16-36%) and the Bologna thesis's cited 66-82% macro/massive-MIMO figure -- the paper's own large-scale figure (80.9%) independently cross-validates the 82% figure almost exactly.
+- [x] Confirmed the paper's own multi-band O-RU power-model formula is structurally the same static-baseline + per-active-chain-idle/tx-over-efficiency family as this repo's own model, the EARTH model, and 3GPP TR 38.864 -- now validated against real commercial hardware rather than only derived analytically.
+- [x] Confirmed the paper still cannot inform the split-dependent power arrays this flag actually needs (its test cases vary RF gain/MIMO/traffic/band count, never 3GPP split option, and it gives no separately-metered fronthaul figure) and that its absolute Watt figures remain ~10-50x this repo's own placeholder scale -- honestly reported as still open for the flag's actual scope, despite being the best source found so far.
+- [x] Updated `oran_env/power_model.py` (docstring, part 8), `manuscript/ORAN_BMPP_DQN_Concept_Note_v1.md` §10.5, and `docs/oran_thesis_guide.md`'s power-model flag entry. No numeric constants changed.
+
+### Time Spent
+| Activity | Hours |
+|----------|-------|
+| Coding | 0 |
+| Writing | 0.4 |
+| Reading | 0.35 (23-page white paper, full read, plus arithmetic on its own test-case tables to compute RU-share percentages) |
+| Debugging | 0 |
+| Running experiments | 0 |
+| **Total** | ~0.75 |
+
+### Decisions Made
+| Decision | Rationale |
+|----------|-----------|
+| Did not change `pa_efficiency` even though it's now validated | The current default (0.25) already sits inside the paper's own fitted ranges (29-39%, 14-32%) -- picking a different value from within the same validated range wouldn't be a "fix," just an arbitrary re-pick. Documenting the validation is the honest outcome here, not a change for its own sake. |
+| Did not rescale any RU/DU/CU/fronthaul absolute-Watt constant | The paper's own figures (RU ~200-670 W, DU ~280-310 W, CU ~230 W) are real commercial macro-cell-class, high-power, multi-band hardware -- roughly 10-50x this repo's own small-cell/testbed placeholder scale, consistent with (and further reinforcing) the scale mismatch already on record from earlier passes. Converting these into a rescaling factor for this repo's own scenario would require inventing an unstated scale-transfer function. |
+| Reported the RU-share finding as "bridging" rather than "resolving" the two previously-conflicting figures | The paper's own RU-share scales continuously with RU/band count (29% to 81%) rather than being a fixed number -- so while it's genuinely useful context that both ends of this repo's own range and the previously-cited macro figure are now independently anchored in real data, it doesn't hand over a single number to adopt for this repo's own `n_ru=4` scenario without picking an arbitrary point on that curve. |
+| Documented the flag as still open for its actual scope (split-dependent RU/DU/CU/fronthaul wattage) despite this being the best source yet | The paper never varies functional split option and never separately meters fronthaul power -- so even this strong a source cannot close the specific gap the flag names. Saying otherwise would overclaim what a genuinely excellent source actually established. |
+
+### Blockers
+| Blocker | Severity | Plan |
+|---------|----------|------|
+| None | -- | The RU/DU/CU/fronthaul wattage flag remains open after 8 passes; only a source that varies functional split option (not just RF gain/MIMO/band count) and gives a matching, component-decomposed Watt table at a small-cell/testbed scale would close it. |
+
+### Tomorrow's Plan
+- [ ] Ready for whatever the candidate directs next
+- [ ] If more literature is wanted, a source that specifically varies 3GPP functional split option (Option 2/6/8-style) while measuring real RU/DU/CU/fronthaul Watts remains the single most valuable missing document type
+
+### Notes
+Verified this round's `power_model.py` edit is docstring-only via `git diff` (all added lines fall inside the module docstring, before the closing `"""`) and `python3 -c "import ast; ast.parse(...)"` (confirms the file still parses). `numpy`/`pytest`/`flake8`/`black` remain unavailable in this session; reinstalling the full stack was judged unnecessary for a documentation-only change, consistent with the precedent set in earlier entries today.
+
+---
+
+## Date: 2026-08-30 (new Bologna thesis on O-RAN CU energy scaling)
+
+### What I Did Today
+- [x] The candidate supplied two new files: `312b3ae9-296898.pdf`, confirmed via `md5sum` to be a byte-identical duplicate of the already-read Abubakar et al. 2023 survey (flagged to the candidate directly, no re-processing); and, in the next message, `b8564b32-Master_ThesisFINAL2.pdf` (a genuinely new master's thesis: Caterina Leonelli, University of Bologna, "Dynamic Resource Allocation and Energy Optimization in 5G Open Radio Access Network (O-RAN)," AY2023-2024) plus a companion PDF confirmed (matching abstract/tables/equations) to be the same Al-Tahmeesschi et al. 2025 paper already cited in an earlier entry today, just the IEEE PIMRC 2025 published version with an institutional-repository cover page -- not re-processed as a new source.
+- [x] Read the new thesis in full (title/TOC/abstract, Chapter 1 Introduction and Background, Chapter 2 Related Work, Chapter 3 System Architecture/Experimental Setup, Chapter 4 Experimental Evaluation, Conclusion, Appendix, bibliography).
+- [x] Found a new, quantified RU-dominance figure in its Related Work (citing Larsen et al. 2023, IEEE OJCOMS): non-massive-MIMO RRU base stations spend 66%, and massive-MIMO AAU base stations 82%, of total RAN energy on the RU alone. Computed this repo's own model's analogous RU-share (~16-36% across c=0..2, from its default constants) and found it sits well below that -- a new mismatch in the opposite direction from the already-known fronthaul-under-weighting finding.
+- [x] Read the thesis's own Chapter 4 (its stated original contribution: real measured energy-in-Joules data from a live OpenAirInterface/Kubernetes/Scaphandre-RAPL testbed on the SLICES-RI/OneLab infrastructure) in full and confirmed it does **not** close the RU/DU/CU/fronthaul wattage flag: the testbed uses no real RU/USRP hardware (RF-simulator only; the thesis's own Future Work section states it plans to add real radio devices later), and its own energy decomposition (Host/Activation/Service) is by accounting category, not by RAN component.
+- [x] Found a fourth scenario-scale reference point for a separate flag: the thesis's own testbed deploys exactly `n_ru=4` (an exact match to this repo's own count) and `n_ue=4`.
+- [x] Updated `oran_env/power_model.py`'s docstring (part 7), `manuscript/ORAN_BMPP_DQN_Concept_Note_v1.md` §10.3 and §10.5, and `docs/oran_thesis_guide.md`'s power-model and default-scenario-scale flag entries. No numeric constants changed.
+
+### Time Spent
+| Activity | Hours |
+|----------|-------|
+| Coding | 0 |
+| Writing | 0.4 |
+| Reading | 0.5 (91-page thesis, full read; plus md5sum/duplicate checks on two companion files) |
+| Debugging | 0 |
+| Running experiments | 0 |
+| **Total** | ~0.9 |
+
+### Decisions Made
+| Decision | Rationale |
+|----------|-----------|
+| Documented the 66%/82% RU-dominance finding as a new mismatch, not used to rescale any constant | The cited figure is for real macro-cell/massive-MIMO deployments' whole-RAN energy (which may include elements this model doesn't represent, e.g. cooling), not a same-scope, same-units figure for this model's own small-cell placeholder scenario -- converting it into a rescaling factor would require additional unstated assumptions the source doesn't provide. |
+| Reported Chapter 4's real testbed energy data honestly as *not* closing the RU/DU/CU/fronthaul flag, despite being genuinely measured, real data | Real measurement alone isn't sufficient -- it has to actually decompose power/energy by the RAN component this flag needs (RU vs. DU vs. CU vs. fronthaul). This testbed measures no RU power at all (RF-simulator, no real radio hardware) and doesn't separate DU from CU either, so despite being a rigorous real-world measurement study, it doesn't close this specific gap. Stretching this into "further validated" would overclaim. |
+| Added the thesis's own `n_ru=4`/`n_ue=4` testbed scale as a fourth default-scenario-scale reference point | It's the first exact match to this repo's own `n_ru=4` found across any source checked for that flag -- worth recording precisely, without overclaiming it validates `n_ue=8` (its own `n_ue=4` gives a different ratio). |
+| No numeric constant changed | No source in this round gives a same-units, same-scope, component-decomposed power figure for RU/DU/CU/fronthaul -- the 66%/82% figure is a percentage of a differently-scoped total, and Chapter 4's Joules data has no RU component at all. |
+
+### Blockers
+| Blocker | Severity | Plan |
+|---------|----------|------|
+| None | -- | The RU/DU/CU/fronthaul wattage flag remains open after 7 passes; only a source giving a matching, component-decomposed Watt table for a small-cell/testbed-scale O-RAN scenario would close it. |
+
+### Tomorrow's Plan
+- [ ] Ready for whatever the candidate directs next
+- [ ] If more literature is wanted, a component-level power breakdown (RU vs. DU vs. CU vs. fronthaul, in Watts, at a small-cell/testbed scale matching this model's own scenario) remains the single most valuable missing document type
+
+### Notes
+Verified this round's power_model.py edit is docstring-only via `git diff` (all added lines fall inside the module docstring, before the closing `"""`) and `python3 -c "import ast; ast.parse(...)"` (confirms the file still parses). `numpy`/`pytest`/`flake8`/`black` were all found missing again this session (the same environment-reset pattern noted in an earlier entry); reinstalling the full stack was judged unnecessary for a documentation-only change, consistent with that entry's precedent.
+
+---
+
+## Date: 2026-08-30 (CF-mMIMO thesis, remaining pages)
+
+### What I Did Today
+- [x] The candidate supplied the remaining pages (75-117) of the same MASc thesis flagged as missing in the prior entry today -- a genuine follow-through on the specific gap disclosed there, rather than a new source.
+- [x] Read Chapter 4 (Simulation Setup, Results, Discussion) and both Appendices in full. Found two genuinely usable results: (1) an ETSI standard (TR 103 737, via the thesis's own citation) for 24-hour power averaging with three weighted load periods -- Busy=6h, Medium=10h, Low=8h -- that **exactly** matches this repo's own traffic model's implied floor duration (8h) and active duration (16h), a real confirmation of the aggregate day-fraction split; (2) Appendix A's formula-derived fronthaul-rate worked example (Split 7.2≈2.764 Gbps, Split 8≈5.898 Gbps at N=8 antennas), which -- honestly disclosed -- disagrees both with the same thesis's own Chapter 4 simulation assumptions (10/20 Gbps) and with 3GPP TR 38.801's real bandwidth ratio, reinforcing rather than closing the already-known bandwidth-vs-power-ratio gap.
+- [x] Confirmed the Appendix A table does not decompose power by RU/DU/CU component either (it's fronthaul bandwidth only) -- the RU/DU/CU wattage flag remains the one fully "still open" flag after 6 literature-check passes across two days, honestly reported as such rather than stretched to claim partial resolution it doesn't have.
+
+### Time Spent
+| Activity | Hours |
+|----------|-------|
+| Coding | 0 |
+| Writing | 0.3 |
+| Reading | 0.4 (thesis pages 75-117, ~43 pages: Chapter 4, Chapter 5, both appendices, bibliography) |
+| Debugging | 0 |
+| Running experiments | 0 |
+| **Total** | ~0.7 |
+
+### Decisions Made
+| Decision | Rationale |
+|----------|-----------|
+| Documented the ETSI 24h-weighting match as a genuine confirmation, precisely scoped | The match (8h floor / 16h active, both exact) is real and worth crediting -- but three aggregate durations don't uniquely determine four breakpoint values, so I was explicit that `t1`-`t4` individually (and `floor_ratio`) remain open, only the aggregate split is now grounded. Overstating this as "breakpoints validated" would be exactly the kind of imprecision the Ethical AI Rule warns against. |
+| Did not pick a "winning" fronthaul-rate figure among the thesis's own two internally-disagreeing numbers (10/20 Gbps vs. 2.764/5.898 Gbps) or against 3GPP TR 38.801's ratio | All three are legitimate in their own context (simulation assumption, formula-derived example, real standard) but disagree with each other -- disclosing the spread honestly is more useful than silently picking one to cite as "the" number. |
+| No numeric constant changed | Neither new finding gives a clean RU/DU/CU/fronthaul Watt decomposition; the ETSI finding is duration-only (already matches, nothing to change), and the fronthaul-rate figures are yet more bandwidth data disagreeing with each other, not power. |
+
+### Blockers
+| Blocker | Severity | Plan |
+|---------|----------|------|
+| None | -- | The RU/DU/CU/fronthaul wattage flag remains open; per the last several entries, only a source that actually decomposes measured or assumed power by component (not bandwidth, not GOPS, not a percentage of a differently-scoped total) would close it. |
+
+### Tomorrow's Plan
+- [ ] This closes out the currently-supplied literature; ready for whatever the candidate directs next
+- [ ] If more literature is wanted, a component-level power breakdown (RU vs. DU vs. CU vs. fronthaul, in Watts) remains the single most valuable missing document type
+
+### Notes
+No code or config changes this round. This is the sixth O-RAN literature-check pass in two days and the first to fully resolve a previously-disclosed "missing pages" gap by the candidate directly supplying exactly what was flagged as missing -- a good sign the disclosure practice (naming specific missing pages rather than a vague "partial read") is actionable.
+
+---
+
+## Date: 2026-08-30 (O-RAN EE survey + CF-mMIMO thesis)
+
+### What I Did Today
+- [x] The candidate supplied 3 more sources without comment: Abubakar et al. 2023 ("Energy Efficiency of Open Radio Access Network: A Survey," IEEE VTC2023-Spring), and two PDF parts of a 2025 MASc thesis (SK Razib Ahmed, UBC, "Cell-Free Massive MIMO under the Open Radio Access Network Flexible Functional Splits towards Efficient Cellular Network").
+- [x] Fixed an environment issue first: `pdftoppm`/`pdftotext` (poppler-utils) had gone missing from this sandbox since the last literature-check round (likely a container/session reset since the base image only ships the `libpoppler134` library, not the CLI tools) -- reinstalled via `apt-get install poppler-utils` before it was needed again.
+- [x] Read Abubakar et al. 2023 in full (8 pages). Found a genuinely new, useful data point: a real fronthaul *power* percentage (not bandwidth) cited from Lopez-Perez et al., split-dependent (2%/30%/60% for split options 6/7/8) -- the first source in either literature-check round giving fronthaul's power *share*, as opposed to bandwidth or an absolute Watt figure.
+- [x] Read the two-part MASc thesis as far as it was supplied (thesis pages 1-22 and 51-74 of what appears to be a ~115+ page document) -- discovered a genuine gap (pages ~23-50 not included) and that both parts stop before Chapter 4's likely numeric parameter table and the thesis's own referenced Appendix A ("Table A.1: Maximum Supported APs per DU under 20 Gbps Fronthaul Budget for Split 7.2 and Split 8," page 115) -- exactly the kind of table this session has been hoping to find for the RU/fronthaul power flag. Documented what was actually supplied honestly rather than guessing at what the missing pages might contain.
+
+### Time Spent
+| Activity | Hours |
+|----------|-------|
+| Coding | 0 |
+| Writing | 0.4 |
+| Reading | 0.6 (Abubakar et al., 8 pages; MASc thesis, ~53 pages across the two supplied parts) |
+| Debugging | 0.1 (poppler-utils reinstall) |
+| Running experiments | 0 |
+| **Total** | ~1.1 |
+
+### Decisions Made
+| Decision | Rationale |
+|----------|-----------|
+| No numeric constant changed this round | Neither source gives a clean, absolute-Watt, per-component decomposition matching this model's own parameterization. Abubakar et al.'s 2%/30%/60% figure is a *percentage of total power*, not directly convertible to this model's Watt-valued `p_fh_per_ru_by_split` without an assumption about what "total power" means in this model's own terms -- documented as further quantification of an already-disclosed gap, not used to rescale anything. |
+| Documented Abubakar et al.'s own survey conclusion that RU/fronthaul-specific O-RAN power modeling is an open research gap field-wide | This is valuable context distinct from a numeric finding: it confirms this repo's own "still open" flag status reflects a genuine, literature-wide gap as of a comprehensive 2023 survey, not a shortcoming of this session's own search effort. |
+| Documented the MASc thesis's structural power-model similarity (static + load-dependent) and closed-form fronthaul-rate formulas as further corroboration, without extracting any numbers | The thesis's own equations are general/symbolic (no numeric instantiation appears in the pages supplied) -- useful as independent structural/directional confirmation, not as a numeric source. |
+| Explicitly disclosed the gap in the supplied thesis PDFs (missing pages, stops before Ch.4/Appendix A) rather than silently working around it | The Ethical AI Rule requires disclosing what is and isn't actually available, not just what would be convenient. Telling the candidate exactly what's missing (and that the missing Appendix A table is likely the single most useful remaining lead) is more useful than quietly noting "partial thesis read" without specifics. |
+| Documented the thesis's own CF-mMIMO scenario scale (K=16, L=20-50 APs) for the default-scenario-scale flag, disclosing its ratio differs from this repo's own | Consistent with the existing DQRL/OREO treatment: report the comparison honestly, including where it doesn't line up as neatly (this thesis's UE:AP ratio is *below* ours, unlike DQRL/OREO which bracketed it). |
+
+### Blockers
+| Blocker | Severity | Plan |
+|---------|----------|------|
+| None | -- | If the candidate can supply the missing pages of the MASc thesis (specifically pages ~75-115+, covering Chapter 4's simulation parameters and Appendix A's AP-per-DU-under-fronthaul-budget table), that is now the single most promising remaining lead for the RU/fronthaul power flag. |
+
+### Tomorrow's Plan
+- [ ] If the candidate wants to keep pursuing the power-model flag, ask for the MASc thesis's remaining pages (75-115+) specifically, rather than a new source
+- [ ] Otherwise, ready to move to whatever the candidate directs next
+
+### Notes
+No code or config changes this round -- documentation-only, same discipline as every other 2026-08-30 entry. This is now the fifth O-RAN literature-check pass in two days; the RU/DU/CU/fronthaul power flag remains the only one of the four O-RAN needs-validation flags still fully "still open" rather than "partially resolved/informed." The sandbox's Python dependency stack (numpy, pytest, etc.) had also reset alongside poppler-utils; rather than a full reinstall for a docstring-only change, verified safety directly via `git diff` (confirmed the edit touches only the module docstring) and `ast.parse()` (confirmed the file still parses as valid Python) -- black/flake8 (installed separately) passed clean.
+
+---
+
+## Date: 2026-08-30 (3GPP TR 38.801 primary source + real O-RAN power measurements)
+
+### What I Did Today
+- [x] The candidate supplied two more sources without further comment: Al-Tahmeesschi et al. 2025 (arXiv:2507.00928, "Enhancing Open RAN Digital Twin Through Power Consumption Measurement") and 3GPP TR 38.801 itself (V0.4.0, 2016-08, Release 14 -- the actual primary document recommended earlier today, previously only seen via a secondary HUBER+SUHNER infographic reproducing its bandwidth table).
+- [x] TR 38.801's Annex A Table A-1 gave exact, non-rounded bandwidth figures for all 8 split options (plus 7a/7b/7c sub-variants and per-option latency) -- and these figures **exactly** cross-validated the pixel-verified HUBER+SUHNER infographic reading from earlier today (Option 8 = 157.3/157.3 Gb/s, matching to the decimal). A genuine, welcome confirmation that the pixel-verification methodology used earlier was correct.
+- [x] Al-Tahmeesschi et al. 2025 is the first source in either literature-check round to give real, RU/DU/CU-*decomposed* O-RAN power measurements (not whole-BS, not macro-cell, not a single vendor total). Their Split 8 testbed is an exact match to this model's `c=2` (both are literally Option 8/PHY-RF split), giving the closest RU power anchor found yet (~44 W measured vs. ~11 W predicted by this model's own constants, a ~4x gap).
+
+### Time Spent
+| Activity | Hours |
+|----------|-------|
+| Coding | 0 |
+| Writing | 0.5 |
+| Reading | 0.5 (TR 38.801, 36 pages, focused on §6.1.2 and Annex A; Al-Tahmeesschi et al., 6 pages, full read) |
+| Debugging | 0 |
+| Running experiments | 0 |
+| **Total** | ~1.0 |
+
+### Decisions Made
+| Decision | Rationale |
+|----------|-----------|
+| No numeric constant changed this round | Neither source gives a clean decomposition of measured RU/DU/CU power into this model's separate processing/RF/static-power terms. TR 38.801's bandwidth table confirms (exactly) figures already cited from a secondary source -- a citation-quality upgrade, not a new numeric fact. |
+| Documented TR 38.801's exact bandwidth table as superseding/confirming the HUBER+SUHNER infographic's pixel-verified reading | The primary document is now the citable source (Option 2 = 4016/3024 Mb/s, Option 6 = 5626.7/7140 Mb/s, Option 8 = 157.3/157.3 Gb/s, exactly matching the earlier pixel-verified reading) -- the infographic remains a valid secondary corroboration, but the thesis should cite the primary TR. |
+| Documented Al-Tahmeesschi et al.'s Split 8 measurements (RU ~43-45 W, DU+CU ~119.5-141.6 W) as the closest real anchor for `c=2`, without rescaling any constant | The ~4x gap between this model's own composite RU estimate and the real measurement is the closest found in either round, but the paper gives only combined DU+CU (not separate) for Split 8, and RU power isn't decomposed into processing-vs-RF -- setting any specific array element would still require guessing a split of the total. |
+| Explicitly flagged a hardware-choice confound between the paper's two testbeds | Split 8 uses one shared server for DU+CU; Split 7.2b uses two separate dedicated servers, one per component. Comparing Split 7.2b's DU (~187-194 W) and CU (~189.6-192.7 W) figures against Split 8's combined DU+CU (~119.5-141.6 W) to conclude "Split 7.2b needs more DU/CU power than Split 8" would be misleading -- most of that gap is which server class was used, not the split option. Stating this caveat explicitly avoids a plausible-looking but wrong inference. |
+| Cited the paper's "power doesn't scale with load" finding as validation of an existing design choice, not a needed change | This model's `compute_du_power()`/`compute_cu_power()` already depend on active-RU-count and split choice, not on instantaneous PRB/throughput -- exactly the structural choice this real measurement independently supports. |
+| Noted the RAN550's measured Split-7.2b RU power (~28.3-30.1 W) is lower than its own datasheet's "typical power consumption: 40 W" claim | A real-vs-nominal discrepancy worth disclosing for completeness, though it's a different physical quantity from the max-TX-power figure already used for the `p_max_dbm` fix, so that fix is unaffected. |
+
+### Blockers
+| Blocker | Severity | Plan |
+|---------|----------|------|
+| None | -- | The RU/DU/CU/fronthaul wattage table remains the one still-open needs-validation flag; a source that decomposes a single O-RU's or O-DU's power into processing vs. RF vs. static-baseline shares (rather than giving only a bundled total) would be needed to close it fully. |
+
+### Tomorrow's Plan
+- [ ] If the candidate wants to keep pursuing this, the natural next ask is a source that decomposes total measured O-RU/O-DU/O-CU power into sub-component shares, since every source checked so far (RAN550 datasheet, Open RAN Handbook, Hoffmann presentation, now Al-Tahmeesschi et al.) gives only bundled totals
+- [ ] Otherwise, ready to move to whatever the candidate directs next
+
+### Notes
+No code or config changes this round -- a documentation-only pass, same discipline as the other 2026-08-30 entries. This closes out the literature thread the candidate opened by asking "what is still pending" / "what is needed in the literature": both of the two specific documents recommended then (3GPP TR 38.801, and a vendor/measurement source with real O-RAN component-level power data) have now been supplied and incorporated.
+
+---
+
+## Date: 2026-08-30 (vendor datasheet + fronthaul bandwidth table)
+
+### What I Did Today
+- [x] The candidate supplied 3 more sources without further comment: Benetel's RAN550 datasheet (a real, small-cell-class, Split-7.2x indoor O-RU product) and two identical copies (confirmed via `md5sum`) of a HUBER+SUHNER/CubeOptics infographic reproducing 3GPP TR 38.801's own functional-split taxonomy and per-split fronthaul bandwidth table.
+- [x] The infographic's bandwidth table is dense and multi-column; the linearized PDF text extraction scrambled the option-to-value mapping (naive reading order suggested Option 1 had the *highest* bandwidth, contradicting the infographic's own prose stating Option 8 has "the highest bandwidth requirements of all functional split options" -- a red flag). Rendered the page at 300 DPI, located the exact red vertical guide-line x-coordinates separating each split's column programmatically, annotated them, and cropped/re-read the header-number row and the bandwidth row against those same coordinates to get an unambiguous, pixel-verified mapping -- avoiding a transposition-style error like the one caught in the C-RAN power model on 2026-08-29.
+- [x] Result: a real, quantitative confirmation of the O-RAN split-centralization mapping's (§10.2) monotonic direction for the three mapped options, plus one genuine numeric constant fix (`power.ru.p_max_dbm`, 30 -> 33 dBm) from the RAN550 datasheet's real max-TX-power spec.
+
+### Time Spent
+| Activity | Hours |
+|----------|-------|
+| Coding | 0.3 |
+| Writing | 0.4 |
+| Reading | 0.3 (RAN550 datasheet, 4 pages; HUBER+SUHNER infographic, 1 dense page) |
+| Debugging | 0.4 (pixel-level re-analysis of the infographic to avoid a transposition error from scrambled text extraction) |
+| Running experiments | 0 |
+| **Total** | ~1.4 |
+
+### Decisions Made
+| Decision | Rationale |
+|----------|-----------|
+| Changed `power.ru.p_max_dbm` 30 -> 33 dBm (1 W -> 2 W) | Benetel RAN550's datasheet states "Maximum TX output power (total EIRP): 2 W" for a real, commercially available, Split-7.2x indoor small-cell O-RU -- the same physical quantity, same units, as this model's `p_max_dbm` action-space ceiling. A clean primary-source match, not a guess, following the same principle as the FTP Model 3 traffic-model fix earlier today. |
+| Did NOT decompose RAN550's "typical power consumption: 40 W" into this model's RU processing/DU/fronthaul arrays | The datasheet gives only a single total-power figure with no breakdown into processing vs. RF vs. fronthaul-interface shares -- assigning it to specific array elements would require guessing that decomposition. Documented as a scale-mismatch-narrowing data point (5-14x this model's own composite RU estimate, vs. 20-100x for the earlier macro-cell/enterprise-server figures) instead. |
+| Precisely pixel-verified the HUBER+SUHNER infographic's bandwidth table before citing any number from it | The naive linearized-text reading order was backwards relative to well-known 5G fronthaul facts (it implied Option 1 has the highest bandwidth, when Option 8/CPRI is well known to have the highest) -- a clear signal the text extraction order didn't match the visual column layout. Rendered at 300 DPI, found the red guide-line x-coordinates programmatically, and cross-checked against the unambiguous "3GPP TR 38.801 / 1 2 3 4 5 6 7-3 7-2 7-1 8" header row and the Small Cell Forum naming row (PDCP-RLC=2, RLC-MAC=3, etc.) before trusting any bandwidth figure. Final verified table: Option 2=3/4 Gbps, Option 6=7.1/5.6 Gbps, Option 8=157.3/157.3 Gbps (full 10-option table in the Concept Note). |
+| Did not rescale `p_fh_per_ru_by_split` to match the real bandwidth ratio | The verified bandwidth figures show Option 8 requires ~39-52x Option 2's bandwidth, far steeper than this model's own 1:2:5 power ratio -- but no source states that fronthaul *power* scales linearly with fronthaul *bandwidth* requirement, so inventing that proportionality to "fix" the ratio would be exactly the kind of unsupported claim the Ethical AI Rule forbids. Documented as a disclosable, now-quantified version of the existing "shape confirmed, magnitude unconfirmed" gap instead. |
+| Confirmed the two HUBER+SUHNER PDFs are byte-identical (`md5sum`) before treating them as one source | Avoided double-counting or wasting effort reading the same document twice. |
+| Added `tests/test_oran_env.py::test_p_max_dbm_matches_ran550_datasheet` | Locks in both the config value and the derived `env.p_max_w`, mirroring the traffic-model regression test added earlier today. |
+
+### Blockers
+| Blocker | Severity | Plan |
+|---------|----------|------|
+| None | -- | The RU/DU/CU/fronthaul wattage table remains the one still-fully-open needs-validation flag; would need a vendor datasheet that actually decomposes total O-RU/O-DU/O-CU power by subsystem (not just a single "typical power consumption" figure) to close it fully. |
+
+### Tomorrow's Plan
+- [ ] If the candidate wants to keep pursuing this, a vendor datasheet with a component-level power breakdown (not just a single total-power figure) would be the natural next ask, along with 3GPP TR 38.801 itself (recommended earlier, not yet supplied) for the split's own text describing these bandwidth figures' derivation
+- [ ] Otherwise, ready to move to whatever the candidate directs next
+
+### Notes
+Full test/lint verification before commit: `black --check`, `flake8 --max-line-length=100`, `mypy --ignore-missing-imports`, and the full O-RAN test suite all clean. No C-RAN files touched (grep-confirmed). This continues the same-day pattern of the 3GPP TR 38.864 entry above: literature can sometimes give a genuine primary-source match (p_max_dbm, lambda_peak, packet_size_bits) worth acting on, and sometimes only narrows/contextualizes a gap without resolving it (the RU/DU/CU/fronthaul wattage table, the bandwidth-vs-power ratio mismatch) -- both outcomes are documented with equal rigor rather than the latter being quietly dropped.
+
+---
+
+## Date: 2026-08-30 (3GPP TR 38.864 primary source)
+
+### What I Did Today
+- [x] The candidate asked what specific literature was still needed to close the remaining O-RAN needs-validation flags; I recommended obtaining 3GPP TR 38.864 ("Study on network energy savings for NR") and 3GPP TR 38.801 directly, rather than more secondary citations of them.
+- [x] The candidate supplied 3GPP TR 38.864 itself (a `.docx`, V18.1.0). Extracted its text (`unzip` + XML strip, since `pandoc` was unavailable in this sandbox) and read §5.1 (Energy consumption model for BS) and Annex A (Evaluation scenarios, traffic models and loads) in full.
+- [x] This is the first source in either literature-check round that gives a genuine, primary-source, right-units numeric match rather than order-of-magnitude/qualitative context: Annex A's FTP Model 3 (0.5 MB packet size, 200 ms mean inter-arrival time) is a real, standard 3GPP Poisson traffic model. Updated `lambda_peak` and `packet_size_bits` to derive directly from it -- the first *numeric constant change* driven by literature in either O-RAN literature-check round (the 2026-08-29 C-RAN fix was also a real value change, but that was a same-day correction against Al-Zubaedi's own table, not part of this O-RAN check series).
+
+### Time Spent
+| Activity | Hours |
+|----------|-------|
+| Coding | 0.2 |
+| Writing | 0.4 |
+| Reading | 0.5 (3GPP TR 38.864, 72 pages, focused on §5.1 and Annex A/B) |
+| Debugging | 0.1 (pandoc unavailable in this sandbox; worked around via unzip + XML text extraction) |
+| Running experiments | 0 |
+| **Total** | ~1.2 |
+
+### Decisions Made
+| Decision | Rationale |
+|----------|-----------|
+| Changed `lambda_peak` 5.0 → 0.5 and `packet_size_bits` 1.0e6 → 4.0e6 (both in `config/oran_default.yaml` and `oran_env/traffic_model.py`'s class defaults) | TR 38.864 Annex A's FTP Model 3 gives 200 ms mean inter-arrival time (= 5 arrivals/s = 0.5 per this model's 0.1s step) and 0.5 MB (=4e6 bits) packet/file size -- a real 3GPP standard traffic model in exactly the units this model needs, not an approximate/order-of-magnitude match like every other source checked so far. This is a genuine primary-source derivation, following the same principle as the 2026-08-29 C-RAN fix (Al-Zubaedi's Table 3.1): when a primary source gives an exact match in the right units, use it. |
+| Left `floor_ratio` and `t1`-`t4` unchanged | TR 38.864 Annex A's own "load (L)%" scenarios (Table A-1) are instantaneous PRB-utilization snapshots with no time-of-day association, and the TR's own stated scope ("prioritizes idle/empty and low/medium load scenarios") stops at 50% load with no busy-hour/full-load reference point -- it gives no floor:peak ratio or diurnal timing to derive these from. Extending the fix to these would require guessing, which the Ethical AI Rule forbids. |
+| Adopted FTP Model 3 specifically (not FTP Model 3 IM or VoIP) | 3GPP leaves the traffic-model choice to the evaluating party; FTP Model 3 is the most commonly used baseline across 3GPP energy-saving evaluations, a defensible choice, documented as such rather than presented as the only possible one. Noted (not implemented) that FTP3-IM's lighter traffic (0.1 MB, 2s inter-arrival) could plausibly inform off-peak/floor behavior better than a flat `floor_ratio` scaling, but this module's structure only supports one packet size for the whole day -- changing that is a design change, left for a future round if wanted. |
+| Documented TR 38.864 §5.1's real 3GPP power-consumption model as additional power-model context, without changing any power-model constant | §5.1's `P_static + P_dynamic` structure (scaled by active-TRX fraction, RF-bandwidth ratio, PSD ratio) independently confirms, from the actual governing 3GPP source, that this family of model is right for the C-RAN/O-RAN power models already in use -- but its Table 5.1-3 values are relative units with no absolute-Watt anchor, and the model is whole-BS, not disaggregated into O-RAN's RU/DU/CU/fronthaul components. Converting relative units to Watts would require inventing a scale factor, so no power-model constant was changed. |
+| Added `tests/test_oran_env.py::test_traffic_model_defaults_match_3gpp_ftp_model_3` | Locks in the new literature-derived defaults (both the `ORANTrafficModel` class default and `config/oran_default.yaml`'s value), mirroring how the C-RAN power-model fix was paired with a re-run of its own regression test. |
+
+### Blockers
+| Blocker | Severity | Plan |
+|---------|----------|------|
+| None | -- | `floor_ratio`/`t1`-`t4` remain open; would need a source giving diurnal timing or a busy-hour:off-peak traffic ratio specifically, which TR 38.864 does not provide. |
+
+### Tomorrow's Plan
+- [ ] If the candidate wants to pursue 3GPP TR 38.801 (the actual source of the Option 2/6/7/8 split numbering, recommended alongside TR 38.864) next, it could similarly upgrade §10.2's split-mapping flag from qualitative to numeric
+- [ ] Otherwise, ready to move to whatever the candidate directs next (e.g. running real experiments)
+
+### Notes
+Full test/lint verification before commit: `black --check`, `flake8 --max-line-length=100`, and `pytest tests/test_oran_env.py -v` all clean; confirmed no other O-RAN test/training/evaluation file hardcodes the old `lambda_peak`/`packet_size_bits` defaults before changing them (`grep` across `tests/test_oran_*.py`, `oran_training/`, `oran_evaluation/`). This is the first literature-driven numeric change in the O-RAN track since the 2026-08-29 config-wiring bug fix, and the first one driven by an exact primary-source match rather than a bug.
+
+---
+
 ## Date: 2026-08-30 (default scenario scale)
 
 ### What I Did Today
