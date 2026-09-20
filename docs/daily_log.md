@@ -2,6 +2,51 @@
 
 > Filled instances of `docs/daily_log_template.md`. Newest entry first.
 
+## Date: 2026-09-20 (O-RAN matrix complete; found and fixed BMPP-DQN's training divergence)
+
+### What I Did Today
+- [x] The checkpointed O-RAN matrix (12/12 `(method, seed)` jobs) finished overnight -- `mpdqn/seed456` (the last job) completed after ~4h, matching the pattern from the 2026-09-19 fix. Pulled every job's `summary.json` to compile final results before reporting them.
+- [x] Before reporting the results as clean, noticed something that didn't add up: `bmpp_dqn` (the proposed method) scored *worse* than every baseline (DQN, DDPG, MP-DQN), and its eval reward/power/QoS were near-identical across all 3 independent training seeds (-100722.0, -100722.0, -100721.5; QoS pinned at exactly 20.8% all three times) -- baselines all showed normal seed-to-seed variation. Pulled `bmpp_dqn`'s full per-episode training history and confirmed a real bug, not noise: episode reward got monotonically *worse* over training (seed42: first-10-episode mean -72,093 -> last-10-episode mean -100,708), and `param_loss` grew unboundedly from 0 to ~774,000 over 500 episodes -- the network was diverging, not learning, and all 3 seeds independently collapsed to nearly the same degenerate fixed point.
+- [x] Presented this finding to the candidate with the evidence rather than either silently accepting the numbers or unilaterally rewriting the algorithm. Per the candidate's choice ("investigate a stability fix"), read `oran_agents/bmpp_dqn.py` in full to find the root cause.
+- [x] Found it: `self.critic_target` (deepcopied + Polyak-averaged every step in `_soft_update`) was never actually *read* anywhere. `update_upper()`'s Double-DQN "target net evaluates" half fed target-encoder features through the ONLINE `self.critic`, not `self.critic_target` -- so there was no real target lag on the critic weights at all, only on the encoder, which is a much weaker anchor than a genuine target network and a well-documented recipe for Q-value divergence. `update_lower()`'s actor loss had the same shape of problem: it maximized the *online* critic's Q-value every step, using the exact same online critic `update_upper()` was simultaneously training -- a tight online-online feedback loop.
+- [x] Fixed both, without adding any of the machinery the concept note explicitly excludes (twin critics, policy-delay gating, target-smoothing noise -- Concept Note Section 10.4): gave `_multi_pass_q()` an optional `critic=` parameter (defaults to the online critic, so every unrelated call site is unchanged), passed `critic=self.critic_target` at both points that should have used it, and froze all 4 target networks' `requires_grad` (they're only ever written via direct `.data.copy_`, never stepped by an optimizer, so this is safe and lets `update_lower()` run its actor loss through the target networks in a normal, gradient-carrying forward pass).
+- [x] Added 3 new regression tests (`tests/test_oran_agents.py`) that would have caught this the first time: `test_update_upper_evaluates_next_state_with_target_critic` and `test_update_lower_bootstraps_actor_loss_off_target_networks` spy on `.forward()` to directly prove which network instance actually gets called (not just check outputs), and `test_update_lower_gradients_still_flow_through_frozen_target_nets` guards against the frozen-target-net change accidentally breaking the actor's gradient path. Full suite re-run clean (20/20 in `tests/test_oran_agents.py`).
+- [x] Validated empirically, not just "tests pass" -- and caught my own premature read of a too-short pilot in the process. A 60-episode pilot's last few per-*step* `param_loss` samples looked nearly flat (~675, +0.5/step), which read like the divergence was resolved. A longer, apples-to-apples per-*episode* 120-episode pilot told a more honest story: growth from episode 59 to 99 was 6.25x (800 -> 5,003) -- statistically indistinguishable from the pre-fix trajectory's 6.32x over the same window (954 -> 6,033). The one real difference so far is episode 99 to 119, where growth slowed to 1.85x (5,003 -> 9,256) versus the ~2.5x a continued 6.3x-per-40-episodes rate would predict, and episode reward plateaued rather than continuing to worsen (ep50-59 mean -92,735 -> ep110-119 mean -93,469, versus the pre-fix run's continued decline to -100,708 by ep490-499). That is a real, measured target-critic bug fixed either way (it was never being read at all), but the evidence that it *resolves* the divergence -- rather than modestly slowing it -- is weak with only 120 episodes: one data point of deceleration is not a trend. Reported this honestly rather than the more flattering 60-episode read.
+
+### Time Spent
+| Activity | Hours |
+|----------|-------|
+| Coding | 0.5 |
+| Writing | 0.3 |
+| Reading | 0.3 |
+| Debugging | 0.6 (reading `bmpp_dqn.py` end-to-end to find the missing target-critic read; reasoning through the actor-critic feedback-loop mechanism) |
+| Running experiments | 0.5 (compiling final O-RAN matrix results; 60-episode and in-progress 120-episode pilot validation) |
+| **Total** | ~2.2 |
+
+### Decisions Made
+| Decision | Rationale |
+|----------|-----------|
+| Presented the divergence finding to the candidate (via a menu of options) before touching any algorithm code | This is the thesis's proposed method failing to learn -- a decision-worthy finding, not a routine bug. The fix also touches a design area (target-network usage) adjacent to the concept note's explicit "no TD3" constraint, so confirming the candidate wanted an algorithmic investigation (vs. documenting it as a negative result, or checking reward scale first) mattered before spending the effort. |
+| Fixed by routing two existing call sites to the already-existing (but previously unused) `self.critic_target`, rather than adding new machinery | The concept note explicitly excludes twin critics, policy-delay gating, and target-smoothing noise (Section 10.4) -- none of those were touched. Using a target network to anchor a TD target or an actor's bootstrap is a general, pre-TD3 stabilization technique (vanilla DDPG already uses a target critic for its own TD target); the bug was that this agent's own target critic existed and was maintained but never actually consulted. |
+| Required a "what actually gets called" test (`.forward()` spying), not just an output-based test, for both regression tests | An output-based test could pass even if the wrong network were called, if the online and target weights happened to be close early in training (they start as an exact copy). Spying on which module's `forward()` fires is the only way to directly prove the fix routes through `critic_target`, matching the standard set by this session's exact-equivalence tests elsewhere. |
+| Validated with a real pilot run (param_loss trajectory), not just "tests pass" | The original bug did not crash anything and produced finite numbers throughout -- it was only caught by noticing an anomaly in real training curves. The same standard applies to trusting the fix: passing unit tests proves the code path changed as intended, not that the actual training dynamics are now stable. |
+
+### Blockers
+| Blocker | Severity | Plan |
+|---------|----------|------|
+| Fixing the (genuinely broken) target-critic read did not clearly resolve BMPP-DQN's training divergence within the 120-episode pilot window -- growth rate through episode 99 was statistically indistinguishable from the pre-fix run; only episodes 99-119 showed a possible slowdown, and reward plateaued rather than improved | Medium -- the fix is a real, necessary correctness fix regardless, but is not yet demonstrated sufficient on its own | Asked the candidate how to proceed: invest in additional stabilization (e.g. reward/Q-value normalization, since per-step rewards are unnormalized and on the order of hundreds) before re-running the full matrix, vs. accept the partial fix and re-run 500 episodes/seed to see the real outcome, vs. document the instability as a disclosed thesis limitation |
+
+### Tomorrow's Plan
+- [ ] Proceed per the candidate's chosen next step for BMPP-DQN's stability
+- [ ] Re-run `bmpp_dqn`'s 3 checkpointed-matrix seeds once a chosen stabilization approach is settled (the other 9 jobs -- dqn/ddpg/mpdqn -- are unaffected and complete)
+- [ ] Report final, corrected O-RAN matrix results once `bmpp_dqn` is re-run
+- [ ] Ask the candidate how to scope the C-RAN checkpointed matrix (full 10-seed x 11-method vs. a reduced first pass), given C-RAN's own MPDQN alone projects to ~87h at full scale
+
+### Notes
+This is the second round this session where sustained, real execution (not a short smoke test) surfaced a genuine algorithmic bug that no existing unit test caught -- the first was 2026-09-19's MPDQN backward-pass cost bug. Both were found by noticing a real training-curve anomaly (this time: three independent seeds converging to a suspiciously identical, and suspiciously bad, outcome) rather than accepting numbers at face value once they were technically "results."
+
+---
+
 ## Date: 2026-09-19 (found and fixed MPDQN's real performance bug)
 
 ### What I Did Today

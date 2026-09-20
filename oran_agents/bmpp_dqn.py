@@ -296,6 +296,21 @@ class BMPPDQNAgent:
         self.lower_encoder_target = copy.deepcopy(self.lower_encoder).to(self.device)
         self.critic_target = copy.deepcopy(self.critic).to(self.device)
         self.param_net_target = copy.deepcopy(self.param_net).to(self.device)
+        # Target nets are only ever written via _soft_update()'s direct
+        # .data.copy_ (never through an optimizer), so freezing them here
+        # is safe and lets update_lower() run its actor loss through
+        # self.critic_target/self.upper_encoder_target in a normal (non
+        # no_grad) forward pass: gradients still flow into pred_params (and
+        # from there into param_net/lower_encoder), just not into the
+        # frozen target weights themselves.
+        for target_net in (
+            self.upper_encoder_target,
+            self.lower_encoder_target,
+            self.critic_target,
+            self.param_net_target,
+        ):
+            for param in target_net.parameters():
+                param.requires_grad_(False)
 
         self.critic_opt = optim.Adam(
             list(self.upper_encoder.parameters()) + list(self.critic.parameters()),
@@ -327,19 +342,28 @@ class BMPPDQNAgent:
         self._pending_split = self._cached_split.copy()
 
     def _multi_pass_q(
-        self, feat: torch.Tensor, cont_params: torch.Tensor
+        self,
+        feat: torch.Tensor,
+        cont_params: torch.Tensor,
+        critic: Optional["BranchingCritic"] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Evaluate every branch's Q-value via its own MP-DQN masked pass.
 
         One forward pass per RU (n_ru total): each pass masks the critic to
         that RU's own (power, prb) only, and only that pass's own-RU slice
         of the output is kept for both branch-groups (activation, split).
+
+        `critic` defaults to the online `self.critic`; callers that need
+        the frozen, Polyak-averaged `self.critic_target` (Double-DQN's
+        "target net evaluates" half, or the actor's bootstrap target) pass
+        it explicitly.
         """
+        critic = critic if critic is not None else self.critic
         batch_size = feat.shape[0]
         activation_q = torch.zeros(batch_size, self.n_ru, 2, device=self.device)
         split_q = torch.zeros(batch_size, self.n_ru, self.n_splits, device=self.device)
         for r in range(self.n_ru):
-            act_r, split_r = self.critic(feat, cont_params, branch_mask_idx=r)
+            act_r, split_r = critic(feat, cont_params, branch_mask_idx=r)
             activation_q[:, r, :] = act_r[:, r, :]
             split_q[:, r, :] = split_r[:, r, :]
         return activation_q, split_q
@@ -454,6 +478,20 @@ class BMPPDQNAgent:
         over an un-gathered action dimension -- the exact class of bug
         already found and fixed in agents/branching_mp_dqn.py's actor
         update.
+
+        Bootstraps the actor's maximization off critic_target/
+        upper_encoder_target (frozen, Polyak-averaged copies) rather than
+        the online critic/upper_encoder. Maximizing directly against an
+        online critic that is itself being updated every step from this
+        same actor's output creates a tight online-online feedback loop;
+        empirically (see docs/daily_log.md's 2026-09-19/20 entries) this
+        diverged -- param_loss grew unboundedly (0 to ~774k over 500
+        episodes) and episode reward got monotonically worse, with all
+        seeds collapsing to the same degenerate policy. Bootstrapping off
+        the slow-moving target breaks that loop without adding any of the
+        machinery the concept note explicitly excludes (twin critics,
+        policy-delay gating, target-smoothing noise) -- it only changes
+        which existing critic copy this actor loss reads from.
         """
         batch_size = batch_size or self.batch_size_default
         if len(self.lower_memory) < max(batch_size, self.min_buffer_size):
@@ -468,8 +506,10 @@ class BMPPDQNAgent:
         power_ratio, prb_share = self.param_net(lower_feat)
         pred_params = torch.stack([power_ratio, prb_share], dim=-1)
 
-        upper_feat = self.upper_encoder(states).detach()
-        activation_q, _split_q = self._multi_pass_q(upper_feat, pred_params)
+        upper_feat = self.upper_encoder_target(states)
+        activation_q, _split_q = self._multi_pass_q(
+            upper_feat, pred_params, critic=self.critic_target
+        )
         greedy_idx = activation_q.argmax(dim=-1, keepdim=True).detach()
         activation_q_greedy = activation_q.gather(-1, greedy_idx).squeeze(-1)
         param_loss = -activation_q_greedy.mean()
@@ -494,6 +534,15 @@ class BMPPDQNAgent:
         evaluates) for both branch-groups -- no twin critic, no
         target-policy-smoothing noise, per the explicit no-TD3 decision
         (Concept Note Section 10.4).
+
+        The "target net evaluates" half previously ran the target
+        *encoder*'s features through the ONLINE critic (self.critic), not
+        self.critic_target -- self.critic_target was being Polyak-averaged
+        every step but never actually read, so there was no real target
+        lag on the critic weights at all, only on the encoder. That is a
+        much weaker anchor than intended and is the most likely primary
+        cause of the training divergence documented in update_lower()'s
+        docstring. Fixed by passing critic=self.critic_target below.
         """
         batch_size = batch_size or self.batch_size_default
         if len(self.upper_memory) < max(
@@ -525,7 +574,7 @@ class BMPPDQNAgent:
 
             next_upper_feat_target = self.upper_encoder_target(next_states)
             next_act_target, next_split_target = self._multi_pass_q(
-                next_upper_feat_target, next_cont_params
+                next_upper_feat_target, next_cont_params, critic=self.critic_target
             )
             next_act_eval = next_act_target.gather(
                 -1, next_act_actions.unsqueeze(-1)
