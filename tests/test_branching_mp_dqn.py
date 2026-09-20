@@ -210,9 +210,11 @@ def test_branching_mp_dqn_reward_scale_affects_update(default_config):
 
 
 def test_branching_mp_dqn_device_defaults_from_hardware_config(default_config):
-    """hardware.device (config/default.yaml) supplies BranchingMPDQN's device
-    default; falls back to cpu regardless when no GPU is present, matching
-    pre-wiring behavior in this (GPU-less) test environment."""
+    """hardware.device (config/default.yaml, "cuda") supplies BranchingMPDQN's
+    device default, but only actually resolves to cuda if a GPU is present --
+    falls back to cpu regardless otherwise. Checked against the runtime's own
+    torch.cuda.is_available() rather than a hardcoded "cpu", since this must
+    hold on both GPU-less and GPU-equipped test machines."""
     env = CRANEnv(default_config)
     agent = BranchingMPDQN(
         state_dim=env.state_dim,
@@ -220,7 +222,8 @@ def test_branching_mp_dqn_device_defaults_from_hardware_config(default_config):
         p_max_w=env.p_max_w,
         config=default_config,
     )
-    assert agent.device.type == "cpu"
+    expected_device = "cuda" if torch.cuda.is_available() else "cpu"
+    assert agent.device.type == expected_device
 
     # An explicit device= argument always wins over hardware.device.
     agent_explicit = BranchingMPDQN(

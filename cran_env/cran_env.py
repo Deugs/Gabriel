@@ -39,7 +39,11 @@ class CRANEnv(gym.Env):
     Action Space:
         Dict({
             "rrh_on": MultiBinary(n_rrh),
-            "power": Box(low=0, high=p_max_w, shape=(n_rrh,), dtype=np.float32)
+            "power": Box(low=0, high=p_max_w, shape=(n_rrh,), dtype=np.float32),
+            "bandwidth": Box(low=0, high=1, shape=(n_rrh,), dtype=np.float32)
+                # Per-RRH share of total channel bandwidth; renormalized over
+                # active RRHs in step() (defaults to an equal split if omitted
+                # or all-zero).
         })
     """
 

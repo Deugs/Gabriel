@@ -1,231 +1,76 @@
 # Skill: Evaluation and Analysis
 
 > **Status**: Invokable as the Antigravity `run-evaluation` skill (`.agents/skills/run-evaluation/`), which points back at this file as the spec of record.
+>
+> **Correction (this audit round)**: unlike its siblings `docs/skills/skill_environment.md` and `docs/skills/skill_hybrid_agent.md`, this file had never been updated since it was first written — it still described the superseded `HybridSACDDQN` agent, a `fronthaul_weight` reward key that was never implemented (the real key is `gamma_fronthaul`), function names (`evaluate_convergence`, `evaluate_energy_efficiency`, `ablation_study`, `scalability_analysis`, `compare_algorithms`) that don't match any function actually exported by `evaluation/__init__.py`, and a 9-color scheme covering only a subset of the real 11-method roster. It also never mentioned 5 of the 10 real evaluation modules (`csi_robustness.py`, `demand_response.py`, `generalization.py`, `power_time_profile.py`, `reward_sensitivity.py`). Everything below now describes the actual `evaluation/` package; read the module files directly (they're short) rather than treating this as a second source of truth.
 
 ## Purpose
 Systematically evaluate DRL agents, compare against baselines, perform ablation studies, and generate publication-quality figures and tables for the thesis.
 
-## Evaluation Protocol
+## The Real Module Roster
 
-### 1. Convergence Analysis
-```python
-def evaluate_convergence(results_dir, algorithms, n_seeds=10):
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+`evaluation/__init__.py` exports:
+`analyze_convergence, compute_cohens_d, run_ablation_study, analyze_scalability, run_csi_robustness_evaluation, run_demand_response_evaluation, run_generalization_evaluation, run_latency_benchmark, run_power_time_profile_evaluation, run_reward_sensitivity_sweep, compute_confidence_interval, plot_learning_curves, plot_energy_efficiency_bar, plot_scalability_analysis, plot_ablation_comparison, plot_degradation_curve`.
 
-    colors = plt.cm.tab10(np.linspace(0, 1, len(algorithms)))
+Ten modules, one per evaluation concern:
 
-    for idx, algo in enumerate(algorithms):
-        # Load results: shape (n_seeds, n_episodes)
-        rewards = load_results(results_dir, algo, metric="episode_reward")
+### 1. `convergence.py` — `analyze_convergence(results_dir, save_dir, table_save_dir, ...)`
 
-        # Smooth with moving average
-        window = 50
-        smoothed = np.array([np.convolve(r, np.ones(window)/window, mode='valid') 
-                             for r in rewards])
+Aggregates every `summary.json` under `results_dir` — recognizing both the proposed method's one-file-per-seed layout and the baselines' one-list-per-algorithm layout — computes 95% CIs (`compute_confidence_interval`, t-distribution-based) per algorithm, and runs paired t-tests + Cohen's d (`compute_cohens_d`) between the proposed method (matched by the exact string `"Branching_MP_DQN"`, **not** the superseded `"Hybrid_SAC_DDQN"`) and every baseline found. Comparisons are paired **by seed**, not by list/filesystem-discovery order — an earlier version of this function paired by position, which could silently mismatch seeds between the proposed run and a baseline run; this is now a regression-tested fix (`tests/test_evaluation.py`). Exports a LaTeX table, `convergence_summary.tex`.
 
-        mean = smoothed.mean(axis=0)
-        std = smoothed.std(axis=0)
-        episodes = np.arange(window, len(rewards[0]) + 1)
+### 2. `ablation.py` — `run_ablation_study(config_path, save_dir, ...)`
 
-        axes[0, 0].plot(episodes, mean, label=algo, color=colors[idx], linewidth=2)
-        axes[0, 0].fill_between(episodes, mean - std, mean + std, 
-                                alpha=0.2, color=colors[idx])
+Trains the proposed agent under 4 variants via `training.train_hybrid_agent`'s `config_overrides` argument — **Full**, **No-Switching-Cost** (`gamma_switch=0`), **No-Fronthaul-Term** (`gamma_fronthaul=0` — not `fronthaul_weight`, which was never a real key), **No-QoS-Penalty** (`beta_qos=0`) — comparing final held-out evaluation reward. Produces `ablation_study.pdf`. An earlier version silently dropped these overrides before they reached `train_hybrid_agent`; this is now regression-tested.
 
-    axes[0, 0].set_xlabel("Episode", fontsize=12)
-    axes[0, 0].set_ylabel("Episode Reward", fontsize=12)
-    axes[0, 0].set_title("(a) Convergence Comparison", fontsize=13, fontweight='bold')
-    axes[0, 0].legend(fontsize=10)
-    axes[0, 0].grid(True, alpha=0.3)
+### 3. `scalability.py` — `analyze_scalability(config_path, save_dir, ...)`
 
-    # Similar for energy, QoS, switching cost subplots
+Trains the proposed agent at 5 network scales — `R=5/U=2, R=12/U=10, R=20/U=20, R=35/U=25, R=50/U=30` (the last a stretch goal, per `docs/workflow.md`'s committed Experiment Matrix) — measuring final power, per-step execution time, QoS rate, and switching frequency at each scale.
 
-    plt.tight_layout()
-    plt.savefig("thesis/figures/convergence.pdf", dpi=300, bbox_inches='tight')
-    plt.close()
-```
+### 4. `csi_robustness.py` — `run_csi_robustness_evaluation(config_path, save_dir, ...)`
 
-### 2. Energy Efficiency Comparison
-```python
-def evaluate_energy_efficiency(results_dir, algorithms, n_eval_episodes=100):
-    results = {}
+The thesis's flagship robustness experiment (Concept Note §12.5, S3), addressing the perfect-CSI training assumption. Trains (or loads a pre-trained checkpoint, proposed-method only) `branching_mp_dqn`/`ddqn`/`ddpg` under perfect CSI, then at evaluation time only perturbs the *observed* channel-gain magnitude with additive Gaussian noise at `sigma ∈ {0, 0.01, 0.05, 0.1}` — the environment's true physics/reward still use the real channel. Reports EE and QoS-violation-rate degradation curves. Exposes the shared `_TRAINERS` dict and `_evaluate_under_csi_noise`, reused by `generalization.py` below.
 
-    for algo in algorithms:
-        energy_data = []
-        for seed in range(10):
-            env = CRANEnv(config)
-            agent = load_agent(results_dir, algo, seed)
+### 5. `generalization.py` — `run_generalization_evaluation(config_path, save_dir, ...)`
 
-            episode_energies = []
-            for _ in range(n_eval_episodes):
-                state, _ = env.reset(seed=seed)
-                episode_energy = 0
-                for step in range(config.max_steps):
-                    action = agent.select_action(state, evaluate=True)
-                    state, _, _, _, info = env.step(action)
-                    episode_energy += info["total_power"]
-                episode_energies.append(episode_energy)
+Concept Note §12.3 (A5). Trains on the `weekday_urban` traffic profile, evaluates without retraining on both `weekday_urban` (matched) and `weekend_suburban` (generalization), reporting the EE change. Reuses `csi_robustness.py`'s `_TRAINERS`/`_evaluate_under_csi_noise` at `sigma=0`.
 
-            energy_data.extend(episode_energies)
+### 6. `latency_benchmark.py` — `run_latency_benchmark(config_path, save_dir, ...)`
 
-        results[algo] = {
-            "mean": np.mean(energy_data),
-            "std": np.std(energy_data),
-            "ci95": 1.96 * np.std(energy_data) / np.sqrt(len(energy_data))
-        }
+Concept Note §12.3 (A3/G14). Measures pure forward-pass (`select_action`) latency in ms, isolated from training/env-step cost, at `R ∈ {5,12,20,35,50}` paired with `n_ue ∈ {2,10,20,25,30}` (the same R↔U pairing `scalability.py` uses). P-DQN/MP-DQN are included only at R≤12 and skipped gracefully (returns `None`, no crash) above that.
 
-    # Compute savings vs. All ON baseline
-    baseline_energy = results["All_ON"]["mean"]
-    for algo in algorithms:
-        if algo != "All_ON":
-            savings = (baseline_energy - results[algo]["mean"]) / baseline_energy * 100
-            results[algo]["savings_pct"] = savings
+### 7. `demand_response.py` — `run_demand_response_evaluation(config_path, save_dir, ...)`
 
-    return results
-```
+Comparable to Iqbal et al.'s Figs. 3 and 5. Trains each method once at default demand, then sweeps a **frozen** policy across demand multipliers `{0.5, 1.0, 1.5, 2.0, 2.5}` (scaling `traffic.base_rate_mbps`), reporting EE and mean power vs. demand.
 
-### 3. Ablation Study
-```python
-def ablation_study(base_config, variants):
-    results = {}
+### 8. `power_time_profile.py` — `run_power_time_profile_evaluation(config_path, save_dir, ...)`
 
-    for name, cfg_override in variants:
-        config = copy.deepcopy(base_config)
-        config.update(cfg_override)
+Comparable to Iqbal et al.'s Fig. 4. Trains each method once, rolls out under the frozen policy, buckets per-step power by hour-of-day (0–23), producing a diurnal power profile per method.
 
-        # Train agent
-        agent = HybridSACDDQN(config)
-        train(agent, config)
+### 9. `reward_sensitivity.py` — `run_reward_sensitivity_sweep(config_path, save_dir, ...)`
 
-        # Evaluate
-        eval_results = evaluate(agent, config, n_episodes=100)
-        results[name] = eval_results
+Concept Note §12.6 (S5). Grid-sweeps the *training-time* reward weight `gamma_switch` over `{0.01, 0.05, 0.1, 0.5, 1.0}` at fixed `beta_qos` — unlike the CSI-robustness/generalization/demand-response/power-time-profile evaluations above, each grid point here trains a **fresh** `BranchingMPDQN` from scratch (a reward weight, unlike CSI noise or demand scale, changes what a policy is trained to do, not just what it's evaluated against). Reports EE, QoS-violation rate, and switching frequency per `gamma_switch` value.
 
-    # Plot
-    fig, ax = plt.subplots(figsize=(10, 6))
-    names = list(results.keys())
-    energies = [results[n]["mean_energy"] for n in names]
-    errors = [results[n]["std_energy"] for n in names]
+### 10. `plot_utils.py` — shared plotting helpers, no evaluation logic
 
-    bars = ax.bar(names, energies, yerr=errors, capsize=5, 
-                  color=['#2ecc71', '#e74c3c', '#3498db', '#f39c12'])
-    ax.set_ylabel("Average Energy Consumption (W)", fontsize=12)
-    ax.set_title("Ablation Study: Impact of Reward Components", fontsize=13, fontweight='bold')
-    ax.grid(True, alpha=0.3, axis='y')
+`setup_matplotlib_style()` (IEEE/Nature-style rcParams), `compute_confidence_interval(data, confidence=0.95)`, `plot_learning_curves`, `plot_energy_efficiency_bar`, `plot_scalability_analysis` (2×2 grid; gracefully drops QoS/switching subplots if the data lacks those keys), `plot_degradation_curve` (generic metric-vs-swept-x curve, reused by CSI-robustness/generalization/demand-response/power-time-profile/reward-sensitivity/latency), `plot_ablation_comparison` (horizontal bar chart).
 
-    plt.xticks(rotation=15, ha='right')
-    plt.tight_layout()
-    plt.savefig("thesis/figures/ablation.pdf", dpi=300, bbox_inches='tight')
+## Statistical Significance Testing
 
-    return results
+`analyze_convergence` (not a separate `compare_algorithms` function — that name never existed in this codebase) computes, for the proposed method vs. every baseline, paired **by seed**:
 
-# Usage
-variants = [
-    ("Full Model", {}),
-    ("No Switching Cost", {"gamma_switch": 0}),
-    ("No Fronthaul Power", {"fronthaul_weight": 0}),
-    ("No QoS Penalty", {"beta_qos": 0}),
-]
-```
+- Paired t-test (`scipy.stats.ttest_rel`)
+- Cohen's d (`compute_cohens_d`, pooled standard deviation)
 
-### 4. Scalability Analysis
-```python
-def scalability_analysis(base_config, scenarios):
-    results = {"energy": [], "time": [], "qos": []}
-
-    for scenario in scenarios:
-        config = copy.deepcopy(base_config)
-        config.update(scenario)
-
-        start_time = time.time()
-        agent = HybridSACDDQN(config)
-        train(agent, config)
-        train_time = time.time() - start_time
-
-        eval_results = evaluate(agent, config)
-
-        results["energy"].append(eval_results["mean_energy"])
-        results["time"].append(train_time)
-        results["qos"].append(eval_results["qos_violation_rate"])
-
-    # Plot scalability
-    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-
-    labels = [s["label"] for s in scenarios]
-    x = range(len(labels))
-
-    axes[0].plot(x, results["energy"], 'o-', linewidth=2, markersize=8)
-    axes[0].set_xticks(x)
-    axes[0].set_xticklabels(labels)
-    axes[0].set_ylabel("Energy (W)")
-    axes[0].set_title("Energy vs. Network Size")
-    axes[0].grid(True, alpha=0.3)
-
-    axes[1].plot(x, results["time"], 's-', linewidth=2, markersize=8, color='orange')
-    axes[1].set_xticks(x)
-    axes[1].set_xticklabels(labels)
-    axes[1].set_ylabel("Training Time (hours)")
-    axes[1].set_title("Training Time vs. Network Size")
-    axes[1].grid(True, alpha=0.3)
-
-    axes[2].plot(x, results["qos"], '^-', linewidth=2, markersize=8, color='red')
-    axes[2].set_xticks(x)
-    axes[2].set_xticklabels(labels)
-    axes[2].set_ylabel("QoS Violation Rate")
-    axes[2].set_title("QoS vs. Network Size")
-    axes[2].grid(True, alpha=0.3)
-
-    plt.tight_layout()
-    plt.savefig("thesis/figures/scalability.pdf", dpi=300, bbox_inches='tight')
-
-    return results
-```
-
-### 5. Statistical Significance Testing
-```python
-from scipy import stats
-
-def compare_algorithms(results_dir, algo1, algo2, metric="episode_reward", 
-                       n_seeds=10, n_episodes=100):
-    data1 = load_metric(results_dir, algo1, metric, n_seeds, n_episodes)
-    data2 = load_metric(results_dir, algo2, metric, n_seeds, n_episodes)
-
-    # Paired t-test (same seeds)
-    t_stat, p_value = stats.ttest_rel(data1, data2)
-
-    # Effect size (Cohen's d)
-    pooled_std = np.sqrt((np.std(data1)**2 + np.std(data2)**2) / 2)
-    cohens_d = (np.mean(data1) - np.mean(data2)) / pooled_std
-
-    return {
-        "algo1_mean": np.mean(data1),
-        "algo2_mean": np.mean(data2),
-        "difference": np.mean(data1) - np.mean(data2),
-        "t_statistic": t_stat,
-        "p_value": p_value,
-        "cohens_d": cohens_d,
-        "significant": p_value < 0.05
-    }
-```
+over 10 seeds (`[42, 123, 456, 789, 1011, 1337, 2024, 2718, 3141, 4242]`, per `docs/rules.md` Rule 3 — not the 5 an earlier draft of this file assumed).
 
 ## Figure Standards
 
 ### Color Scheme
-```python
-# Consistent across all figures
-COLORS = {
-    "All_ON": "#e74c3c",      # Red
-    "Greedy": "#f39c12",       # Orange
-    "NMBS": "#9b59b6",         # Purple
-    "Convex": "#3498db",       # Blue
-    "DDQN": "#1abc9c",         # Teal
-    "DDPG": "#2ecc71",         # Green
-    "TD3": "#34495e",          # Dark gray
-    "SAC": "#e67e22",          # Dark orange
-    "Hybrid": "#2980b9",       # Dark blue (proposed method)
-}
-```
+
+The real 11-method roster (`config/default.yaml`'s `algorithm.name`, `baselines/__init__.py`, `agents/__init__.py`) is: All-ON/Uniform, Greedy, NMBS, Convex, DDQN, DDQN+SOCP, ANN+GSBF, DDPG (pure), P-DQN, MP-DQN, and the proposed Branching MP-DQN+TD3. The superseded Hybrid SAC-DDQN (`agents/hybrid_sac_dqn.py`) is not part of the comparison suite and should not appear in a results figure's legend. There is no single hardcoded `COLORS` dict in `evaluation/plot_utils.py` today — colors are assigned per-call via `matplotlib`'s `tab10`/`tab20` colormap indexed by algorithm order, not a fixed name→hex mapping. If a fixed palette is wanted for consistency across figures (e.g. for the final thesis submission), define one covering all 11 real method names above, not the 9-name placeholder set this file previously suggested.
 
 ### LaTeX Figure Export
+
 ```python
 def setup_matplotlib_for_latex():
     plt.rcParams.update({
@@ -244,26 +89,30 @@ def setup_matplotlib_for_latex():
     })
 ```
 
+(Illustrative — `plot_utils.py::setup_matplotlib_style()` is the actual, currently-used equivalent; check it directly if you need the exact rcParams in force today.)
+
 ## Required Outputs for Thesis
 
 | Output | File | Section |
 |--------|------|---------|
-| Convergence curves | `figures/convergence.pdf` | 4.2 |
-| 24-hour energy profile | `figures/energy_profile.pdf` | 4.3 |
-| SINR CDF | `figures/sinr_cdf.pdf` | 4.4 |
-| Ablation bar chart | `figures/ablation.pdf` | 4.5 |
-| Scalability triple plot | `figures/scalability.pdf` | 4.6 |
-| Parameter table | `tables/parameters.tex` | 4.1 |
-| Results table | `tables/results.tex` | 4.3 |
-| Ablation table | `tables/ablation.tex` | 4.5 |
-| Scalability table | `tables/scalability.tex` | 4.6 |
+| Convergence curves (11 methods, 10 seeds) | `thesis/figures/convergence_*.pdf` | 4.2 |
+| Convergence statistics (CIs, paired t-test, Cohen's d) | `thesis/tables/convergence_summary.tex` | 4.2 |
+| 24-hour energy profile | `power_time_profile.py` output | 4.3 / §12.3 |
+| SINR CDF | (not yet a dedicated module — derive from `CRANEnv.step()`'s `mean_sinr_db`/per-user SINR if needed) | 4.4 |
+| Ablation bar chart | `thesis/figures/ablation_study.pdf` | 4.5 |
+| Scalability sweep (R=5..50) | `analyze_scalability` output | 4.6 |
+| Inference-latency benchmark (R=5..50) | `latency_benchmark.py` output | 4.6 / §12.3 |
+| CSI-robustness degradation curve | `csi_robustness.py` output | 4.7 / §12.5 |
+| Cross-profile generalization | `generalization.py` output | 4.8 / §12.3 |
+| Demand-response curve | `demand_response.py` output | cf. Iqbal Figs. 3/5 |
+| Reward-weight (gamma_switch) sensitivity | `reward_sensitivity.py` output | §12.6 |
 
 ## Validation Checklist
-- [ ] All figures use consistent color scheme
-- [ ] All error bars represent 95% confidence intervals
-- [ ] All tables have units in headers
-- [ ] Statistical significance reported for all comparisons
-- [ ] Best results bolded in tables
+- [ ] `analyze_convergence` pairs the proposed method against each baseline strictly by seed, not list position
+- [ ] Comparisons use `"Branching_MP_DQN"` as the proposed-method name, not the superseded `"Hybrid_SAC_DDQN"`
+- [ ] All error bars/CIs use 95% confidence intervals (`compute_confidence_interval`)
+- [ ] Statistical significance (paired t-test) and effect size (Cohen's d) both reported for every head-to-head comparison
 - [ ] Figures are vector graphics (PDF)
-- [ ] All figures referenced in text before they appear
-- [ ] Captions are self-contained (explain what is shown and key takeaway)
+- [ ] `run_ablation_study`'s config overrides (`gamma_switch`, `gamma_fronthaul`, `beta_qos`) genuinely reach `train_hybrid_agent` — regression-tested, don't silently reintroduce the drop
+- [ ] P-DQN/MP-DQN are skipped gracefully (not crashed) above their `n_rrh` tractability cap in `latency_benchmark.py`/`scalability.py`
+- [ ] Captions are self-contained (explain what is shown and the key takeaway)

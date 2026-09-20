@@ -94,7 +94,7 @@ bash scripts/run_oran_experiments.sh
 | Issue | Who | How |
 |-------|-----|-----|
 | Algorithm not converging | Methodology Validator | Check hooks.md debugging checklist |
-| Code-text mismatch | Code Reviewer | Manually diff against docs/equation_code_mapping.md (scripts/check_code_text_consistency.py is planned — not yet implemented) |
+| Code-text mismatch | Code Reviewer | Run `python scripts/check_code_text_consistency.py` (statically verifies every "Implemented" row in docs/equation_code_mapping.md against the real code; wired into `.githooks/pre-commit`) |
 | Missing references | Literature Curator | Check BibTeX; search recent papers |
 | Scope creep | Thesis Architect | Review rules.md Scope Boundary Rule |
 | Behind schedule | Gap Analyst | Re-prioritize per workflow.md risk table |

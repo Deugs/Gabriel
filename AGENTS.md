@@ -150,6 +150,7 @@ Gabriel/
 │   ├── latency_benchmark.py # Forward-pass latency at R=5,12,20,35,50 (§12.3, A3/G14)
 │   ├── demand_response.py # EE/power vs. user demand (§12.3, cf. Iqbal Figs. 3/5)
 │   ├── power_time_profile.py # Power vs. hour-of-day (§12.3, cf. Iqbal Fig. 4)
+│   ├── reward_sensitivity.py # gamma_switch sweep, trains fresh per grid point (§12.6, S5)
 │   └── plot_utils.py
 ├── config/                # Experiment configurations
 │   ├── default.yaml

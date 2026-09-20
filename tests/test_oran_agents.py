@@ -216,8 +216,8 @@ def test_multi_pass_no_cross_talk(default_config):
 
     import torch
 
-    feat = torch.randn(1, agent.upper_encoder.output_dim)
-    cont_params_a = torch.rand(1, agent.n_ru, 2)
+    feat = torch.randn(1, agent.upper_encoder.output_dim, device=agent.device)
+    cont_params_a = torch.rand(1, agent.n_ru, 2, device=agent.device)
     cont_params_b = cont_params_a.clone()
     cont_params_b[0, 0, :] = 1.0 - cont_params_b[0, 0, :]  # perturb only RU 0
 
@@ -550,7 +550,7 @@ def test_dqn_baseline_uses_plain_target_not_double_dqn(default_config):
         for p in agent.target_q_net.parameters():
             p.add_(1.0)
 
-    states = torch.randn(4, env.state_dim)
+    states = torch.randn(4, env.state_dim, device=agent.device)
     with torch.no_grad():
         _, target_split_q = agent.target_q_net(states)
         expected = target_split_q.max(dim=-1).values
