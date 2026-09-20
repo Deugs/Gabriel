@@ -52,6 +52,25 @@ Re-ran the same 120-episode pilot with this on top of the target-critic fix. Res
 
 Added `test_running_normalizer_matches_numpy_std_and_never_shifts_mean` and `test_remember_stores_normalized_not_raw_reward` (`tests/test_oran_agents.py`, now 22/22 including both this update's tests and the earlier target-critic-fix's 3). Full repo suite re-run clean: 149/149.
 
+### Update, same day: re-ran bmpp_dqn's 3 seeds; the matrix is complete, with an honest remaining gap
+Per the candidate's choice ("re-run the full matrix now"), cleared `bmpp_dqn`'s 3 manifest entries and relaunched the checkpointed O-RAN matrix -- it correctly skipped the 9 already-done jobs (dqn/ddpg/mpdqn) and re-ran only `bmpp_dqn`'s seeds 42/123/456 at the full 500 episodes each.
+
+The numerical fix held for the full run: `param_loss` stayed bounded and decelerating throughout (seed42: 24.7 at ep59 -> 119.6 at ep250 -> 162.4 at ep499 -- 4.8x then 1.4x across similarly-sized windows, versus the original bug's unbounded run to ~774k). That part of the investigation is closed.
+
+The behavioral result is not a success, and reporting it as one would be dishonest: eval QoS satisfaction landed at *exactly* 20.8% at literally every checkpoint from episode 50 through 500, for all 3 seeds, both before and after this session's fixes -- the fixes changed the numerical trajectory but never changed what the greedy discrete policy actually does. Final eval reward is likewise nearly identical across all 3 seeds (-100,732.0, -100,731.9, -100,731.6) despite different training seeds, different final power draw, and different "active RUs" counts -- a strong signature that the discrete (RU-on/split) decision network's greedy argmax choice locks onto a fixed pattern very early in training and never moves again, regardless of what its own Q-values or the continuous-parameter network are doing underneath. All 12 checkpointed-matrix jobs are now `"status": "done"`; final comparison:
+
+| Method | Seed | Reward | Power | QoS |
+|---|---|---|---|---|
+| bmpp_dqn | 42/123/456 | -100,732 / -100,732 / -100,732 | 150.7W / 147.8W / 138.9W | 20.8% / 20.8% / 20.8% |
+| dqn | 42/123/456 | -69,503 / -69,570 / -50,109 | 194.6W / 170.9W / 156.9W | 23.4% / 23.2% / 28.6% |
+| ddpg | 42/123/456 | -69,016 / -96,683 / -76,931 | 197.0W / 194.5W / 200.4W | 28.0% / 24.0% / 24.0% |
+| mpdqn | 42/123/456 | -45,921 / -45,356 / -46,363 | 135.9W / 133.1W / 128.5W | 32.2% / 30.4% / 30.2% |
+
+BMPP-DQN (the proposed method) is last of all 4 on every metric, with essentially zero seed variance where every baseline shows normal seed-to-seed spread -- reported to the candidate as its own finding, distinct from (and following) the two numerical fixes above, since it points to a different failure mode (early policy lock-in / discrete-decision collapse) that neither fix addressed.
+
+### Notes (same-day update)
+Three genuinely different things were true in the same investigation and needed to stay distinct rather than being collapsed into one "fixed it" narrative: (1) a real correctness bug (critic_target never read) that is now fixed and verified: (2) a real numerical-stability improvement (reward normalization) that is now fixed and verified; (3) a real, still-open behavioral finding (the discrete policy converges to the same fixed, worse-than-baseline choice regardless of seed or either fix) that neither of the first two addressed and that remains for the candidate to decide how to pursue.
+
 ---
 
 ## Date: 2026-09-19 (found and fixed MPDQN's real performance bug)
