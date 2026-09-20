@@ -45,6 +45,13 @@
 ### Notes
 This is the second round this session where sustained, real execution (not a short smoke test) surfaced a genuine algorithmic bug that no existing unit test caught -- the first was 2026-09-19's MPDQN backward-pass cost bug. Both were found by noticing a real training-curve anomaly (this time: three independent seeds converging to a suspiciously identical, and suspiciously bad, outcome) rather than accepting numbers at face value once they were technically "results."
 
+### Update, same day: reward normalization resolves the remaining divergence
+Per the candidate's choice ("add reward/Q normalization next"), added `_RunningNormalizer` (`oran_agents/bmpp_dqn.py`) -- a Welford's-algorithm running std estimator, applied as a pure division (never a mean-shift, since shifting an infinite-horizon discounted reward changes which policy is optimal; scaling by a positive constant does not). Wired into `remember()`: both the lower buffer's per-step reward and the upper buffer's per-window summed reward are normalized by their own running std (separate instances, since their raw scales differ by ~10x) before being stored -- `select_action()`/evaluation are untouched, so reported eval metrics remain raw, comparable environment reward.
+
+Re-ran the same 120-episode pilot with this on top of the target-critic fix. Result is unambiguous this time: `param_loss` reached only 26.5 -> 57.8 -> 71.8 at episodes 59/99/119 (vs. the target-critic-only fix's 800 -> 5,003 -> 9,256 at the same points, itself barely different from the original bug's 954 -> 6,033) -- growth is now clearly decelerating (2.18x then 1.24x across the two 40/20-episode windows) rather than compounding, a ~36x smaller magnitude at episode 59 alone. Episode reward, however, is still plateaued around the same -93,000 level as both prior runs (ep0-9 mean -71,329 -> ep110-119 mean -93,501) -- not yet improving. This is very plausibly an exploration-schedule artifact rather than a sign the fix is insufficient: with `epsilon_decay=0.995` starting from 1.0, epsilon is still ~0.55 at episode 120 (over half of discrete decisions still random) versus ~0.08 by episode 500 -- meaningful policy-quality comparison likely needs the full 500-episode run, not a 120-episode snapshot, to be fair.
+
+Added `test_running_normalizer_matches_numpy_std_and_never_shifts_mean` and `test_remember_stores_normalized_not_raw_reward` (`tests/test_oran_agents.py`, now 22/22 including both this update's tests and the earlier target-critic-fix's 3). Full repo suite re-run clean: 149/149.
+
 ---
 
 ## Date: 2026-09-19 (found and fixed MPDQN's real performance bug)

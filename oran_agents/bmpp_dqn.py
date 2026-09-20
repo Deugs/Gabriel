@@ -48,6 +48,46 @@ def _resolve_activation(name: str) -> Any:
         )
 
 
+class _RunningNormalizer:
+    """Welford's online mean/variance estimator, used to rescale (never
+    shift) the reward signal fed into TD targets.
+
+    Division-only (no mean-subtraction): shifting an infinite-horizon
+    discounted reward changes which policy is optimal, but scaling it by a
+    positive constant does not. Only `.std` is used downstream, on
+    purpose.
+    """
+
+    def __init__(self, epsilon: float = 1.0e-3):
+        self.epsilon = epsilon
+        self.count = 0
+        self.mean = 0.0
+        self._m2 = 0.0
+
+    def update(self, x: float) -> None:
+        self.count += 1
+        delta = x - self.mean
+        self.mean += delta / self.count
+        delta2 = x - self.mean
+        self._m2 += delta * delta2
+
+    @property
+    def std(self) -> float:
+        if self.count < 2:
+            return 1.0
+        variance = self._m2 / self.count
+        return max(variance**0.5, self.epsilon)
+
+    def normalize(self, x: float) -> float:
+        """Updates running stats from the raw `x`, then returns x rescaled
+        by the (pre-update) running std -- so the very first call returns
+        x unchanged (std defaults to 1.0 until enough samples exist) and
+        later calls track the reward stream's actual observed scale."""
+        current_std = self.std
+        self.update(x)
+        return x / current_std
+
+
 class _Encoder(nn.Module):
     """Feature encoder mapping state s(t) to a feature representation."""
 
@@ -324,6 +364,13 @@ class BMPPDQNAgent:
         self.lower_memory = LowerReplayBuffer(lower_buffer_size)
         self.upper_memory = UpperReplayBuffer(upper_buffer_size)
 
+        # Separate normalizers: the upper buffer stores rewards *summed*
+        # over upper_level_period_steps env steps, a naturally larger raw
+        # scale than the lower buffer's single-step rewards, so each
+        # needs its own running std estimate.
+        self.lower_reward_normalizer = _RunningNormalizer()
+        self.upper_reward_normalizer = _RunningNormalizer()
+
         # Two-timescale cadence bookkeeping (agent-side; the env itself is
         # timescale-agnostic, docs/skills/skill_oran_env.md Rule 4).
         self._steps_since_decision = 0
@@ -426,9 +473,22 @@ class BMPPDQNAgent:
         callers must call select_action() then remember() in lockstep for
         this to stay accurate (the standard select -> step -> remember
         training-loop order already used throughout this codebase).
+
+        Both buffers store a normalized reward (raw reward divided by a
+        running estimate of that reward stream's own std, never
+        mean-shifted -- see _RunningNormalizer), not the raw environment
+        reward. This does not affect select_action()/evaluation (neither
+        calls remember()); it only rescales the TD-target/actor-loss
+        signal update_upper()/update_lower() actually train on. Added
+        because the raw per-step reward here is unnormalized and can run
+        to several hundred in magnitude (an unscaled QoS-violation
+        penalty term), which update_upper()'s TD bootstrap otherwise
+        compounds into Q-value magnitudes prone to runaway growth (see
+        docs/daily_log.md's 2026-09-20 entry).
         """
         cont_params = np.stack([action["power"] / self.p_max_w, action["prb"]], axis=-1)
-        self.lower_memory.push(state, cont_params, reward, next_state, done)
+        normalized_reward = self.lower_reward_normalizer.normalize(reward)
+        self.lower_memory.push(state, cont_params, normalized_reward, next_state, done)
 
         if self.last_action_was_decision:
             # Flush any previously pending window (shouldn't normally
@@ -453,11 +513,17 @@ class BMPPDQNAgent:
         if (
             window_complete or episode_ended_mid_window
         ) and self._pending_upper_state is not None:
+            # Normalize the raw accumulated window-sum (not a sum of
+            # already-normalized per-step values) against this buffer's
+            # own running scale.
+            normalized_upper_reward = self.upper_reward_normalizer.normalize(
+                self._pending_upper_reward_sum
+            )
             self.upper_memory.push(
                 self._pending_upper_state,
                 self._pending_ru_on,
                 self._pending_split,
-                self._pending_upper_reward_sum,
+                normalized_upper_reward,
                 next_state,
                 done,
             )

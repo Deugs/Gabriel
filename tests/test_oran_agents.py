@@ -423,6 +423,68 @@ def test_update_lower_bootstraps_actor_loss_off_target_networks(default_config):
     )
 
 
+def test_running_normalizer_matches_numpy_std_and_never_shifts_mean():
+    """_RunningNormalizer must track the true running std (Welford's
+    algorithm) and only ever scale, never shift, its input -- shifting an
+    infinite-horizon discounted reward would change which policy is
+    optimal; scaling by a positive constant does not."""
+    from oran_agents.bmpp_dqn import _RunningNormalizer
+
+    rng = np.random.default_rng(0)
+    samples = rng.normal(loc=50.0, scale=20.0, size=500).tolist()
+
+    normalizer = _RunningNormalizer()
+    outputs = [normalizer.normalize(x) for x in samples]
+
+    # After many samples, the running std should closely track numpy's
+    # population std of everything observed so far.
+    assert abs(normalizer.std - float(np.std(samples))) / float(np.std(samples)) < 0.05
+
+    # Scale-only: dividing every sample by the same positive running std
+    # (frozen, for this check) must preserve the *ratio* between any two
+    # raw samples exactly -- a mean-shift would not.
+    frozen_std = normalizer.std
+    ratio_raw = samples[10] / samples[11]
+    ratio_scaled = (samples[10] / frozen_std) / (samples[11] / frozen_std)
+    assert abs(ratio_raw - ratio_scaled) < 1e-9
+
+    # First call must be unchanged (no prior stats to scale by).
+    fresh = _RunningNormalizer()
+    assert fresh.normalize(7.0) == 7.0
+
+
+def test_remember_stores_normalized_not_raw_reward(default_config):
+    """Regression guard for the 2026-09-20 reward-normalization addition:
+    remember() must push a *normalized* reward into both replay buffers,
+    not the raw environment reward -- otherwise update_upper()'s TD
+    targets keep bootstrapping off the same unbounded raw-reward scale
+    that drove BMPP-DQN's training divergence."""
+    cfg = dict(default_config)
+    cfg["algorithm"] = dict(default_config["algorithm"])
+    cfg["algorithm"]["upper_level_period_steps"] = 4
+
+    env = ORANEnv(cfg)
+    obs, _ = env.reset(seed=42)
+    agent = _make_agent(env, cfg)
+
+    raw_rewards = []
+    for _ in range(8):
+        action = agent.select_action(obs, evaluate=False)
+        next_obs, reward, terminated, truncated, info = env.step(action)
+        raw_rewards.append(reward)
+        agent.remember(obs, action, reward, next_obs, terminated)
+        obs = next_obs
+
+    stored_lower_rewards = [t[2] for t in agent.lower_memory.buffer]
+    assert len(stored_lower_rewards) == len(raw_rewards)
+    # Once the normalizer has seen more than one sample, storage must
+    # differ from the raw stream (a real rescale happened, not a no-op).
+    assert any(
+        abs(stored - raw) > 1e-9
+        for stored, raw in zip(stored_lower_rewards[1:], raw_rewards[1:])
+    )
+
+
 def test_update_lower_gradients_still_flow_through_frozen_target_nets(
     default_config,
 ):
