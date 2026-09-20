@@ -2,6 +2,127 @@
 
 > Filled instances of `docs/daily_log_template.md`. Newest entry first.
 
+## Date: 2026-09-20 (O-RAN matrix complete; found and fixed BMPP-DQN's training divergence)
+
+### What I Did Today
+- [x] The checkpointed O-RAN matrix (12/12 `(method, seed)` jobs) finished overnight -- `mpdqn/seed456` (the last job) completed after ~4h, matching the pattern from the 2026-09-19 fix. Pulled every job's `summary.json` to compile final results before reporting them.
+- [x] Before reporting the results as clean, noticed something that didn't add up: `bmpp_dqn` (the proposed method) scored *worse* than every baseline (DQN, DDPG, MP-DQN), and its eval reward/power/QoS were near-identical across all 3 independent training seeds (-100722.0, -100722.0, -100721.5; QoS pinned at exactly 20.8% all three times) -- baselines all showed normal seed-to-seed variation. Pulled `bmpp_dqn`'s full per-episode training history and confirmed a real bug, not noise: episode reward got monotonically *worse* over training (seed42: first-10-episode mean -72,093 -> last-10-episode mean -100,708), and `param_loss` grew unboundedly from 0 to ~774,000 over 500 episodes -- the network was diverging, not learning, and all 3 seeds independently collapsed to nearly the same degenerate fixed point.
+- [x] Presented this finding to the candidate with the evidence rather than either silently accepting the numbers or unilaterally rewriting the algorithm. Per the candidate's choice ("investigate a stability fix"), read `oran_agents/bmpp_dqn.py` in full to find the root cause.
+- [x] Found it: `self.critic_target` (deepcopied + Polyak-averaged every step in `_soft_update`) was never actually *read* anywhere. `update_upper()`'s Double-DQN "target net evaluates" half fed target-encoder features through the ONLINE `self.critic`, not `self.critic_target` -- so there was no real target lag on the critic weights at all, only on the encoder, which is a much weaker anchor than a genuine target network and a well-documented recipe for Q-value divergence. `update_lower()`'s actor loss had the same shape of problem: it maximized the *online* critic's Q-value every step, using the exact same online critic `update_upper()` was simultaneously training -- a tight online-online feedback loop.
+- [x] Fixed both, without adding any of the machinery the concept note explicitly excludes (twin critics, policy-delay gating, target-smoothing noise -- Concept Note Section 10.4): gave `_multi_pass_q()` an optional `critic=` parameter (defaults to the online critic, so every unrelated call site is unchanged), passed `critic=self.critic_target` at both points that should have used it, and froze all 4 target networks' `requires_grad` (they're only ever written via direct `.data.copy_`, never stepped by an optimizer, so this is safe and lets `update_lower()` run its actor loss through the target networks in a normal, gradient-carrying forward pass).
+- [x] Added 3 new regression tests (`tests/test_oran_agents.py`) that would have caught this the first time: `test_update_upper_evaluates_next_state_with_target_critic` and `test_update_lower_bootstraps_actor_loss_off_target_networks` spy on `.forward()` to directly prove which network instance actually gets called (not just check outputs), and `test_update_lower_gradients_still_flow_through_frozen_target_nets` guards against the frozen-target-net change accidentally breaking the actor's gradient path. Full suite re-run clean (20/20 in `tests/test_oran_agents.py`).
+- [x] Validated empirically, not just "tests pass" -- and caught my own premature read of a too-short pilot in the process. A 60-episode pilot's last few per-*step* `param_loss` samples looked nearly flat (~675, +0.5/step), which read like the divergence was resolved. A longer, apples-to-apples per-*episode* 120-episode pilot told a more honest story: growth from episode 59 to 99 was 6.25x (800 -> 5,003) -- statistically indistinguishable from the pre-fix trajectory's 6.32x over the same window (954 -> 6,033). The one real difference so far is episode 99 to 119, where growth slowed to 1.85x (5,003 -> 9,256) versus the ~2.5x a continued 6.3x-per-40-episodes rate would predict, and episode reward plateaued rather than continuing to worsen (ep50-59 mean -92,735 -> ep110-119 mean -93,469, versus the pre-fix run's continued decline to -100,708 by ep490-499). That is a real, measured target-critic bug fixed either way (it was never being read at all), but the evidence that it *resolves* the divergence -- rather than modestly slowing it -- is weak with only 120 episodes: one data point of deceleration is not a trend. Reported this honestly rather than the more flattering 60-episode read.
+
+### Time Spent
+| Activity | Hours |
+|----------|-------|
+| Coding | 0.5 |
+| Writing | 0.3 |
+| Reading | 0.3 |
+| Debugging | 0.6 (reading `bmpp_dqn.py` end-to-end to find the missing target-critic read; reasoning through the actor-critic feedback-loop mechanism) |
+| Running experiments | 0.5 (compiling final O-RAN matrix results; 60-episode and in-progress 120-episode pilot validation) |
+| **Total** | ~2.2 |
+
+### Decisions Made
+| Decision | Rationale |
+|----------|-----------|
+| Presented the divergence finding to the candidate (via a menu of options) before touching any algorithm code | This is the thesis's proposed method failing to learn -- a decision-worthy finding, not a routine bug. The fix also touches a design area (target-network usage) adjacent to the concept note's explicit "no TD3" constraint, so confirming the candidate wanted an algorithmic investigation (vs. documenting it as a negative result, or checking reward scale first) mattered before spending the effort. |
+| Fixed by routing two existing call sites to the already-existing (but previously unused) `self.critic_target`, rather than adding new machinery | The concept note explicitly excludes twin critics, policy-delay gating, and target-smoothing noise (Section 10.4) -- none of those were touched. Using a target network to anchor a TD target or an actor's bootstrap is a general, pre-TD3 stabilization technique (vanilla DDPG already uses a target critic for its own TD target); the bug was that this agent's own target critic existed and was maintained but never actually consulted. |
+| Required a "what actually gets called" test (`.forward()` spying), not just an output-based test, for both regression tests | An output-based test could pass even if the wrong network were called, if the online and target weights happened to be close early in training (they start as an exact copy). Spying on which module's `forward()` fires is the only way to directly prove the fix routes through `critic_target`, matching the standard set by this session's exact-equivalence tests elsewhere. |
+| Validated with a real pilot run (param_loss trajectory), not just "tests pass" | The original bug did not crash anything and produced finite numbers throughout -- it was only caught by noticing an anomaly in real training curves. The same standard applies to trusting the fix: passing unit tests proves the code path changed as intended, not that the actual training dynamics are now stable. |
+
+### Blockers
+| Blocker | Severity | Plan |
+|---------|----------|------|
+| Fixing the (genuinely broken) target-critic read did not clearly resolve BMPP-DQN's training divergence within the 120-episode pilot window -- growth rate through episode 99 was statistically indistinguishable from the pre-fix run; only episodes 99-119 showed a possible slowdown, and reward plateaued rather than improved | Medium -- the fix is a real, necessary correctness fix regardless, but is not yet demonstrated sufficient on its own | Asked the candidate how to proceed: invest in additional stabilization (e.g. reward/Q-value normalization, since per-step rewards are unnormalized and on the order of hundreds) before re-running the full matrix, vs. accept the partial fix and re-run 500 episodes/seed to see the real outcome, vs. document the instability as a disclosed thesis limitation |
+
+### Tomorrow's Plan
+- [ ] Proceed per the candidate's chosen next step for BMPP-DQN's stability
+- [ ] Re-run `bmpp_dqn`'s 3 checkpointed-matrix seeds once a chosen stabilization approach is settled (the other 9 jobs -- dqn/ddpg/mpdqn -- are unaffected and complete)
+- [ ] Report final, corrected O-RAN matrix results once `bmpp_dqn` is re-run
+- [ ] Ask the candidate how to scope the C-RAN checkpointed matrix (full 10-seed x 11-method vs. a reduced first pass), given C-RAN's own MPDQN alone projects to ~87h at full scale
+
+### Notes
+This is the second round this session where sustained, real execution (not a short smoke test) surfaced a genuine algorithmic bug that no existing unit test caught -- the first was 2026-09-19's MPDQN backward-pass cost bug. Both were found by noticing a real training-curve anomaly (this time: three independent seeds converging to a suspiciously identical, and suspiciously bad, outcome) rather than accepting numbers at face value once they were technically "results."
+
+### Update, same day: reward normalization resolves the remaining divergence
+Per the candidate's choice ("add reward/Q normalization next"), added `_RunningNormalizer` (`oran_agents/bmpp_dqn.py`) -- a Welford's-algorithm running std estimator, applied as a pure division (never a mean-shift, since shifting an infinite-horizon discounted reward changes which policy is optimal; scaling by a positive constant does not). Wired into `remember()`: both the lower buffer's per-step reward and the upper buffer's per-window summed reward are normalized by their own running std (separate instances, since their raw scales differ by ~10x) before being stored -- `select_action()`/evaluation are untouched, so reported eval metrics remain raw, comparable environment reward.
+
+Re-ran the same 120-episode pilot with this on top of the target-critic fix. Result is unambiguous this time: `param_loss` reached only 26.5 -> 57.8 -> 71.8 at episodes 59/99/119 (vs. the target-critic-only fix's 800 -> 5,003 -> 9,256 at the same points, itself barely different from the original bug's 954 -> 6,033) -- growth is now clearly decelerating (2.18x then 1.24x across the two 40/20-episode windows) rather than compounding, a ~36x smaller magnitude at episode 59 alone. Episode reward, however, is still plateaued around the same -93,000 level as both prior runs (ep0-9 mean -71,329 -> ep110-119 mean -93,501) -- not yet improving. This is very plausibly an exploration-schedule artifact rather than a sign the fix is insufficient: with `epsilon_decay=0.995` starting from 1.0, epsilon is still ~0.55 at episode 120 (over half of discrete decisions still random) versus ~0.08 by episode 500 -- meaningful policy-quality comparison likely needs the full 500-episode run, not a 120-episode snapshot, to be fair.
+
+Added `test_running_normalizer_matches_numpy_std_and_never_shifts_mean` and `test_remember_stores_normalized_not_raw_reward` (`tests/test_oran_agents.py`, now 22/22 including both this update's tests and the earlier target-critic-fix's 3). Full repo suite re-run clean: 149/149.
+
+### Update, same day: re-ran bmpp_dqn's 3 seeds; the matrix is complete, with an honest remaining gap
+Per the candidate's choice ("re-run the full matrix now"), cleared `bmpp_dqn`'s 3 manifest entries and relaunched the checkpointed O-RAN matrix -- it correctly skipped the 9 already-done jobs (dqn/ddpg/mpdqn) and re-ran only `bmpp_dqn`'s seeds 42/123/456 at the full 500 episodes each.
+
+The numerical fix held for the full run: `param_loss` stayed bounded and decelerating throughout (seed42: 24.7 at ep59 -> 119.6 at ep250 -> 162.4 at ep499 -- 4.8x then 1.4x across similarly-sized windows, versus the original bug's unbounded run to ~774k). That part of the investigation is closed.
+
+The behavioral result is not a success, and reporting it as one would be dishonest: eval QoS satisfaction landed at *exactly* 20.8% at literally every checkpoint from episode 50 through 500, for all 3 seeds, both before and after this session's fixes -- the fixes changed the numerical trajectory but never changed what the greedy discrete policy actually does. Final eval reward is likewise nearly identical across all 3 seeds (-100,732.0, -100,731.9, -100,731.6) despite different training seeds, different final power draw, and different "active RUs" counts -- a strong signature that the discrete (RU-on/split) decision network's greedy argmax choice locks onto a fixed pattern very early in training and never moves again, regardless of what its own Q-values or the continuous-parameter network are doing underneath. All 12 checkpointed-matrix jobs are now `"status": "done"`; final comparison:
+
+| Method | Seed | Reward | Power | QoS |
+|---|---|---|---|---|
+| bmpp_dqn | 42/123/456 | -100,732 / -100,732 / -100,732 | 150.7W / 147.8W / 138.9W | 20.8% / 20.8% / 20.8% |
+| dqn | 42/123/456 | -69,503 / -69,570 / -50,109 | 194.6W / 170.9W / 156.9W | 23.4% / 23.2% / 28.6% |
+| ddpg | 42/123/456 | -69,016 / -96,683 / -76,931 | 197.0W / 194.5W / 200.4W | 28.0% / 24.0% / 24.0% |
+| mpdqn | 42/123/456 | -45,921 / -45,356 / -46,363 | 135.9W / 133.1W / 128.5W | 32.2% / 30.4% / 30.2% |
+
+BMPP-DQN (the proposed method) is last of all 4 on every metric, with essentially zero seed variance where every baseline shows normal seed-to-seed spread -- reported to the candidate as its own finding, distinct from (and following) the two numerical fixes above, since it points to a different failure mode (early policy lock-in / discrete-decision collapse) that neither fix addressed.
+
+### Notes (same-day update)
+Three genuinely different things were true in the same investigation and needed to stay distinct rather than being collapsed into one "fixed it" narrative: (1) a real correctness bug (critic_target never read) that is now fixed and verified: (2) a real numerical-stability improvement (reward normalization) that is now fixed and verified; (3) a real, still-open behavioral finding (the discrete policy converges to the same fixed, worse-than-baseline choice regardless of seed or either fix) that neither of the first two addressed and that remains for the candidate to decide how to pursue.
+
+### Update, same day: investigated finding #3 -- likely architectural, not a tunable bug
+Per the candidate's choice ("investigate further"), tested the most obvious tunable-hyperparameter hypothesis first: that `lr_discrete` (1e-4, combined with `gradient_clip_norm=1.0`) makes the discrete critic's per-step updates too small to escape an early, poorly-calibrated fixed point within 500 episodes. Ran the same 120-episode pilot at `lr_discrete` = 1e-4 (current default), 1e-3 (10x), and 1e-2 (100x). `critic_loss` converged to a small value under all three (1.19 / 6.05 / 7.33 by episode 99), confirming the critic itself is not stuck -- but *training* QoS satisfaction stayed essentially flat and nearly identical regardless of learning rate (ep0-9 means: 0.243 / 0.237 / 0.235; ep110-119 means: 0.193 / 0.190 / 0.191). A 100x learning-rate range producing no material behavioral difference is strong evidence this is not a tuning problem.
+
+Traced the likely actual mechanism instead: `oran_env/oran_env.py::_signal_interference()` computes each UE's interference as `total_active_power - signal`, a genuine joint function of *every simultaneously active RU's* transmit power -- turning RU 3 on changes the interference (and therefore SINR, and therefore QoS) experienced by UEs served by RU 1, RU 2, etc. But `oran_agents/bmpp_dqn.py::_BranchingHeads.forward()` computes each RU's discrete Q-value from the shared state feature alone (`v = value_head(features)`, `advs[r] = adv_heads[r](features)`), with no conditioning on what any other branch is doing. This is exactly the well-documented representational trade-off of Branching DQN (Tavakoli et al. 2018, already cited in this repo's own literature table as the source for branching's "2R not 2^R" scalability benefit): giving up joint-action expressiveness for tractability. In an environment where cross-RU interference is a first-order effect on the objective, a per-branch-independent value decomposition is structurally unable to represent the true joint value function, and can converge to a stable, seed-independent but *sub-optimal factored equilibrium* -- which is consistent with everything observed (identical QoS across seeds, LR-independence, and a critic that converges numerically but to the wrong thing).
+
+This is reported as a likely explanation backed by two pieces of evidence (the LR-independence experiment and the mechanistic code trace), not a proven root cause -- distinguishing it from the earlier two findings, which were verified via exact-equivalence/regression tests, not inference from mechanism.
+
+---
+
+## Date: 2026-09-19 (found and fixed MPDQN's real performance bug)
+
+### What I Did Today
+- [x] `mpdqn/seed42` (O-RAN's checkpointed matrix) had, across several resume cycles and one continuous 93-minute uninterrupted stretch, never completed the same 500 episodes that DQN/DDPG/BMPP-DQN each finish in a few minutes -- a ~20-30x+ gap far too large to be just "MP-DQN's multi-pass architecture does more forward passes." Per the candidate's choice ("profile it now"), investigated properly instead of continuing to wait or arbitrarily cutting episodes.
+- [x] `cProfile`'d `ORANMPDQNAgent.update()` directly (not a guess): found `update()` averaged ~0.51s/call, with `run_backward` alone taking ~94ms/call. Traced this to `update()`'s `param_loss` computation: it evaluated Q-values for **all 1296 joint actions** (`2**n_ru * n_splits**n_ru` at this repo's `n_ru=4`/`n_splits=3`) with full gradient tracking, then used `.gather()` to pick out only the one greedy action -- building and backpropagating through a computation graph ~1296x larger than the loss actually needs.
+- [x] Fixed `oran_agents/mpdqn_agent.py`'s `update()`: find the greedy action under `no_grad()` first (cheap -- no backward graph), then re-evaluate only that one action with gradients enabled. Proved this is an exact algebraic identity (not an approximation) via a new test (`tests/test_oran_agents.py::test_mpdqn_param_loss_optimization_is_exactly_equivalent`) that reimplements the old formula directly and asserts the loss value and every gradient w.r.t. `param_net`'s parameters match to floating-point precision. Re-profiled: `update()` dropped from ~508ms to ~292ms/call (1.7x), `run_backward` from ~94ms to near-zero.
+- [x] Found the **identical bug**, independently reimplemented, in the C-RAN track's shared `agents/pdqn_agent.py::PDQNAgent.update()` (inherited verbatim by `MPDQNAgent`) -- and two more instances of the same pattern there (the target-Q computation and the critic-loss computation both evaluated all actions to use only one already-known action). Refactored via two new overridable hook methods (`_compute_q_for_known_action`, `_compute_greedy_q_with_grad`) with behavior-preserving defaults for flat P-DQN (already O(1), no change) and optimized overrides in `MPDQNAgent` (masked single-action evaluation, mirroring the O-RAN fix). Added an equivalence test (`tests/test_new_baselines.py::test_mpdqn_known_action_and_greedy_optimizations_are_exactly_equivalent`) proving both overrides match the naive formula exactly.
+- [x] Honestly measured C-RAN's own post-fix cost at its real scale (`n_rrh=12` -> 4096 joint actions): the wasteful backward-pass cost is gone, but the *inherent* forward-only cost of evaluating a 4096-action space remains large -- projected ~87 hours for a full 3000-episode/seed run. This is disclosed as expected, not a remaining bug: the module's own docstring already states MP-DQN at this scale is "deliberately intractable... the baseline the proposed method's branching decomposition is meant to outperform on scalability, not a scaled-down version of it." The fix removes an *accidental* inefficiency; it does not and should not eliminate the *intentional* one.
+- [x] Full suite re-run clean: 144/144 (142 previous + 2 new equivalence tests). Also removed two genuinely-unused pre-existing imports (`typing.Dict`, `torch.nn`) from `agents/mpdqn_agent.py` while already editing that file. `flake8`/`mypy`/`black` all clean.
+- [x] Resumed the checkpointed O-RAN matrix with the fix in place. Correcting an overly-optimistic claim made earlier while writing this entry: `update()` runs on nearly every one of ~50,000 total steps (500 episodes x 100 steps, minus the ~128-step buffer-fill delay), so at the measured 292ms/call this is still a genuinely long ~4-hour computation per seed (~12h for all 3 `mpdqn` seeds) -- not "well under an hour." The real, honest improvement is that this is now a *bounded, finishable* multi-hour job instead of one that 93 minutes of continuous execution couldn't finish even once; it is not a small fix.
+
+### Time Spent
+| Activity | Hours |
+|----------|-------|
+| Coding | 0.7 |
+| Writing | 0.25 |
+| Reading | 0.15 |
+| Debugging | 0.3 (cProfile investigation, tracing the exact bottleneck, verifying the C-RAN side shares the same bug) |
+| Running experiments | 0.2 (profiling runs, equivalence tests, before/after timing measurements) |
+| **Total** | ~1.6 |
+
+### Decisions Made
+| Decision | Rationale |
+|----------|-----------|
+| Investigated with `cProfile` rather than guessing at the cause | "MP-DQN is slower than DQN" was already known/expected; the question was whether the *magnitude* (20-30x+) was inherent or a fixable inefficiency. Only direct profiling could distinguish "architecturally expensive" from "accidentally wasteful," and it turned out to be mostly the latter for O-RAN's smaller action space. |
+| Required an exact-equivalence test (loss value + every gradient) before trusting either fix, not just "it still runs and doesn't crash" | This changes core RL training math (what the critic and continuous-parameter networks actually learn from). A silent numerical drift here wouldn't crash anything -- it would just quietly corrupt every future baseline comparison. Proving algebraic identity against a hand-reimplemented reference is the only way to rule that out with confidence. |
+| Fixed the shared C-RAN `PDQNAgent.update()` via overridable hooks with behavior-preserving defaults, rather than duplicating `update()` in `MPDQNAgent` | Duplicating a ~70-line training method risks the two copies drifting apart under future changes. Hooks that default to the exact original behavior (verified: PDQN's own tests still pass unchanged) and are overridden only where a genuine optimization applies is safer and keeps the two algorithms' shared logic in one place. |
+| Did not attempt to make C-RAN's MPDQN fast at `n_rrh=12` scale | The remaining ~87h cost is inherent to evaluating a 4096-action space every step, which the module's own docstring states is the *deliberate point* of including this baseline (to demonstrate why branching is necessary). Hacking around that would undermine the comparison this baseline exists to make. |
+
+### Blockers
+| Blocker | Severity | Plan |
+|---------|----------|------|
+| C-RAN's MPDQN remains inherently expensive (~87h projected for a full run) even after removing the accidental inefficiency | Medium, but expected/by-design | When the real C-RAN matrix is eventually run, budget for this specific baseline separately (e.g. fewer seeds, or accept it as the slowest method by design) rather than expecting parity with the other 10 methods |
+
+### Tomorrow's Plan
+- [ ] Continue the checkpointed O-RAN matrix's scheduled-check-in cycle; `mpdqn`'s 3 seeds should now complete far faster
+- [ ] Report final O-RAN results once all 12 jobs are done
+
+### Notes
+This is the first round this session that found and fixed a genuine, pre-existing performance bug (not a documentation gap or a missing config wire-up) -- discovered only because the checkpointed matrix's real, sustained execution surfaced it in a way no unit test or short smoke test had. Both fixes are provably exact, not just "probably fine."
+
+---
+
 ## Date: 2026-09-18 (parallel multi-track support for the checkpointed runner)
 
 ### What I Did Today

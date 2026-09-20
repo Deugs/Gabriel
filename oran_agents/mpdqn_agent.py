@@ -320,9 +320,29 @@ class ORANMPDQNAgent:
         feat_for_param = self.encoder(states).detach()
         power_ratio, prb_share = self.param_net(feat_for_param)
         pred_params = torch.stack([power_ratio, prb_share], dim=-1)
-        q_pred_all = self._compute_q_all_actions(feat_for_param, pred_params)
-        greedy_idx = q_pred_all.argmax(dim=-1, keepdim=True).detach()
-        param_loss = -q_pred_all.gather(-1, greedy_idx).mean()
+
+        # Only the GREEDY action's Q-value (w.r.t. pred_params) is actually
+        # used below -- find it under no_grad (cheap: no backward graph to
+        # build), then re-evaluate just that one action with gradients
+        # enabled. This is algebraically identical to evaluating all
+        # n_joint_actions with gradients and gathering the greedy one (see
+        # tests/test_oran_agents.py's equivalence test), but avoids
+        # backpropagating through an O(n_joint_actions)-times-larger
+        # computation graph than necessary -- n_joint_actions is
+        # 2**n_ru * n_splits**n_ru (1296 at this repo's n_ru=4/n_splits=3
+        # default), so the naive version was ~1296x more backward work than
+        # this loss actually needs.
+        with torch.no_grad():
+            q_pred_all_for_argmax = self._compute_q_all_actions(
+                feat_for_param, pred_params
+            )
+            greedy_idx = q_pred_all_for_argmax.argmax(dim=-1)  # (batch,)
+
+        greedy_bits = self.joint_ru_bits[greedy_idx]  # (batch, n_ru)
+        masked_params = pred_params * greedy_bits.unsqueeze(-1)  # (batch, n_ru, 2)
+        fused = self.q_net.fuse(feat_for_param, masked_params)
+        q_pred_greedy = self.q_net.q_at_indices(fused, greedy_idx)
+        param_loss = -q_pred_greedy.mean()
 
         self.param_opt.zero_grad()
         param_loss.backward()

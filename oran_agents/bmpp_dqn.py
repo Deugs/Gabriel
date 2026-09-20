@@ -48,6 +48,46 @@ def _resolve_activation(name: str) -> Any:
         )
 
 
+class _RunningNormalizer:
+    """Welford's online mean/variance estimator, used to rescale (never
+    shift) the reward signal fed into TD targets.
+
+    Division-only (no mean-subtraction): shifting an infinite-horizon
+    discounted reward changes which policy is optimal, but scaling it by a
+    positive constant does not. Only `.std` is used downstream, on
+    purpose.
+    """
+
+    def __init__(self, epsilon: float = 1.0e-3):
+        self.epsilon = epsilon
+        self.count = 0
+        self.mean = 0.0
+        self._m2 = 0.0
+
+    def update(self, x: float) -> None:
+        self.count += 1
+        delta = x - self.mean
+        self.mean += delta / self.count
+        delta2 = x - self.mean
+        self._m2 += delta * delta2
+
+    @property
+    def std(self) -> float:
+        if self.count < 2:
+            return 1.0
+        variance = self._m2 / self.count
+        return max(variance**0.5, self.epsilon)
+
+    def normalize(self, x: float) -> float:
+        """Updates running stats from the raw `x`, then returns x rescaled
+        by the (pre-update) running std -- so the very first call returns
+        x unchanged (std defaults to 1.0 until enough samples exist) and
+        later calls track the reward stream's actual observed scale."""
+        current_std = self.std
+        self.update(x)
+        return x / current_std
+
+
 class _Encoder(nn.Module):
     """Feature encoder mapping state s(t) to a feature representation."""
 
@@ -296,6 +336,21 @@ class BMPPDQNAgent:
         self.lower_encoder_target = copy.deepcopy(self.lower_encoder).to(self.device)
         self.critic_target = copy.deepcopy(self.critic).to(self.device)
         self.param_net_target = copy.deepcopy(self.param_net).to(self.device)
+        # Target nets are only ever written via _soft_update()'s direct
+        # .data.copy_ (never through an optimizer), so freezing them here
+        # is safe and lets update_lower() run its actor loss through
+        # self.critic_target/self.upper_encoder_target in a normal (non
+        # no_grad) forward pass: gradients still flow into pred_params (and
+        # from there into param_net/lower_encoder), just not into the
+        # frozen target weights themselves.
+        for target_net in (
+            self.upper_encoder_target,
+            self.lower_encoder_target,
+            self.critic_target,
+            self.param_net_target,
+        ):
+            for param in target_net.parameters():
+                param.requires_grad_(False)
 
         self.critic_opt = optim.Adam(
             list(self.upper_encoder.parameters()) + list(self.critic.parameters()),
@@ -308,6 +363,13 @@ class BMPPDQNAgent:
 
         self.lower_memory = LowerReplayBuffer(lower_buffer_size)
         self.upper_memory = UpperReplayBuffer(upper_buffer_size)
+
+        # Separate normalizers: the upper buffer stores rewards *summed*
+        # over upper_level_period_steps env steps, a naturally larger raw
+        # scale than the lower buffer's single-step rewards, so each
+        # needs its own running std estimate.
+        self.lower_reward_normalizer = _RunningNormalizer()
+        self.upper_reward_normalizer = _RunningNormalizer()
 
         # Two-timescale cadence bookkeeping (agent-side; the env itself is
         # timescale-agnostic, docs/skills/skill_oran_env.md Rule 4).
@@ -327,19 +389,28 @@ class BMPPDQNAgent:
         self._pending_split = self._cached_split.copy()
 
     def _multi_pass_q(
-        self, feat: torch.Tensor, cont_params: torch.Tensor
+        self,
+        feat: torch.Tensor,
+        cont_params: torch.Tensor,
+        critic: Optional["BranchingCritic"] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Evaluate every branch's Q-value via its own MP-DQN masked pass.
 
         One forward pass per RU (n_ru total): each pass masks the critic to
         that RU's own (power, prb) only, and only that pass's own-RU slice
         of the output is kept for both branch-groups (activation, split).
+
+        `critic` defaults to the online `self.critic`; callers that need
+        the frozen, Polyak-averaged `self.critic_target` (Double-DQN's
+        "target net evaluates" half, or the actor's bootstrap target) pass
+        it explicitly.
         """
+        critic = critic if critic is not None else self.critic
         batch_size = feat.shape[0]
         activation_q = torch.zeros(batch_size, self.n_ru, 2, device=self.device)
         split_q = torch.zeros(batch_size, self.n_ru, self.n_splits, device=self.device)
         for r in range(self.n_ru):
-            act_r, split_r = self.critic(feat, cont_params, branch_mask_idx=r)
+            act_r, split_r = critic(feat, cont_params, branch_mask_idx=r)
             activation_q[:, r, :] = act_r[:, r, :]
             split_q[:, r, :] = split_r[:, r, :]
         return activation_q, split_q
@@ -402,9 +473,22 @@ class BMPPDQNAgent:
         callers must call select_action() then remember() in lockstep for
         this to stay accurate (the standard select -> step -> remember
         training-loop order already used throughout this codebase).
+
+        Both buffers store a normalized reward (raw reward divided by a
+        running estimate of that reward stream's own std, never
+        mean-shifted -- see _RunningNormalizer), not the raw environment
+        reward. This does not affect select_action()/evaluation (neither
+        calls remember()); it only rescales the TD-target/actor-loss
+        signal update_upper()/update_lower() actually train on. Added
+        because the raw per-step reward here is unnormalized and can run
+        to several hundred in magnitude (an unscaled QoS-violation
+        penalty term), which update_upper()'s TD bootstrap otherwise
+        compounds into Q-value magnitudes prone to runaway growth (see
+        docs/daily_log.md's 2026-09-20 entry).
         """
         cont_params = np.stack([action["power"] / self.p_max_w, action["prb"]], axis=-1)
-        self.lower_memory.push(state, cont_params, reward, next_state, done)
+        normalized_reward = self.lower_reward_normalizer.normalize(reward)
+        self.lower_memory.push(state, cont_params, normalized_reward, next_state, done)
 
         if self.last_action_was_decision:
             # Flush any previously pending window (shouldn't normally
@@ -429,11 +513,17 @@ class BMPPDQNAgent:
         if (
             window_complete or episode_ended_mid_window
         ) and self._pending_upper_state is not None:
+            # Normalize the raw accumulated window-sum (not a sum of
+            # already-normalized per-step values) against this buffer's
+            # own running scale.
+            normalized_upper_reward = self.upper_reward_normalizer.normalize(
+                self._pending_upper_reward_sum
+            )
             self.upper_memory.push(
                 self._pending_upper_state,
                 self._pending_ru_on,
                 self._pending_split,
-                self._pending_upper_reward_sum,
+                normalized_upper_reward,
                 next_state,
                 done,
             )
@@ -454,6 +544,20 @@ class BMPPDQNAgent:
         over an un-gathered action dimension -- the exact class of bug
         already found and fixed in agents/branching_mp_dqn.py's actor
         update.
+
+        Bootstraps the actor's maximization off critic_target/
+        upper_encoder_target (frozen, Polyak-averaged copies) rather than
+        the online critic/upper_encoder. Maximizing directly against an
+        online critic that is itself being updated every step from this
+        same actor's output creates a tight online-online feedback loop;
+        empirically (see docs/daily_log.md's 2026-09-19/20 entries) this
+        diverged -- param_loss grew unboundedly (0 to ~774k over 500
+        episodes) and episode reward got monotonically worse, with all
+        seeds collapsing to the same degenerate policy. Bootstrapping off
+        the slow-moving target breaks that loop without adding any of the
+        machinery the concept note explicitly excludes (twin critics,
+        policy-delay gating, target-smoothing noise) -- it only changes
+        which existing critic copy this actor loss reads from.
         """
         batch_size = batch_size or self.batch_size_default
         if len(self.lower_memory) < max(batch_size, self.min_buffer_size):
@@ -468,8 +572,10 @@ class BMPPDQNAgent:
         power_ratio, prb_share = self.param_net(lower_feat)
         pred_params = torch.stack([power_ratio, prb_share], dim=-1)
 
-        upper_feat = self.upper_encoder(states).detach()
-        activation_q, _split_q = self._multi_pass_q(upper_feat, pred_params)
+        upper_feat = self.upper_encoder_target(states)
+        activation_q, _split_q = self._multi_pass_q(
+            upper_feat, pred_params, critic=self.critic_target
+        )
         greedy_idx = activation_q.argmax(dim=-1, keepdim=True).detach()
         activation_q_greedy = activation_q.gather(-1, greedy_idx).squeeze(-1)
         param_loss = -activation_q_greedy.mean()
@@ -494,6 +600,15 @@ class BMPPDQNAgent:
         evaluates) for both branch-groups -- no twin critic, no
         target-policy-smoothing noise, per the explicit no-TD3 decision
         (Concept Note Section 10.4).
+
+        The "target net evaluates" half previously ran the target
+        *encoder*'s features through the ONLINE critic (self.critic), not
+        self.critic_target -- self.critic_target was being Polyak-averaged
+        every step but never actually read, so there was no real target
+        lag on the critic weights at all, only on the encoder. That is a
+        much weaker anchor than intended and is the most likely primary
+        cause of the training divergence documented in update_lower()'s
+        docstring. Fixed by passing critic=self.critic_target below.
         """
         batch_size = batch_size or self.batch_size_default
         if len(self.upper_memory) < max(
@@ -525,7 +640,7 @@ class BMPPDQNAgent:
 
             next_upper_feat_target = self.upper_encoder_target(next_states)
             next_act_target, next_split_target = self._multi_pass_q(
-                next_upper_feat_target, next_cont_params
+                next_upper_feat_target, next_cont_params, critic=self.critic_target
             )
             next_act_eval = next_act_target.gather(
                 -1, next_act_actions.unsqueeze(-1)

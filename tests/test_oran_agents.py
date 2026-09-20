@@ -310,6 +310,211 @@ def test_update_lower_and_upper_do_not_crash_across_full_training_loop(
     assert saw_nonzero_critic_loss
 
 
+def _populate_agent(agent, env, cfg, n_steps=40):
+    obs, _ = env.reset(seed=42)
+    for _ in range(n_steps):
+        action = agent.select_action(obs, evaluate=False)
+        next_obs, reward, terminated, truncated, info = env.step(action)
+        agent.remember(obs, action, reward, next_obs, terminated)
+        obs = next_obs
+        if terminated or truncated:
+            obs, _ = env.reset(seed=123)
+
+
+def test_update_upper_evaluates_next_state_with_target_critic(default_config):
+    """Regression guard for the 2026-09-20 bug: update_upper()'s Double-DQN
+    'target net evaluates' step must actually call self.critic_target, not
+    re-feed target-encoder features through the online self.critic.
+    self.critic_target was being Polyak-averaged every step but never
+    read, so there was no real target lag on the critic weights at all
+    -- only on the encoder -- which the checkpointed O-RAN matrix run
+    showed diverges (param_loss grew unboundedly, episode reward got
+    monotonically worse across all 3 seeds)."""
+    cfg = dict(default_config)
+    cfg["algorithm"] = dict(default_config["algorithm"])
+    cfg["algorithm"]["min_buffer_size"] = 16
+    cfg["algorithm"]["batch_size"] = 8
+    cfg["algorithm"]["upper_level_period_steps"] = 4
+
+    env = ORANEnv(cfg)
+    agent = _make_agent(env, cfg)
+    _populate_agent(agent, env, cfg)
+
+    calls = {"critic": 0, "critic_target": 0}
+    orig_critic_forward = agent.critic.forward
+    orig_target_forward = agent.critic_target.forward
+
+    def spy_critic(*args, **kwargs):
+        calls["critic"] += 1
+        return orig_critic_forward(*args, **kwargs)
+
+    def spy_target(*args, **kwargs):
+        calls["critic_target"] += 1
+        return orig_target_forward(*args, **kwargs)
+
+    agent.critic.forward = spy_critic
+    agent.critic_target.forward = spy_target
+    try:
+        agent.update_upper()
+    finally:
+        agent.critic.forward = orig_critic_forward
+        agent.critic_target.forward = orig_target_forward
+
+    assert calls["critic_target"] > 0, (
+        "update_upper() never invoked critic_target -- the Double-DQN "
+        "target-evaluation step must read the frozen target critic."
+    )
+
+
+def test_update_lower_bootstraps_actor_loss_off_target_networks(default_config):
+    """Regression guard for the 2026-09-20 fix: update_lower()'s actor loss
+    must maximize critic_target(upper_encoder_target(...)), not the online
+    upper_encoder/critic. Maximizing directly against an online critic that
+    this same call trains every step created a tight online-online feedback
+    loop that diverged in practice."""
+    cfg = dict(default_config)
+    cfg["algorithm"] = dict(default_config["algorithm"])
+    cfg["algorithm"]["min_buffer_size"] = 8
+    cfg["algorithm"]["batch_size"] = 8
+
+    env = ORANEnv(cfg)
+    agent = _make_agent(env, cfg)
+    _populate_agent(agent, env, cfg, n_steps=16)
+
+    calls = {
+        "upper_encoder": 0,
+        "upper_encoder_target": 0,
+        "critic": 0,
+        "critic_target": 0,
+    }
+    orig = {
+        "upper_encoder": agent.upper_encoder.forward,
+        "upper_encoder_target": agent.upper_encoder_target.forward,
+        "critic": agent.critic.forward,
+        "critic_target": agent.critic_target.forward,
+    }
+
+    def make_spy(name):
+        def spy(*args, **kwargs):
+            calls[name] += 1
+            return orig[name](*args, **kwargs)
+
+        return spy
+
+    agent.upper_encoder.forward = make_spy("upper_encoder")
+    agent.upper_encoder_target.forward = make_spy("upper_encoder_target")
+    agent.critic.forward = make_spy("critic")
+    agent.critic_target.forward = make_spy("critic_target")
+    try:
+        agent.update_lower()
+    finally:
+        agent.upper_encoder.forward = orig["upper_encoder"]
+        agent.upper_encoder_target.forward = orig["upper_encoder_target"]
+        agent.critic.forward = orig["critic"]
+        agent.critic_target.forward = orig["critic_target"]
+
+    assert calls["upper_encoder_target"] > 0
+    assert calls["critic_target"] > 0
+    assert calls["upper_encoder"] == 0, (
+        "update_lower()'s actor loss must not read the online upper_encoder"
+    )
+    assert calls["critic"] == 0, (
+        "update_lower()'s actor loss must not read the online critic"
+    )
+
+
+def test_running_normalizer_matches_numpy_std_and_never_shifts_mean():
+    """_RunningNormalizer must track the true running std (Welford's
+    algorithm) and only ever scale, never shift, its input -- shifting an
+    infinite-horizon discounted reward would change which policy is
+    optimal; scaling by a positive constant does not."""
+    from oran_agents.bmpp_dqn import _RunningNormalizer
+
+    rng = np.random.default_rng(0)
+    samples = rng.normal(loc=50.0, scale=20.0, size=500).tolist()
+
+    normalizer = _RunningNormalizer()
+    outputs = [normalizer.normalize(x) for x in samples]
+
+    # After many samples, the running std should closely track numpy's
+    # population std of everything observed so far.
+    assert abs(normalizer.std - float(np.std(samples))) / float(np.std(samples)) < 0.05
+
+    # Scale-only: dividing every sample by the same positive running std
+    # (frozen, for this check) must preserve the *ratio* between any two
+    # raw samples exactly -- a mean-shift would not.
+    frozen_std = normalizer.std
+    ratio_raw = samples[10] / samples[11]
+    ratio_scaled = (samples[10] / frozen_std) / (samples[11] / frozen_std)
+    assert abs(ratio_raw - ratio_scaled) < 1e-9
+
+    # First call must be unchanged (no prior stats to scale by).
+    fresh = _RunningNormalizer()
+    assert fresh.normalize(7.0) == 7.0
+
+
+def test_remember_stores_normalized_not_raw_reward(default_config):
+    """Regression guard for the 2026-09-20 reward-normalization addition:
+    remember() must push a *normalized* reward into both replay buffers,
+    not the raw environment reward -- otherwise update_upper()'s TD
+    targets keep bootstrapping off the same unbounded raw-reward scale
+    that drove BMPP-DQN's training divergence."""
+    cfg = dict(default_config)
+    cfg["algorithm"] = dict(default_config["algorithm"])
+    cfg["algorithm"]["upper_level_period_steps"] = 4
+
+    env = ORANEnv(cfg)
+    obs, _ = env.reset(seed=42)
+    agent = _make_agent(env, cfg)
+
+    raw_rewards = []
+    for _ in range(8):
+        action = agent.select_action(obs, evaluate=False)
+        next_obs, reward, terminated, truncated, info = env.step(action)
+        raw_rewards.append(reward)
+        agent.remember(obs, action, reward, next_obs, terminated)
+        obs = next_obs
+
+    stored_lower_rewards = [t[2] for t in agent.lower_memory.buffer]
+    assert len(stored_lower_rewards) == len(raw_rewards)
+    # Once the normalizer has seen more than one sample, storage must
+    # differ from the raw stream (a real rescale happened, not a no-op).
+    assert any(
+        abs(stored - raw) > 1e-9
+        for stored, raw in zip(stored_lower_rewards[1:], raw_rewards[1:])
+    )
+
+
+def test_update_lower_gradients_still_flow_through_frozen_target_nets(
+    default_config,
+):
+    """Freezing critic_target/upper_encoder_target's own parameters (so
+    update_lower can read them in a normal, non-no_grad forward pass
+    without leaking stray .grad into weights nothing ever steps) must not
+    also block gradient flow through the graph into param_net/
+    lower_encoder -- a frozen (requires_grad=False) leaf still lets
+    autograd differentiate w.r.t. any *other* input that does require
+    grad."""
+    cfg = dict(default_config)
+    cfg["algorithm"] = dict(default_config["algorithm"])
+    cfg["algorithm"]["min_buffer_size"] = 8
+    cfg["algorithm"]["batch_size"] = 8
+
+    env = ORANEnv(cfg)
+    agent = _make_agent(env, cfg)
+    _populate_agent(agent, env, cfg, n_steps=16)
+
+    before = [p.clone() for p in agent.param_net.parameters()]
+    metrics = agent.update_lower()
+    after = list(agent.param_net.parameters())
+
+    assert metrics["param_loss"] != 0.0
+    assert any(not torch.equal(b, a) for b, a in zip(before, after)), (
+        "param_net's weights did not change after update_lower() -- "
+        "gradients are not flowing through the frozen target networks."
+    )
+
+
 # ---------------------------------------------------------------------------
 # Baselines: DQN (discrete-only), DDPG (continuous-only), MP-DQN (flat joint)
 # ---------------------------------------------------------------------------
@@ -485,3 +690,55 @@ def test_mpdqn_baseline_runs_and_updates(default_config):
 
     assert not np.isnan(metrics["critic_loss"])
     assert not np.isnan(metrics["param_loss"])
+
+
+def test_mpdqn_param_loss_optimization_is_exactly_equivalent(default_config):
+    """update()'s param_loss now finds the greedy action under no_grad, then
+    re-evaluates only that one action with gradients enabled, instead of
+    evaluating all n_joint_actions with gradients and gathering the greedy
+    one -- an optimization that avoids an O(n_joint_actions)-times-larger
+    backward pass (see oran_agents/mpdqn_agent.py's update() comment; this
+    was the root cause of MPDQN taking 90+ minutes for a single 500-episode
+    seed while every other O-RAN method finished in minutes).
+
+    This test proves the optimization is an exact algebraic identity, not
+    an approximation: it reimplements the OLD (pre-optimization) formula
+    directly against the same agent/weights/inputs and asserts the loss
+    value and every gradient w.r.t. param_net's parameters match the NEW
+    code path to floating-point precision.
+    """
+    cfg = _small_config(default_config)
+    torch.manual_seed(0)
+    agent = ORANMPDQNAgent(state_dim=12, n_ru=2, n_splits=2, config=cfg)
+
+    batch = 5
+    feat_for_param = torch.randn(batch, agent.encoder.output_dim)
+
+    # OLD formula: evaluate ALL n_joint_actions with gradients, then gather
+    # the greedy one (this is exactly what update() did before the fix).
+    power_ratio_old, prb_share_old = agent.param_net(feat_for_param)
+    pred_params_old = torch.stack([power_ratio_old, prb_share_old], dim=-1)
+    q_pred_all = agent._compute_q_all_actions(feat_for_param, pred_params_old)
+    greedy_idx_old = q_pred_all.argmax(dim=-1, keepdim=True).detach()
+    param_loss_old = -q_pred_all.gather(-1, greedy_idx_old).mean()
+    grads_old = torch.autograd.grad(param_loss_old, list(agent.param_net.parameters()))
+
+    # NEW formula: exactly the lines now in update() after the fix.
+    agent.param_net.zero_grad()
+    power_ratio_new, prb_share_new = agent.param_net(feat_for_param)
+    pred_params_new = torch.stack([power_ratio_new, prb_share_new], dim=-1)
+    with torch.no_grad():
+        q_pred_all_for_argmax = agent._compute_q_all_actions(
+            feat_for_param, pred_params_new
+        )
+        greedy_idx_new = q_pred_all_for_argmax.argmax(dim=-1)
+    greedy_bits = agent.joint_ru_bits[greedy_idx_new]
+    masked_params = pred_params_new * greedy_bits.unsqueeze(-1)
+    fused = agent.q_net.fuse(feat_for_param, masked_params)
+    q_pred_greedy = agent.q_net.q_at_indices(fused, greedy_idx_new)
+    param_loss_new = -q_pred_greedy.mean()
+    grads_new = torch.autograd.grad(param_loss_new, list(agent.param_net.parameters()))
+
+    assert torch.allclose(param_loss_old, param_loss_new, atol=1e-6)
+    for g_old, g_new in zip(grads_old, grads_new):
+        assert torch.allclose(g_old, g_new, atol=1e-6)
