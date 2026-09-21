@@ -141,6 +141,24 @@ EPISODES=5 bash scripts/run_cran_experiments.sh
 EPISODES=5 bash scripts/run_oran_experiments.sh
 ```
 
+**Faster: train both tracks' core matrix in parallel.** The two commands
+above run sequentially and one track at a time. `scripts/run_all_parallel.py`
+instead runs every (method, seed) unit from *both* tracks — all baseline
+algorithms plus the proposed method, all seeds — as a pool of concurrent
+subprocesses sized to the host's CPU count, with each subprocess's own
+BLAS/PyTorch thread count capped so they don't oversubscribe the machine.
+Output lands in the exact same `data/results/` / `data/results_oran/`
+layout the sequential scripts use, so it's a drop-in replacement for the
+core matrix (not the C-RAN track's additional scalability/ablation/etc.
+sweeps, or either track's final aggregation step — the script prints the
+exact follow-up commands for those when it finishes):
+
+```bash
+python scripts/run_all_parallel.py                # uses all available CPUs
+python scripts/run_all_parallel.py --jobs 8        # cap concurrency explicitly
+python scripts/run_all_parallel.py --dry-run       # preview the job plan first
+```
+
 Optional (O-RAN track): check whether the power model's needs-validation
 constants (§10.5 of its concept note) affect the headline method
 comparison:
