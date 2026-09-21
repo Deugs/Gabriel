@@ -1,0 +1,494 @@
+% Chapter 2 -- Literature Review (O-RAN / BMPP-DQN track)
+%
+% Governs: manuscript/ORAN_BMPP_DQN_Concept_Note_v1.md (Sections 3, 9)
+% Chapter mapping: docs/oran_thesis_guide.md ("2. Literature Review" row)
+% Status: DRAFT. Intended to be \input{} from the thesis-wide main.tex once
+% that skeleton exists, immediately after chapter1_oran_introduction.tex
+% (\label{chap:oran-introduction}). A thesis-wide references.bib does not
+% yet exist, so citations are numbered locally (IEEE style) against the
+% reference list at the end of this file, which repeats the keys already
+% used in Chapter 1 plus the additional sources this chapter draws on.
+% Merge into a single thesis-wide bibliography once main.tex is created.
+%
+% Scope note: parameter-validation literature (power-model constants,
+% traffic-model breakpoints, functional-split bandwidth figures --
+% manuscript/ORAN_BMPP_DQN_Concept_Note_v1.md Section 10's nine literature-
+% check passes) is deliberately NOT reproduced here. Per
+% docs/oran_thesis_guide.md's chapter-content mapping, that evidence belongs
+% to Chapter 3 (System Model and Problem Formulation), where it supports
+% specific numeric choices in oran_env/. This chapter instead evaluates the
+% ALGORITHMIC and CONCEPTUAL literature that establishes the three research
+% gaps introduced in Chapter 1.
+
+\chapter{Literature Review}
+\label{chap:oran-literature}
+
+This chapter reviews the literature underlying the three research gaps
+introduced in Chapter~\ref{chap:oran-introduction}: the absence of a
+principled treatment of O-RAN's hybrid discrete-continuous action space
+(Section~\ref{sec:lit-oran-energy}), the lack of an architecture that
+combines action-branching decomposition with multi-pass parameterized
+processing (Section~\ref{sec:lit-drl-hybrid}), and the limited treatment of
+O-RAN's natural multi-timescale control structure
+(Section~\ref{sec:lit-multitimescale}). Rather than surveying each paper in
+isolation, the chapter is organized to build a cumulative argument: each
+section evaluates what a cluster of related works does and does not
+establish, so that Section~\ref{sec:lit-synthesis} can state precisely which
+gap remains open after each cluster is accounted for.
+
+\section{O-RAN Architecture and the Energy-Efficiency Imperative}
+\label{sec:oran-arch-review}
+
+The O-RAN Alliance's own architectural specification~\cite{oran2021mvp}
+formalizes the RU/DU/CU disaggregation and the two-timescale RIC structure
+introduced in Section~\ref{sec:oran-background}, and explicitly identifies
+energy efficiency as a target use case for both RIC tiers. Subsequent survey
+work has consistently reported the RAN as the dominant contributor to
+mobile-network energy consumption and has catalogued AI/ML-driven control as
+the primary proposed remedy: Barker, Seyfi, and Afghah's review of AI/ML in
+mobile edge computing and Open RAN~\cite{barker2025mec} and Lassoued and
+Boujnah's comprehensive review of 5G energy-efficiency
+strategies~\cite{lassoued2026review} both position learning-based RAN
+control as displacing static, rule-based energy-saving features (e.g.,
+fixed sleep-mode schedules), on the grounds that traffic and channel
+conditions are too non-stationary for a fixed policy to remain
+near-optimal. Sthankiya et al.'s survey specifically of AI-driven energy
+optimization in next-generation RAN~\cite{sthankiya2024survey} narrows this
+further to O-RAN, and is useful for this thesis because it explicitly
+catalogues which RIC tier, which disaggregation boundary, and which
+learning paradigm (supervised, RL, federated) each surveyed work targets --
+a taxonomy this review adopts implicitly in the sections that follow.
+None of these three surveys, however, proposes or evaluates a specific
+learning architecture; they establish that the problem is real and
+important, and that RL is a leading candidate approach, but the specific
+architectural question this thesis addresses -- how to represent O-RAN's
+hybrid, multi-timescale action space inside an RL agent -- is left open by
+design, as a survey's remit.
+
+\section{Deep Reinforcement Learning for Discrete, Continuous, and Hybrid Action Spaces}
+\label{sec:lit-drl-hybrid}
+
+The DRL algorithms available to address O-RAN's control problem fall into
+three families, and the boundary between them is the technical crux of this
+thesis.
+
+\textbf{Purely discrete-action methods.} Deep Q-Networks and their
+double/dueling refinements learn a value function over a discrete action
+set and select actions by maximization. In the adjacent C-RAN literature,
+Iqbal, Tham, and Chang~\cite{iqbal2021ddqn} apply a Double DQN specifically
+to RRH on/off decisions, pairing it with a separate convex solver for power
+allocation -- a two-stage design this thesis's own discrete branches draw a
+Double-DQN-style target computation from (Section~\ref{sec:oran-background}
+already anticipates this; the mechanism is specified formally in
+Chapter~\ref{chap:oran-system-model}). Fathy, Abood, and
+Hamdi~\cite{fathy2021ann} similarly pair a neural network (there, used for
+pre-processing rather than value estimation) with a convex power-allocation
+stage. Both works demonstrate that a discrete activation decision and a
+continuous power decision can be decoupled into two separately-solved
+stages, but neither trains the two stages jointly, end-to-end, inside a
+single RL agent -- the coupling between them is handled procedurally
+(the discrete stage's output is simply passed as an input to the convex
+stage), not learned. This two-stage decoupling is a reasonable engineering
+simplification when a convex solver is available for the continuous
+sub-problem, but O-RAN's own energy-power relationship (transmit power
+interacting with PRB share, interference, and functional-split-dependent
+processing cost) is not naturally convex in the way idealized power-control
+problems are, which is part of the motivation for a jointly-learned
+approach.
+
+\textbf{Purely continuous-action methods.} Deep Deterministic Policy
+Gradient (DDPG) and its refinements learn a deterministic policy over a
+continuous action space via a differentiable critic. These methods have no
+native mechanism for a discrete choice: a binary decision such as RU
+activation can only be approximated by thresholding a continuous output,
+which -- as already noted in Section~\ref{sec:oran-problem-statement} for
+OREO~\cite{qazzaz2026oreo} specifically -- breaks the gradient signal a true
+discrete decision would carry, since the threshold operation's gradient is
+zero almost everywhere. Shengren et al.'s benchmark of DRL algorithms for
+energy-systems scheduling~\cite{shengren2022benchmark} (SAC $>$ TD3 $>$
+DDPG in training stability, evaluated on a purely continuous control
+problem) is useful evidence for algorithm selection \emph{within} the
+continuous family, but by construction says nothing about the
+discrete-continuous coupling problem, since its own benchmark task has no
+discrete component.
+
+\textbf{Parameterized (hybrid) action-space methods.} P-DQN, introduced by
+Xiong et al.~\cite{xiong2018pdqn}, is the first architecture designed
+specifically for actions that are simultaneously discrete (which action to
+take) and continuous (a parameter of that action): a shared network
+produces continuous parameters for every discrete action in parallel, and a
+Q-network scores each (discrete action, continuous parameter) pair. This
+directly targets the coupling problem left unaddressed by the two clusters
+above. However, P-DQN's own single-pass design has a documented flaw: the
+Q-network's input includes \emph{every} discrete action's continuous
+parameters simultaneously, so the gradient used to train the parameter
+network for action $k$ is contaminated by the (irrelevant) parameters of
+every other action $k' \neq k$ -- a false cross-talk gradient rather than a
+genuine learning signal. Bester, James, and Konidaris's MP-DQN
+refinement~\cite{bester2019mpdqn} fixes exactly this flaw with multi-pass
+processing: each discrete action's Q-value is computed from a masked input
+in which only that action's own continuous parameters are non-zero,
+eliminating the cross-talk gradient by construction. This progression
+(P-DQN $\to$ MP-DQN) is the direct methodological ancestor of this thesis's
+own multi-pass masking mechanism (Chapter~\ref{chap:oran-system-model}).
+
+Two applied parameterized-action papers confirm this family's relevance to
+wireless resource control specifically, while also exposing its remaining
+limitation. Sharma and Yoon~\cite{sharma2023massivemimo} apply a
+parameterized DQN to power allocation in massive MIMO, and Kabir, Tham, and
+Chang~\cite{kabir2023mobility} apply parameterized RL to mobility-aware IoT
+resource allocation; a broader, unrelated IEEE study of hybrid-action RL
+for load balancing and energy efficiency~\cite{ieee2024selfoptimized} and
+Yan et al.'s constrained hybrid-action-space
+formulation~\cite{yan2025fluctuates} further confirm that parameterized RL
+is an active, validated methodology beyond this thesis's specific setting.
+None of these four works, however, uses a \emph{branching} decomposition of
+the discrete side of the action space: each treats the discrete action set
+as a single flat choice (e.g., ``which sub-channel,'' ``which mobility
+mode''), not as a vector of $R$ independent per-entity decisions the way RU
+activation naturally is (one binary decision per RU). This is precisely
+where P-DQN and MP-DQN's remaining scalability limitation becomes material
+for O-RAN: with $R$ RUs, $S$ split options, and a flat parameterized
+representation, the discrete action set already grows combinatorially
+(e.g., $S^R$ joint split choices before RU activation is even considered),
+reintroducing at the architectural level the same combinatorial blow-up
+that motivated moving from tabular Q-learning to function approximation in
+the first place.
+
+Branching DQN (BDQ), proposed by Tavakoli, Pardo, and
+Kormushev~\cite{tavakoli2018branching}, addresses exactly this combinatorial
+growth, but for purely discrete action spaces: by giving each of $R$
+independent decisions its own ``branch'' (a dueling-style Q-head sharing a
+common state encoder), BDQ reduces the discrete output size from
+$\prod_r |\mathcal{A}_r|$ to $\sum_r |\mathcal{A}_r|$ -- linear rather than
+exponential in $R$. This is the second direct methodological ancestor of
+this thesis's design. Critically, however, BDQ's own formulation has no
+continuous-parameter mechanism at all: it is a discrete-only architecture,
+and its branches' independence (each branch's Q-value depends only on the
+shared state encoding, not on any other branch's chosen action) is a
+design choice made for a purely discrete setting, where it is a reasonable
+one. Chapter~\ref{chap:oran-results} returns to this specific independence
+assumption when discussing what the empirical comparison in this thesis
+reveals about its consequences in an O-RAN environment where cross-RU
+interference genuinely couples the branches' outcomes.
+
+\section{Deep Reinforcement Learning for O-RAN Energy Optimization}
+\label{sec:lit-oran-energy}
+
+Having established the three architectural families in isolation, this
+section evaluates how each has actually been applied to O-RAN (or
+sufficiently O-RAN-adjacent) energy optimization specifically, and where
+each application still leaves the discrete-continuous, multi-branch,
+multi-timescale coupling problem unresolved.
+
+OREO~\cite{qazzaz2026oreo} remains the most directly comparable prior
+system: it targets the same problem (O-RAN energy optimization via DRL) at
+the same architectural ambition (a learned policy, not a heuristic), but --
+as detailed in Sections~\ref{sec:oran-problem-statement} and
+\ref{sec:lit-drl-hybrid} -- resolves the hybrid-action problem only by
+approximation (continuous relaxation plus thresholding), uses a flat
+(non-branching) action representation, and operates its PPO policy at a
+single timescale (the Non-RT RIC's), leaving Near-RT-RIC-scale decisions and
+any coupling between the two timescales outside its scope. Amiri, Wang,
+Shojafar, and Tafazolli~\cite{amiri2022vnf} apply DRL to dynamic VNF
+(functional-split-related) splitting decisions in O-RAN specifically, which
+is methodologically close to this thesis's own split-selection branch, but
+their formulation treats split selection as the sole learned decision and
+does not jointly optimize it alongside RU activation or continuous power/PRB
+control, so the cross-decision coupling this thesis targets is outside
+their scope by construction, not merely unaddressed. Bordin et
+al.~\cite{bordin2025design} evaluate both PPO and DQN for RF-front-end
+energy saving in Open RAN using the \texttt{ns-O-RAN} simulator, providing
+useful evidence that both algorithm families are viable in a realistic
+O-RAN simulation environment, but their formulation, like OREO's, does not
+combine branching decomposition with parameterized continuous control; it
+compares algorithm families on a task that itself remains discrete
+(RF-front-end on/off), so it does not test the hybrid-action question this
+thesis addresses. Rezazadeh, Chergui, Christofi, and Verikoukis's
+actor-critic approach to zero-touch resource and energy control in network
+slicing~\cite{rezazadeh2022actorcritic} confirms actor-critic methods are
+viable for joint resource-energy control in a RAN-adjacent setting, but
+targets slice-level resource control rather than O-RAN's specific
+RU/DU/CU-disaggregated action space, and does not decompose its action
+space by branch at all.
+
+The closest related work to this thesis's own proposed architecture is Lu,
+Yan, and Zeng's EExApp~\cite{luyanzeng2026eexapp}, which addresses RU
+energy optimization in 5G O-RAN using a GNN-based RL formulation with two
+separate actor-critic pairs -- one for RU sleep decisions, one for DU
+network slicing -- coordinated as two interacting agents rather than one.
+EExApp is evidence that decomposing an O-RAN energy-control problem by
+decision type (sleep vs.\ slicing) is a productive design choice, which
+this thesis's own branch decomposition shares in spirit. The architectural
+difference is nonetheless material: EExApp's two decision types are each handled by an independent actor-critic
+pair with its own critic, whereas this thesis's BMPP-DQN handles both
+decision types through a single \emph{critic} (a non-twin
+\texttt{BranchingCritic}, evaluated once per branch via multi-pass masking)
+rather than two separately-trained critics. BMPP-DQN does still use two
+separate encoders internally -- an upper encoder feeding the discrete
+branching critic and a lower encoder feeding the continuous parameter
+network, reflecting the two-timescale design RQ3 investigates -- so the
+distinction from EExApp is specifically in the \emph{value function}: one
+shared critic scoring both decision types' branches, rather than two
+independently-trained critics each scoring one decision type. This matters
+for the coordination question this thesis targets: two independently
+trained critics must coordinate through whatever channel connects their
+respective agents (e.g., one agent's action entering the other's observed
+state), whereas a single shared critic scores every branch's action against
+the same learned value function directly. Whether a shared-critic design in
+fact resolves EExApp's own two-agent coordination problem better than two
+coordinated critics do is an empirical question this thesis's own results,
+not this literature review, can speak to; the two designs represent
+genuinely different resolutions of the same underlying decomposition idea,
+not a strict improvement of one over the other on paper alone.
+
+A further comparison is instructive for what it \emph{cannot} establish.
+Chuang et al.'s hybrid A3C and Dueling DQN architecture~\cite{chuang2025hybrid}
+combines two DRL paradigms in a 5G C-RAN setting, superficially resembling
+this thesis's own combination of two DRL paradigms (branching, multi-pass
+parameterized processing). On inspection, however, Chuang et al.\ address
+industrial IoT task scheduling, not RU/DU/CU energy control, and their
+hybrid combines two purely discrete-action methods (A3C's policy-gradient
+updates and Dueling DQN's value estimation), not a discrete-continuous
+hybrid action space. The paper is therefore evidence only that combining
+two DRL paradigms within one architecture is a viable general strategy, a
+premise this thesis also relies on; it does not bear on the specific
+discrete-continuous, branch-structured coupling problem that motivates
+BMPP-DQN, and is engaged here only to disclose that it was considered and
+found not directly applicable, rather than silently omitted.
+
+\section{Multi-Timescale Control in O-RAN}
+\label{sec:lit-multitimescale}
+
+The O-RAN Alliance's own two-tier RIC specification~\cite{oran2021mvp}
+establishes that O-RAN's control problem is natively multi-timescale by
+design, not merely as an implementation detail: the Non-RT and Near-RT RICs
+are specified with different control-loop periods precisely because
+different categories of decision (policy/configuration versus
+resource/scheduling) have different natural update rates. Two further works
+engage this structure without resolving it in the way this thesis's RQ3
+requires. Liang, Al-Tahmeesschi, Chetty, and Ahmadi's federated-TD3
+approach~\cite{liang2026federated} coordinates a rApp aggregator with
+per-cell xApp agents -- a genuine multi-tier architecture -- but its
+tiering separates \emph{agents by network entity} (a central aggregator
+versus distributed per-cell learners) rather than \emph{decisions by
+timescale} within a single agent; its motivating rationale (avoiding the
+scalability cost of a single centralized agent as the number of cells
+grows) is itself cited in Section~\ref{sec:oran-scope}'s justification for
+this thesis's own single-agent scope, but the paper does not itself study
+how separating decision timescales within one agent affects convergence.
+Sohaib et al.'s transfer-learning approach for cloud-native
+O-RAN~\cite{sohaib2024transfer} demonstrates that a policy trained under one
+traffic condition (e.g., eMBB) can be adapted to another (e.g., URLLC) with
+reduced retraining cost, which is a form of temporal adaptation, but again
+addresses adaptation \emph{across} training episodes, not the
+within-episode coupling between a slow branch's decision and a fast
+branch's subsequent, dependent decisions that this thesis's two-timescale
+design (RU activation and split selection held fixed for several
+environment steps while power and PRB allocation update every step) is
+built to capture. No work reviewed in this chapter evaluates, within a
+single learned agent, how explicitly separating slow structural decisions
+from fast resource decisions affects convergence relative to treating both
+at a single update frequency -- the specific comparison this thesis's RQ3
+poses.
+
+\section{Synthesis: Research Gaps Addressed by This Thesis}
+\label{sec:lit-synthesis}
+
+Table~\ref{tab:lit-gap-synthesis} summarizes how the clusters reviewed above
+map onto the three gaps introduced in Section~\ref{sec:oran-problem-statement}.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Mapping from reviewed literature clusters to the three research
+    gaps this thesis addresses. A checkmark indicates the cluster resolves
+    that dimension of the gap; a dash indicates it does not.}
+  \label{tab:lit-gap-synthesis}
+  \begin{tabular}{lccc}
+    \toprule
+    Cluster & Discrete-continuous & Branching & Multi-timescale \\
+            & coupling (Gap 1) & decomposition (Gap 2) & coordination (Gap 3) \\
+    \midrule
+    DQN family~\cite{iqbal2021ddqn,fathy2021ann} & -- (two-stage, not joint) & -- & -- \\
+    DDPG family~\cite{shengren2022benchmark} & -- (thresholding only) & -- & -- \\
+    P-DQN / MP-DQN~\cite{xiong2018pdqn,bester2019mpdqn} & \checkmark & -- (flat) & -- \\
+    Branching DQN~\cite{tavakoli2018branching} & -- (discrete only) & \checkmark & -- \\
+    OREO~\cite{qazzaz2026oreo} & -- (thresholding) & -- (flat) & -- (single tier) \\
+    EExApp~\cite{luyanzeng2026eexapp} & \checkmark (per agent) & \checkmark (2 agents) & -- \\
+    Federated TD3~\cite{liang2026federated} & -- & -- & -- (agent-tiered, not decision-tiered) \\
+    \textbf{BMPP-DQN (this thesis)} & \checkmark & \checkmark & \checkmark \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Three conclusions follow. First, the discrete-continuous coupling problem
+(Gap 1) is solved in principle by the P-DQN/MP-DQN line, but no O-RAN energy
+work reviewed here adopts it; O-RAN energy papers instead resolve the
+hybrid action space either by thresholding a continuous policy (OREO) or by
+decoupling discrete and continuous decisions into separately-trained
+components (Iqbal et al., Fathy et al., in the adjacent C-RAN literature).
+Second, the branching decomposition that would let a parameterized method
+scale to $R$ independent RUs (Gap 2) exists for discrete-only action spaces
+(BDQ) but has not been combined with multi-pass parameterized processing in
+any work reviewed here -- EExApp's two-agent decomposition is the closest
+attempt, but decomposes by decision \emph{type} across two independently
+trained agents, not by \emph{entity} within one coupled network the way BDQ
+decomposes by RU. Third, no work reviewed here evaluates, within a single
+agent, the effect of explicitly separating decision timescales on
+convergence (Gap 3); the closest analogues either tier by network entity
+(federated TD3) or by training phase (transfer learning), not by decision
+frequency within one training loop.
+
+BMPP-DQN, introduced formally in Chapter~\ref{chap:oran-system-model},
+is positioned directly at the intersection these three gaps define: it
+extends BDQ's per-RU branching with MP-DQN's multi-pass masking so that each
+branch's discrete Q-value is computed from a shared encoding without
+cross-talk from other branches' continuous parameters, and it separates the
+resulting branches into an upper-level (RU activation, split selection) and
+lower-level (power, PRB allocation) network reflecting the Non-RT/Near-RT
+RIC timescale split the O-RAN Alliance's own architecture
+specifies~\cite{oran2021mvp}. Chapter~\ref{chap:oran-results} evaluates
+this design against DQN, DDPG, and MP-DQN baselines and reports what the
+resulting comparison actually shows about each of these three design
+choices -- including, as Chapter~\ref{chap:oran-conclusion} discusses in
+full, a finding about branch independence that this literature review's own
+treatment of BDQ's discrete-only design in
+Section~\ref{sec:lit-drl-hybrid} anticipates as a live architectural
+question rather than a settled one.
+
+% ---------------------------------------------------------------------------
+% Local reference list for this chapter (IEEE numbered style). Entries
+% correspond to manuscript/ORAN_BMPP_DQN_Concept_Note_v1.md Section 9 and
+% AGENTS.md's Foundational References table. Keys already used in
+% chapter1_oran_introduction.tex are repeated verbatim here so this chapter
+% remains standalone-compilable; merge into a single thesis-wide
+% references.bib once main.tex exists, and do not let the two chapters'
+% copies of a shared key drift apart until then.
+% ---------------------------------------------------------------------------
+\begin{thebibliography}{21}
+
+\bibitem{qazzaz2026oreo}
+M.~M.~H. Qazzaz, A. Salama, M. Hafeez, and S.~A.~R. Zaidi,
+``OREO: Open RAN Energy Optimization via Deep Reinforcement Learning for 6G
+Networks,'' \emph{IEEE Open Journal of the Communications Society}, vol.~7,
+pp.~4165--4182, 2026.
+
+\bibitem{oran2021mvp}
+O-RAN Alliance, ``O-RAN Minimum Viable Plan and Commercialization
+Strategy,'' Jun. 2021.
+
+\bibitem{xiong2018pdqn}
+J. Xiong, Q. Wang, Z. Yang, P. Sun, L. Han, Y. Zheng, H. Fu, T. Zhang, J. Liu,
+and H. Liu, ``Parametrized Deep Q-Networks Learning: Reinforcement Learning
+with Discrete-Continuous Hybrid Action Space,'' arXiv preprint
+arXiv:1810.06394, 2018.
+
+\bibitem{bester2019mpdqn}
+C.~J. Bester, S.~D. James, and G.~D. Konidaris, ``Multi-Pass Q-Networks for
+Deep Reinforcement Learning with Parameterised Action Spaces,'' arXiv
+preprint arXiv:1905.04388, 2019.
+
+\bibitem{tavakoli2018branching}
+A. Tavakoli, F. Pardo, and P. Kormushev, ``Action Branching Architectures for
+Deep Reinforcement Learning,'' in \emph{Proc. AAAI Conference on Artificial
+Intelligence}, 2018.
+
+\bibitem{bordin2025design}
+M. Bordin, A. Lacava, M. Polese, S. Satish, M. AnanthaSwamy Nittoor,
+R. Sivaraj, F. Cuomo, and T. Melodia, ``Design and Evaluation of Deep
+Reinforcement Learning for Energy Saving in Open RAN,'' in \emph{Proc. IEEE
+22nd Consumer Communications \& Networking Conference (CCNC)}, Las Vegas,
+NV, USA, Jan. 2025, pp.~1--6.
+
+\bibitem{sthankiya2024survey}
+A. Sthankiya et al., ``A Survey on AI-Driven Energy Optimization in
+Next-Generation RAN,'' arXiv preprint arXiv:2411.02164, 2024.
+
+\bibitem{liang2026federated}
+X. Liang, A. Al-Tahmeesschi, S.~B. Chetty, and H. Ahmadi, ``Green O-RAN
+Operation: a Modern ML-Driven Network Energy Consumption Optimization,'' in
+\emph{Proc. IEEE GLOBECOM}, 2025, pp.~4475--4480.
+
+\bibitem{sohaib2024transfer}
+M. Sohaib et al., ``DRL Transfer Learning for Cloud-Native O-RAN,''
+arXiv preprint arXiv:2407.11563, 2024.
+
+\bibitem{iqbal2021ddqn}
+A. Iqbal, M.-L. Tham, and Y.~C. Chang, ``Double Deep Q-Network-Based
+Energy-Efficient Resource Allocation in Cloud Radio Access Network,''
+\emph{IEEE Access}, vol.~9, pp.~20440--[end page not independently
+confirmed in this repository], 2021, doi: 10.1109/ACCESS.2021.3054909.
+
+\bibitem{fathy2021ann}
+M. Fathy, M.~S. Abood, and M.~M. Hamdi, ``Optimization of Energy-Efficient
+Cloud Radio Access Networks for 5G using Neural Networks,'' in \emph{Proc.
+Int. Conf. Intelligent Technology, System and Service for Internet of
+Everything (ITSS-IoE)}, 2021.
+
+\bibitem{alzubaedi2019cran}
+W.~H.~A. Al-Zubaedi, ``Planning a C-RAN Deployment for the Next Generation
+Cellular Networks,'' Ph.D. dissertation, Dept.\ of Electronic and Computer
+Engineering, Brunel University London, London, U.K., 2019.
+
+\bibitem{shengren2022benchmark}
+H. Shengren, E.~M. Salazar Duque, P.~P. Vergara, and P. Palensky,
+``Performance Comparison of Deep RL Algorithms for Energy Systems Optimal
+Scheduling,'' in \emph{Proc. IEEE PES Innovative Smart Grid Technologies
+Conference Europe (ISGT-Europe)}, 2022, pp.~1--6.
+
+\bibitem{ieee2024selfoptimized}
+``Self-Optimized Agent for Load Balancing and Energy Efficiency: A
+Reinforcement Learning Framework With Hybrid Action Space,'' \emph{IEEE
+Trans.\ on Network and Service Management}, vol.~21, no.~4, pp.~4902--4919,
+Jul. 2024.
+
+\bibitem{sharma2023massivemimo}
+S. Sharma and W. Yoon, ``Energy Efficient Power Allocation in Massive MIMO
+Based on Parameterized Deep DQN,'' \emph{Electronics}, vol.~12, no.~21,
+p.~4517, 2023.
+
+\bibitem{kabir2023mobility}
+H. Kabir, M.-L. Tham, and Y.~C. Chang, ``Mobility-Aware Resource Allocation
+in IoT Network for Post-Disaster Communications with Parameterized
+Reinforcement Learning,'' \emph{Sensors}, vol.~23, no.~14, p.~6448,
+Jul. 2023.
+
+\bibitem{luyanzeng2026eexapp}
+J. Lu, P. Yan, and H. Zeng, ``EExApp: GNN-Based Reinforcement Learning for
+Radio Unit Energy Optimization in 5G O-RAN,'' in \emph{Proc.\ IEEE
+INFOCOM}, 2026, pp.~1--10.
+
+\bibitem{yan2025fluctuates}
+C. Yan et al., ``Hybrid Reinforcement Learning in Parameterized Action
+Space via Fluctuates Constraint,'' \emph{Engineering Applications of
+Artificial Intelligence}, vol.~162, p.~112499, 2025.
+
+\bibitem{rezazadeh2022actorcritic}
+F. Rezazadeh, H. Chergui, L. Christofi, and C. Verikoukis, ``Actor-Critic-
+Based Learning for Zero-Touch Joint Resource and Energy Control in Network
+Slicing,'' arXiv preprint, 2022.
+
+\bibitem{amiri2022vnf}
+E. Amiri, N. Wang, M. Shojafar, and R. Tafazolli, ``Energy-Aware Dynamic
+VNF Splitting in O-RAN Using Deep Reinforcement Learning,'' in \emph{Proc.
+IEEE Int.\ Conf.\ Local Computer Networks (LCN)}, 2022, pp.~422--429.
+
+\bibitem{barker2025mec}
+R. Barker, T. Seyfi, and F. Afghah, ``Advancements in Mobile Edge Computing
+and Open RAN: Leveraging Artificial Intelligence and Machine Learning for
+Wireless Systems,'' \emph{arXivLens}, 2025.
+
+\bibitem{lassoued2026review}
+N. Lassoued and N. Boujnah, ``A Comprehensive Review of Energy Efficiency in
+5G Networks: Past Strategies, Present Advances, and Future Research
+Directions,'' \emph{Computers}, vol.~15, no.~1, p.~50, 2026.
+
+\bibitem{chuang2025hybrid}
+Chuang et al., ``[Title and venue not independently verified in this
+repository -- known only via a descriptive secondary reference, per
+AGENTS.md's Foundational References table:] Hybrid A3C and Dueling DQN
+applied to industrial IoT task scheduling in a 5G Cloud-RAN setting,''
+2025. \emph{Needs primary-source verification before this entry is used
+outside this draft.}
+
+\end{thebibliography}

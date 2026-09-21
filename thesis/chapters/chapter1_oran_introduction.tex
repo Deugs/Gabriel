@@ -1,0 +1,249 @@
+% Chapter 1 -- Introduction (O-RAN / BMPP-DQN track)
+%
+% Governs: manuscript/ORAN_BMPP_DQN_Concept_Note_v1.md (Sections 2-4, 6, 7)
+% Chapter mapping: docs/oran_thesis_guide.md
+% Status: DRAFT. Intended to be \input{} from the thesis-wide main.tex once
+% that skeleton exists; a thesis-wide references.bib does not yet exist, so
+% citations below are numbered locally (IEEE style) against the short
+% reference list at the end of this file. Renumber/merge into the
+% thesis-wide bibliography once main.tex is created.
+%
+% Distinguishes this file from any future C-RAN-track "Chapter 1" via the
+% "oran" filename marker, per the repository's own oran_* naming convention
+% (AGENTS.md).
+
+\chapter{Introduction}
+\label{chap:oran-introduction}
+
+\section{Background}
+\label{sec:oran-background}
+
+The transition from monolithic base station architectures toward Open Radio
+Access Networks (O-RAN) is one of the defining architectural shifts of 5G
+and its evolution toward 6G. O-RAN disaggregates the traditional gNB into
+three functional entities -- the Radio Unit (RU), Distributed Unit (DU), and
+Central Unit (CU) -- connected by open, standardized fronthaul and midhaul
+interfaces rather than proprietary vendor links~\cite{oran2021mvp}. This
+disaggregation, together with the introduction of RAN Intelligent
+Controllers (RICs), is intended to make the RAN programmable: a Non-Real-Time
+RIC operates on a $1$--$10$\,s control loop for slower policy and
+configuration decisions, while a Near-Real-Time RIC operates on a
+$10$--$100$\,ms loop for faster radio-resource decisions~\cite{oran2021mvp}.
+
+This programmability comes at the cost of substantially increased
+operational complexity. The RAN segment alone is estimated to account for
+$70$--$80\%$ of a mobile network's total energy consumption, making RAN
+energy efficiency a first-order operating-expenditure concern for operators
+and a first-order sustainability concern for the industry. Unlike a
+monolithic base station, an O-RAN deployment exposes energy-relevant control
+knobs at every disaggregation boundary: whether an RU is powered on or
+placed into a low-power state, which functional split is used to divide
+processing between the RU and the DU/CU, how much transmit power and how
+large a share of physical resource blocks (PRBs) each RU is allocated. These
+decisions are naturally structured as a \emph{hybrid} action space: some are
+discrete (RU on/off, split selection) and some are continuous (transmit
+power, PRB share), and they occur at different natural timescales -- RU
+activation and split selection are Non-RT-RIC-appropriate, slow decisions,
+while power and PRB allocation are Near-RT-RIC-appropriate, fast decisions.
+
+Deep Reinforcement Learning (DRL) is a natural candidate for this class of
+sequential decision problem, since it can learn a control policy directly
+from interaction with a (simulated or real) environment without requiring an
+explicit, tractable model of the channel and traffic dynamics. However, the
+specific structure of the O-RAN energy-optimization problem -- a hybrid,
+multi-timescale, discrete-continuous action space -- does not fit any single
+standard DRL algorithm cleanly. Deep Q-Networks (DQN) and their variants
+handle discrete actions only; Deep Deterministic Policy Gradient (DDPG) and
+its successors handle continuous actions only. Parameterized-action methods
+such as P-DQN~\cite{xiong2018pdqn} and its refinement, Multi-Pass DQN
+(MP-DQN)~\cite{bester2019mpdqn}, were designed specifically to couple a
+discrete action choice with a continuous parameter for that action, but both
+process the full joint action space in a single, flat network, so one
+decision's learning signal can interfere with another's. Branching DQN
+(BDQ)~\cite{tavakoli2018branching} instead decomposes a discrete action
+space into $R$ independent branches, reducing the size of the network's
+output from $\prod_r |\mathcal{A}_r|$ to $\sum_r |\mathcal{A}_r|$, but is
+limited to purely discrete action spaces. No existing algorithm combines
+branching's discrete-action decomposition with a parameterized method's
+principled handling of coupled discrete-continuous actions.
+
+\section{Problem Statement}
+\label{sec:oran-problem-statement}
+
+The most recent published O-RAN energy-optimization DRL framework, OREO
+(Open RAN Energy Optimization)~\cite{qazzaz2026oreo}, illustrates the
+consequence of this gap. OREO uses Proximal Policy Optimization (PPO) with a
+purely continuous action representation, recovering discrete RU on/off
+decisions by thresholding a continuous output -- an approximation that
+destroys the gradient signal a genuinely discrete decision would otherwise
+provide, rather than a principled treatment of the hybrid action space. Its
+action representation is flat, giving no mechanism to prevent one decision
+type from interfering with another's learning, its reward weighting is
+static rather than adaptive to changing network conditions, and its control
+loop operates at a single timescale (Non-RT RIC only), leaving the faster
+Near-RT RIC decisions -- and any coupling between the two timescales --
+outside its scope.
+
+This motivates the central problem addressed by this thesis: \emph{how can a
+DRL framework combine action-space branching and multi-pass parameterized
+action processing to efficiently optimize energy consumption in O-RAN, while
+correctly handling the hybrid discrete-continuous action space that arises
+from RU activation, functional split selection, transmit power control, and
+PRB allocation under dynamic traffic conditions?} This thesis proposes and
+evaluates \emph{BMPP-DQN} (Branching Multi-Pass Parameterized DQN), a DRL
+architecture designed specifically to close this gap.
+
+\section{Research Questions}
+\label{sec:oran-research-questions}
+
+This thesis is organized around three research questions:
+
+\begin{description}
+  \item[RQ1] How can branching action decomposition and multi-pass
+    parameterized processing be integrated into a single DRL architecture
+    to efficiently handle O-RAN's hybrid discrete-continuous action space?
+  \item[RQ2] What is the energy-saving performance of BMPP-DQN relative to
+    standard DQN, DDPG, and MP-DQN baselines in a simulated O-RAN
+    environment?
+  \item[RQ3] How does explicitly separating slow (RU activation, split
+    selection) and fast (power, PRB allocation) decisions across two
+    timescales affect learning convergence and the resulting energy
+    efficiency, relative to treating all decisions at a single timescale?
+\end{description}
+
+\section{Research Objectives}
+\label{sec:oran-objectives}
+
+The corresponding research objectives are to:
+
+\begin{enumerate}
+  \item Design and implement the BMPP-DQN algorithm, integrating a
+    branching discrete-action architecture with multi-pass parameterized
+    continuous-action processing within a single coupled network.
+  \item Formulate O-RAN energy optimization as a parameterized Markov
+    Decision Process (MDP) with four action branches -- RU activation,
+    functional split selection, transmit power, and PRB allocation fraction
+    -- spanning two decision timescales.
+  \item Implement a focused, single-gNB O-RAN simulation environment with
+    a tractable, three-option abstraction of 3GPP functional splits.
+  \item Quantify BMPP-DQN's energy-saving performance against DQN, DDPG,
+    and MP-DQN baselines under matched traffic and evaluation conditions,
+    against a target of $\geq 15\%$ energy savings relative to these
+    baselines.
+  \item Analyze how the two-timescale, branch-separated design affects
+    learning convergence and overall energy efficiency, relative to a
+    single-timescale treatment of the same action space.
+\end{enumerate}
+
+\section{Significance of the Research}
+\label{sec:oran-significance}
+
+This work contributes to the DRL and O-RAN energy-optimization literatures
+in three ways. First, it integrates branching decomposition and multi-pass
+parameterized processing into a single coupled architecture -- a combination
+that, to the best of the author's knowledge, has not previously been
+proposed -- extending the DRL literature on hybrid discrete-continuous
+action spaces. Second, it targets a specific, practically important
+application: O-RAN's disaggregated RU/DU/CU architecture directly exposes
+the discrete-continuous, multi-timescale control problem this design is
+built for, and RAN energy consumption is a direct, ongoing operating-expense
+and sustainability concern for network operators. Third, by comparing
+BMPP-DQN against three representative baselines (a purely discrete method,
+a purely continuous method, and an existing parameterized method) under a
+common simulation environment, this thesis provides an incremental,
+evidence-based advancement over existing parameterized DRL methods, rather
+than an untested architectural proposal.
+
+\section{Scope and Limitations}
+\label{sec:oran-scope}
+
+The scope of this thesis is deliberately bounded to keep the research
+question tractable within an MPhil timeline. The study considers a single
+gNB, modeled with multiple RUs, one DU, and one CU, and a tractable
+three-level abstraction of 3GPP functional split options (approximating
+Options 2, 6, and 8 of 3GPP TR~38.801) rather than the full space of
+standardized splits. Only downlink energy optimization is considered.
+BMPP-DQN is compared against three baselines -- DQN, DDPG, and MP-DQN --
+rather than the full space of prior hybrid-action methods; OREO is discussed
+qualitatively (Section~\ref{sec:oran-problem-statement}) but not reproduced,
+given the complexity of its PPO-based training pipeline. All evaluation is
+simulation-based, using a simplified wireless channel model and a
+literature-informed but not independently validated power-consumption model
+(discussed further, with its supporting evidence, in
+Chapter~\ref{chap:oran-system-model}). No real-world O-RAN testbed
+validation, multi-gNB or inter-cell coordination, or hardware-specific power
+measurement is attempted. These limitations are revisited in
+Chapter~\ref{chap:oran-conclusion} in light of the simulation results
+presented in Chapter~\ref{chap:oran-results}.
+
+\section{Thesis Organization}
+\label{sec:oran-organization}
+
+The remainder of this thesis is organized as follows.
+Chapter~\ref{chap:oran-literature} reviews the DRL and O-RAN
+energy-optimization literature underlying this work, expanding on the gaps
+identified in Section~\ref{sec:oran-problem-statement}.
+Chapter~\ref{chap:oran-system-model} formulates the O-RAN energy-optimization
+problem as a parameterized MDP and presents the BMPP-DQN architecture.
+Chapter~\ref{chap:oran-results} presents the simulation setup, training
+procedure, and results of the comparison against the DQN, DDPG, and MP-DQN
+baselines. Chapter~\ref{chap:oran-conclusion} summarizes the thesis's
+contributions, discusses the findings relative to the research questions
+posed above, and outlines directions for future work.
+
+% ---------------------------------------------------------------------------
+% Local reference list for this chapter (IEEE numbered style). Entries below
+% correspond to manuscript/ORAN_BMPP_DQN_Concept_Note_v1.md Section 9 and
+% AGENTS.md's Foundational References table. Merge into a thesis-wide
+% references.bib once main.tex exists; do not renumber these keys without
+% also updating the \cite{} calls above.
+% ---------------------------------------------------------------------------
+\begin{thebibliography}{9}
+
+\bibitem{qazzaz2026oreo}
+M.~M.~H. Qazzaz, A. Salama, M. Hafeez, and S.~A.~R. Zaidi,
+``OREO: Open RAN Energy Optimization via Deep Reinforcement Learning for 6G
+Networks,'' \emph{IEEE Open Journal of the Communications Society}, vol.~7,
+pp.~4165--4182, 2026.
+
+\bibitem{oran2021mvp}
+O-RAN Alliance, ``O-RAN Minimum Viable Plan and Commercialization
+Strategy,'' Jun. 2021.
+
+\bibitem{xiong2018pdqn}
+J. Xiong, Q. Wang, Z. Yang, P. Sun, L. Han, Y. Zheng, H. Fu, T. Zhang, J. Liu,
+and H. Liu, ``Parametrized Deep Q-Networks Learning: Reinforcement Learning
+with Discrete-Continuous Hybrid Action Space,'' arXiv preprint
+arXiv:1810.06394, 2018.
+
+\bibitem{bester2019mpdqn}
+C.~J. Bester, S.~D. James, and G.~D. Konidaris, ``Multi-Pass Q-Networks for
+Deep Reinforcement Learning with Parameterised Action Spaces,'' arXiv
+preprint arXiv:1905.04388, 2019.
+
+\bibitem{tavakoli2018branching}
+A. Tavakoli, F. Pardo, and P. Kormushev, ``Action Branching Architectures for
+Deep Reinforcement Learning,'' in \emph{Proc. AAAI Conference on Artificial
+Intelligence}, 2018.
+
+\bibitem{bordin2025design}
+M. Bordin, A. Lacava, M. Polese, S. Satish, M. AnanthaSwamy Nittoor,
+R. Sivaraj, F. Cuomo, and T. Melodia, ``Design and Evaluation of Deep
+Reinforcement Learning for Energy Saving in Open RAN,'' in \emph{Proc. IEEE
+22nd Consumer Communications \& Networking Conference (CCNC)}, Las Vegas,
+NV, USA, Jan. 2025, pp.~1--6.
+
+\bibitem{sthankiya2024survey}
+A. Sthankiya et al., ``A Survey on AI-Driven Energy Optimization in
+Next-Generation RAN,'' arXiv preprint arXiv:2411.02164, 2024.
+
+\bibitem{liang2026federated}
+X. Liang, A. Al-Tahmeesschi, S.~B. Chetty, and H. Ahmadi, ``Green O-RAN
+Operation: a Modern ML-Driven Network Energy Consumption Optimization,'' in
+\emph{Proc. IEEE GLOBECOM}, 2025, pp.~4475--4480.
+
+\bibitem{sohaib2024transfer}
+M. Sohaib et al., ``DRL Transfer Learning for Cloud-Native O-RAN,''
+arXiv preprint arXiv:2407.11563, 2024.
+
+\end{thebibliography}

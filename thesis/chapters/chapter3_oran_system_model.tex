@@ -1,0 +1,810 @@
+% Chapter 3 -- System Model, Problem Formulation, and Algorithm Design
+% (O-RAN / BMPP-DQN track)
+%
+% Governs: manuscript/ORAN_BMPP_DQN_Concept_Note_v1.md Sections 5.1, 5.2,
+% 10 (Implementation Addendum, all subsections)
+% Chapter mapping: docs/oran_thesis_guide.md ("3. System Model..." and
+% "3.x Algorithm Design" rows)
+% Status: DRAFT. Intended to be \input{} from the thesis-wide main.tex,
+% after chapter2_oran_literature_review.tex (\label{chap:oran-literature}).
+% Equations and architecture below are transcribed directly from
+% oran_env/oran_env.py, oran_env/channel_model.py, oran_env/power_model.py,
+% oran_env/traffic_model.py, oran_agents/bmpp_dqn.py, and
+% config/oran_default.yaml as of the commit this draft was written against
+% -- per this repository's Quality Gate 6 (Code-Text Consistency, AGENTS.md),
+% every symbol and constant below must be re-checked against those files if
+% they change. Figures are ASCII-art placeholders (per this draft's own
+% brief) pending vector (TikZ/PDF) versions for final submission.
+%
+% Needs-validation parameter values are flagged inline exactly as
+% oran_env/*.py's own docstrings and Concept Note Section 10 flag them --
+% this chapter does not silently upgrade a placeholder to a fact.
+%
+% Package requirements for main.tex's preamble (not yet created): this
+% file's Algorithm 1 uses \algorithmic{}/algpseudocode syntax (\State,
+% \Function...\EndFunction, \Call, \Statex) and therefore needs
+% \usepackage{algorithm} and \usepackage{algpseudocode} (NOT the older
+% \usepackage{algorithmic}, whose ALL-CAPS command names are incompatible
+% with the mixed-case commands used below).
+
+\chapter{System Model, Problem Formulation, and Algorithm Design}
+\label{chap:oran-system-model}
+
+This chapter formulates the O-RAN energy-optimization problem addressed by
+this thesis as a parameterized Markov Decision Process (MDP), specifies the
+channel, traffic, and power-consumption models underlying that formulation,
+and presents the BMPP-DQN architecture designed to solve it. Sections
+\ref{sec:oran-topology}--\ref{sec:oran-power} describe the simulation
+environment (\texttt{oran\_env/}); Section~\ref{sec:oran-mdp} gives the
+formal MDP; Section~\ref{sec:oran-optimization} restates the problem as a
+constrained optimization and motivates a learning-based solution; Sections
+\ref{sec:oran-bmpp-architecture}--\ref{sec:oran-bmpp-training} present the
+BMPP-DQN architecture and training procedure.
+
+\section{Network Architecture and Topology}
+\label{sec:oran-topology}
+
+Consistent with the focused, single-gNB scope established in
+Section~\ref{sec:oran-scope}, the system under study consists of $R$ Radio
+Units, one Distributed Unit, and one Central Unit, serving $U$ User
+Equipments (UEs) in the downlink. Figure~\ref{fig:oran-architecture}
+illustrates the disaggregated architecture and the two RIC control loops
+that motivate this thesis's two-timescale agent design
+(Section~\ref{sec:oran-bmpp-architecture}).
+
+\begin{figure}[htbp]
+\centering
+\begin{verbatim}
+                     +-----------------------------+
+                     |        Non-RT RIC           |
+                     |  (policy loop: 1-10 s)       |
+                     |  - RU activation             |
+                     |  - Functional split select.  |
+                     +---------------+--------------+
+                                     |  slow control
+                                     v
+        +----------------------------------------------------------+
+        |                      Central Unit (CU)                    |
+        |         RRC / PDCP  (upper layers, split-dependent)       |
+        +----------------------------+-------------------------------+
+                                     | midhaul (F1)
+                                     v
+        +----------------------------------------------------------+
+        |                    Distributed Unit (DU)                  |
+        |     RLC / MAC / (part of) PHY, per functional split       |
+        +----------------+-----------+------------+------------------+
+                          | fronthaul (O-RAN 7.2x-style)
+             +------------+------+   +------+------+
+             v                   v          v
+        +---------+         +---------+  +---------+     ...  (R RUs)
+        |  RU 1   |         |  RU 2   |  |  RU R   |
+        | RF + PA |         | RF + PA |  | RF + PA |
+        +----+----+         +----+----+  +----+----+
+             |                    |            |
+             v                    v            v
+        ( UE 1 .. UE U served over the wireless downlink )
+                                     ^
+                                     |  fast control (10-100 ms)
+                     +---------------+--------------+
+                     |        Near-RT RIC           |
+                     |  - Transmit power (per RU)    |
+                     |  - PRB allocation share       |
+                     +-----------------------------+
+\end{verbatim}
+\caption{Disaggregated O-RAN architecture used in this thesis: $R$ Radio
+  Units (RUs) connected via fronthaul to a single Distributed Unit (DU),
+  connected via midhaul to a single Central Unit (CU). The Non-RT RIC
+  issues slow (1--10\,s) discrete decisions (RU activation, functional
+  split); the Near-RT RIC issues fast (10--100\,ms) continuous decisions
+  (transmit power, PRB share). This timescale split motivates BMPP-DQN's
+  own upper/lower decomposition (Section~\ref{sec:oran-bmpp-architecture}).}
+\label{fig:oran-architecture}
+\end{figure}
+
+The default scenario (\texttt{config/oran\_default.yaml}) sets $R=4$ RUs,
+one DU, one CU, and $U=8$ UEs distributed uniformly at random over a
+$500\,\mathrm{m} \times 500\,\mathrm{m}$ area at the start of each episode;
+RU positions are likewise drawn uniformly at random over the same area.
+This scale is a tractability-driven choice, not an independently validated
+``correct'' size -- Section~\ref{sec:oran-scope} already discloses this,
+and Concept Note Section 10.3 situates it relative to comparable published
+RAN-DRL scenario scales.
+
+Each RU can operate under one of $S=3$ representative functional splits,
+abstracted as a monotonic centralization level $c \in \{0, 1, 2\}$
+(loosely mapped onto 3GPP TR~38.801 Options 2, 6, and 8
+respectively~\cite{threegpp38801}): $c=0$ places the most processing at
+the RU and requires the least fronthaul bandwidth, while $c=2$ places the
+least processing at the RU (a PHY-RF split) and requires the most. This
+three-level abstraction is a deliberate simulation simplification, flagged
+\emph{needs validation} as a design choice rather than asserted as a
+physically exact correspondence to the named 3GPP options -- Concept Note
+Section 10.2 documents the supporting and conflicting evidence found for
+this choice in detail.
+
+The same Gymnasium-compliant environment interface described in this
+chapter is used both for training and evaluating BMPP-DQN and for the
+three baseline agents (DQN, DDPG, MP-DQN) compared in
+Chapter~\ref{chap:oran-results}, ensuring that all four methods are
+compared under identical channel, traffic, and power-model conditions.
+
+\section{Channel Model}
+\label{sec:oran-channel}
+
+Each RU-UE link's channel gain $h_{r,u}(t) \in \mathbb{C}$ combines
+log-distance path loss with independent, per-step Rayleigh small-scale
+fading (no shadowing term and no temporal correlation across steps --
+a deliberate simplification relative to the C-RAN track's own channel
+model, per Concept Note Section 5.1's ``simplified SINR with path loss and
+Rayleigh fading''). Path loss in dB is
+\begin{equation}
+  \mathrm{PL}(d_{r,u}) = \mathrm{PL}_0 + 10\,n\,\log_{10}\!\left(\frac{d_{r,u}}{1\,\mathrm{km}}\right),
+  \label{eq:oran-pathloss}
+\end{equation}
+where $d_{r,u}$ is the Euclidean distance between RU $r$ and UE $u$
+(clamped to a minimum of $10\,\mathrm{m}$ to avoid a singular near-field
+value), $n=3.5$ is the path loss exponent
+(\texttt{path\_loss\_exponent}), and
+\begin{equation}
+  \mathrm{PL}_0 = 46.3 + 33.9\,\log_{10}(f_c^{\mathrm{MHz}}) - 13.82\,\log_{10}(10)
+  \label{eq:oran-pl0}
+\end{equation}
+is a reference path loss constant at carrier frequency $f_c=3.5\,\mathrm{GHz}$
+(\texttt{carrier\_freq\_ghz}), structurally in the COST-231/Hata family with
+a fixed effective height term. The complex channel gain is then
+\begin{equation}
+  h_{r,u}(t) = 10^{-\mathrm{PL}(d_{r,u})/20}\, \cdot\, w_{r,u}(t),
+  \qquad w_{r,u}(t) \sim \mathcal{CN}(0, 1),
+  \label{eq:oran-channel}
+\end{equation}
+with $w_{r,u}(t)$ a fresh, independent circularly-symmetric complex
+Gaussian draw at every environment step $t$, realized as
+$w_{r,u}(t) = (X + jY)/\sqrt{2}$ for independent
+$X, Y \sim \mathcal{N}(0,1)$ -- i.e., Rayleigh-distributed fading amplitude
+$|w_{r,u}(t)|$, with no correlation between successive steps. The channel
+bandwidth is $B = 20\,\mathrm{MHz}$ (\texttt{bandwidth\_mhz}) and the
+thermal noise floor is $P_{\mathrm{noise}} = -102\,\mathrm{dBm}$
+(\texttt{noise\_power\_dbm}), converted to Watts as
+$P_{\mathrm{noise}}^{\mathrm{W}} = 10^{(P_{\mathrm{noise}}-30)/10}$.
+
+\section{Traffic Model}
+\label{sec:oran-traffic}
+
+Each UE's downlink demand follows a deterministic diurnal envelope with a
+stochastic Poisson arrival count superimposed, matching the concept note's
+own specification of ``time-varying Poisson arrival with a daily
+trapezoidal pattern'' (Section 5.1). The envelope $\lambda(t)$ (in packets
+per environment step, per UE) is a four-breakpoint trapezoid over the hour
+of day $\tau = t \bmod 24$:
+\begin{equation}
+  \lambda(\tau) =
+  \begin{cases}
+    \lambda_{\mathrm{floor}} & \tau < t_1 \text{ or } \tau \geq t_4 \\[2pt]
+    \lambda_{\mathrm{floor}} + (\lambda_{\mathrm{peak}} - \lambda_{\mathrm{floor}})\dfrac{\tau - t_1}{t_2 - t_1} & t_1 \leq \tau < t_2 \\[6pt]
+    \lambda_{\mathrm{peak}} & t_2 \leq \tau < t_3 \\[2pt]
+    \lambda_{\mathrm{peak}} - (\lambda_{\mathrm{peak}} - \lambda_{\mathrm{floor}})\dfrac{\tau - t_3}{t_4 - t_3} & t_3 \leq \tau < t_4
+  \end{cases}
+  \label{eq:oran-traffic-envelope}
+\end{equation}
+where $\lambda_{\mathrm{floor}} = f_{\mathrm{floor}}\,\lambda_{\mathrm{peak}}$
+for a floor ratio $f_{\mathrm{floor}}=0.2$ (\texttt{floor\_ratio}), and the
+default breakpoints are $t_1=7$, $t_2=10$, $t_3=20$, $t_4=23$ (hours).
+Figure~\ref{fig:oran-traffic-envelope} sketches this shape.
+
+\begin{figure}[htbp]
+\centering
+\begin{verbatim}
+  lambda(peak) |              _______________________
+               |             /                       \
+               |            /                         \
+               |           /                           \
+               |          /                             \
+  lambda(floor)|_________/                               \_____________
+               +----+----+----+----+----+----+----+----+----+----+---> hour
+               0    t1=7  t2=10        t3=20 t4=23              24
+                    (rise)  (plateau: 10h duration)  (fall)   (floor)
+\end{verbatim}
+\caption{Trapezoidal diurnal traffic envelope $\lambda(\tau)$
+  (Eq.~\ref{eq:oran-traffic-envelope}). The floor duration (8\,h, from
+  $t_4$ wrapping to $t_1$) and combined rise+plateau+fall duration
+  (16\,h) match ETSI TR~103~737's own Low (8\,h) and combined
+  Medium+Busy (16\,h) load-period split (Concept Note Section 10.6);
+  the four individual breakpoints and $f_{\mathrm{floor}}$ itself
+  remain unvalidated placeholders.}
+\label{fig:oran-traffic-envelope}
+\end{figure}
+
+At each step, UE $u$'s instantaneous packet arrival count is drawn
+$K_u(t) \sim \mathrm{Poisson}(\lambda(\tau))$, independently across UEs, and
+converted to a demand rate
+\begin{equation}
+  D_u(t) = K_u(t)\, \frac{L_{\mathrm{pkt}}}{\Delta t}\ \text{bps},
+  \label{eq:oran-demand}
+\end{equation}
+where $L_{\mathrm{pkt}} = 4\times10^{6}\,\mathrm{bits}$
+(\texttt{packet\_size\_bits}) and $\Delta t = 0.1\,\mathrm{s}$
+(\texttt{step\_duration\_s}) is the environment's step duration, chosen to
+match the lower bound of the Near-RT RIC's $10$--$100\,\mathrm{ms}$ decision
+rate. $\lambda_{\mathrm{peak}}=0.5$ and $L_{\mathrm{pkt}}$ are derived
+directly from 3GPP TR~38.864 Annex A's FTP Model~3 (a $0.5\,\mathrm{MB}$
+file size with a $200\,\mathrm{ms}$ mean inter-arrival time, i.e.\ $5$
+arrivals/s $=0.5$ per $0.1\,\mathrm{s}$ step)~\cite{threegpp38864} -- a
+primary-source-derived value, not a placeholder guess. $f_{\mathrm{floor}}$
+and the breakpoints $t_1$--$t_4$ remain \emph{needs-validation}
+placeholders: no source examined ties a specific diurnal timing or
+floor-to-peak ratio to a 5G/O-RAN small-cell scenario, though their
+\emph{aggregate} floor-versus-active day-fraction split independently
+matches ETSI TR~103~737's own load-period weighting (Concept Note Section
+10.6).
+
+\section{Power Consumption Model}
+\label{sec:oran-power}
+
+Total instantaneous power consumption decomposes additively across the
+four disaggregated components plus a switching term:
+\begin{equation}
+  P_{\mathrm{total}}(t) = P_{\mathrm{RU}}(t) + P_{\mathrm{DU}}(t) + P_{\mathrm{CU}}(t) + P_{\mathrm{FH}}(t) + P_{\mathrm{sw}}(t).
+  \label{eq:oran-total-power}
+\end{equation}
+
+\textbf{RU power.} For the set of active RUs $\mathcal{M}(t) = \{r : v_r(t) = 1\}$
+(activation indicator $v_r(t) \in \{0,1\}$) and inactive RUs
+$\mathcal{N}(t) = \{r : v_r(t) = 0\}$,
+\begin{equation}
+  P_{\mathrm{RU}}(t) = \sum_{r \in \mathcal{M}(t)} P_{\mathrm{proc}}\big(c_r(t)\big) \; + \; \frac{1}{\eta}\sum_{r \in \mathcal{M}(t)} p_r(t) \; + \; |\mathcal{N}(t)|\, P_{\mathrm{sleep}},
+  \label{eq:oran-ru-power}
+\end{equation}
+where $c_r(t) \in \{0,1,2\}$ is RU $r$'s current split centralization level,
+$P_{\mathrm{proc}}(c) \in \{10.0, 6.0, 3.0\}\,\mathrm{W}$ is the active-RU
+processing power at level $c$ (\texttt{p\_proc\_by\_split\_w}, decreasing
+as $c$ increases, since a more centralized split shifts processing away
+from the RU), $\eta = 0.25$ is the power-amplifier drain efficiency
+(\texttt{pa\_efficiency}), $p_r(t) \in [0, P_{\max}]$ is RU $r$'s transmit
+power, and $P_{\mathrm{sleep}} = 2.0\,\mathrm{W}$ is the sleep-mode power
+of an inactive RU. $P_{\max} = 33\,\mathrm{dBm}$ ($2\,\mathrm{W}$)
+(\texttt{p\_max\_dbm}) matches the Benetel RAN550's real maximum transmit
+output power (total EIRP) for a Split-7.2x indoor small-cell
+O-RU~\cite{benetel2024ran550} -- the one constant in this power model
+independently confirmed by a real vendor datasheet rather than retained as
+an unvalidated placeholder. The active/sleep structural form itself
+follows the EARTH linear power model~\cite{auer2011earth}, though
+$P_{\mathrm{proc}}(c)$, $P_{\mathrm{sleep}}$, and $\eta$ are otherwise
+literature-style placeholders chosen only to preserve a monotonic
+trade-off across split levels, not verified split-level RU wattage figures
+-- Concept Note Section 10.5 documents nine rounds of literature
+verification against this specific gap, discussed further in
+Section~\ref{sec:oran-power-validation}.
+
+\textbf{DU power.}
+\begin{equation}
+  P_{\mathrm{DU}}(t) = P_{\mathrm{DU}}^{\mathrm{static}} + \sum_{r \in \mathcal{M}(t)} P_{\mathrm{DU,proc}}\big(c_r(t)\big),
+  \label{eq:oran-du-power}
+\end{equation}
+with static power $P_{\mathrm{DU}}^{\mathrm{static}} = 50.0\,\mathrm{W}$
+(\texttt{p\_static\_w}) and per-active-RU processing power
+$P_{\mathrm{DU,proc}}(c) \in \{5.0, 10.0, 20.0\}\,\mathrm{W}$
+(\texttt{p\_per\_ru\_by\_split\_w}, \emph{increasing} with $c$, since a
+less centralized split pushes more processing to the DU).
+
+\textbf{CU power.}
+\begin{equation}
+  P_{\mathrm{CU}}(t) = P_{\mathrm{CU}}^{\mathrm{static}} + P_{\mathrm{CU}}^{\mathrm{dyn}} \, |\mathcal{M}(t)|,
+  \label{eq:oran-cu-power}
+\end{equation}
+with $P_{\mathrm{CU}}^{\mathrm{static}} = 30.0\,\mathrm{W}$
+(\texttt{p\_static\_w}) and $P_{\mathrm{CU}}^{\mathrm{dyn}} = 1.0\,\mathrm{W}$
+per active RU (\texttt{p\_dyn\_per\_ru\_w}).
+
+\textbf{Fronthaul power.}
+\begin{equation}
+  P_{\mathrm{FH}}(t) =
+  \begin{cases}
+    0 & \mathcal{M}(t) = \emptyset \\[2pt]
+    P_{\mathrm{FH}}^{\mathrm{common}} + \displaystyle\sum_{r \in \mathcal{M}(t)} P_{\mathrm{FH,proc}}\big(c_r(t)\big) & \text{otherwise,}
+  \end{cases}
+  \label{eq:oran-fh-power}
+\end{equation}
+with $P_{\mathrm{FH}}^{\mathrm{common}} = 10.0\,\mathrm{W}$
+(\texttt{p\_common\_w}) and per-active-RU fronthaul power
+$P_{\mathrm{FH,proc}}(c) \in \{3.0, 6.0, 15.0\}\,\mathrm{W}$
+(\texttt{p\_per\_ru\_by\_split\_w}, increasing with $c$, reflecting a
+less-centralized split's larger fronthaul bandwidth requirement).
+
+\textbf{Switching cost.} Let $\mathbb{1}[\cdot]$ denote the indicator
+function. Between consecutive steps,
+\begin{equation}
+  P_{\mathrm{sw}}(t) = P_{\mathrm{sw}}^{\mathrm{RU}} \sum_{r=1}^{R} \mathbb{1}\!\left[v_r(t) \neq v_r(t-1)\right]
+  \; + \; P_{\mathrm{sw}}^{\mathrm{split}} \sum_{r=1}^{R} \mathbb{1}\!\left[c_r(t) \neq c_r(t-1)\right] \cdot v_r(t)\, v_r(t-1),
+  \label{eq:oran-switch-power}
+\end{equation}
+with $P_{\mathrm{sw}}^{\mathrm{RU}} = 2.0\,\mathrm{W}$
+(\texttt{p\_switch\_w}) per activation-state flip and
+$P_{\mathrm{sw}}^{\mathrm{split}} = 1.0\,\mathrm{W}$
+(\texttt{p\_switch\_split\_w}) per split change -- the latter counted only
+for RUs active in \emph{both} the previous and current step, since an RU
+that just switched on or off has not meaningfully ``changed'' a split
+choice in a way that costs anything beyond the activation flip already
+counted.
+
+\subsection{Status of the Power Model's Numeric Constants}
+\label{sec:oran-power-validation}
+
+Every numeric constant in Equations~\ref{eq:oran-ru-power}--\ref{eq:oran-switch-power}
+except $P_{\max}$ is a literature-style placeholder retained specifically
+to preserve a monotonic energy trade-off across split levels $c \in
+\{0,1,2\}$ -- not a verified physical measurement. This is disclosed here,
+rather than deferred silently to a limitations section, because Quality
+Gate 3 (Reproducibility) and Gate 6 (Code-Text Consistency) both require
+this chapter to state plainly what is fact versus placeholder. Concept
+Note Section 10.5 documents nine independent literature-verification
+passes against this specific gap (3GPP TR~38.864's static-plus-dynamic
+model family, a real small-cell O-RU datasheet, component-decomposed O-RAN
+testbed measurements, and analytical O-DU/O-CU power models, among
+others); the consistent finding across all nine is that no source
+combines a varied 3GPP split option with matching, component-decomposed
+(RU vs.\ DU vs.\ CU vs.\ fronthaul) absolute power in Watts at this
+model's small-cell scale -- the specific combination needed to validate
+Equations~\ref{eq:oran-ru-power}--\ref{eq:oran-fh-power}'s per-split
+arrays directly. Real measured hardware power (macro-cell O-RUs,
+enterprise-class O-DU/O-CU compute hosts, and a real commercial multi-band
+O-RAN test line) runs $10$--$50\times$ above this model's own small-cell
+placeholder scale, and this gap is not closed by rescaling, since no
+source specifies what absolute scale a $R=4$-RU simulation should use.
+Chapter~\ref{chap:oran-results} reports a sensitivity analysis
+perturbing these constants within the ranges the literature review
+brackets, to test whether the comparative conclusions in
+Chapter~\ref{chap:oran-results} depend on any single unvalidated constant.
+
+\section{Markov Decision Process Formulation}
+\label{sec:oran-mdp}
+
+The O-RAN energy-optimization problem is formulated as a parameterized MDP
+$(\mathcal{S}, \mathcal{A}, P, r, \gamma)$ with a hybrid discrete-continuous
+action space, following the four action branches specified in Concept Note
+Section 10.1. Figure~\ref{fig:oran-mdp-loop} sketches the agent-environment
+interaction loop this section formalizes.
+
+\begin{figure}[htbp]
+\centering
+\begin{verbatim}
+        +-----------------------------------------------------------+
+        |                         BMPP-DQN Agent                    |
+        |                                                           |
+        |   s(t) --> [ upper branch: v(t), c(t) ]  (every N steps)  |
+        |        \-> [ lower branch: p(t), beta(t) ] (every step)   |
+        +---------------------------+-------------------------------+
+                                    | a(t) = (v(t), c(t), p(t), beta(t))
+                                    v
+        +-----------------------------------------------------------+
+        |                    O-RAN Environment (oran_env)           |
+        |  1. apply action -> update active RUs, splits, Tx power   |
+        |  2. compute per-UE SINR, throughput  (Sec. 3.2, 3.5)      |
+        |  3. compute P_total(t)                        (Sec. 3.4) |
+        |  4. compute r(t) = alpha*EE(t) - beta*QoS - gamma*switch  |
+        |  5. draw next channel realization, next traffic demand    |
+        +---------------------------+-------------------------------+
+                                    | s(t+1), r(t), done
+                                    v
+                          (back to BMPP-DQN Agent)
+\end{verbatim}
+\caption{Agent-environment interaction loop. The agent's discrete branches
+  (RU activation $v$, split $c$) are recomputed only every
+  $N=$~\texttt{upper\_level\_period\_steps} environment steps, while its
+  continuous branches (power $p$, PRB share $\beta$) are recomputed every
+  step -- realizing the two-timescale design motivated in
+  Section~\ref{sec:oran-topology}. The environment itself is
+  timescale-agnostic: \texttt{step()} always accepts all four action
+  components every call.}
+\label{fig:oran-mdp-loop}
+\end{figure}
+
+\subsection{State Space}
+
+The state $s(t) \in \mathbb{R}^{d}$, $d = R{\cdot}U + R + R{\cdot}S + U + 4$, concatenates:
+\begin{equation}
+  s(t) = \Big[\, |h_{r,u}(t)|_{r,u} ,\ v(t-1) ,\ \mathrm{onehot}\big(c(t-1)\big) ,\ D(t)/10^6 ,\ \frac{P_{\mathrm{total}}(t-1)}{1000} ,\ \frac{\tau(t)}{24} ,\ \bar{T} ,\ \frac{\bar{P}}{1000} \,\Big],
+  \label{eq:oran-state}
+\end{equation}
+where $|h_{r,u}(t)|_{r,u}$ flattens the $R \times U$ channel-gain magnitude
+matrix, $v(t-1) \in \{0,1\}^R$ is the previous step's RU activation vector,
+$\mathrm{onehot}(c(t-1)) \in \{0,1\}^{R\times S}$ one-hot encodes each RU's
+previous split choice, $D(t)/10^6 \in \mathbb{R}^U$ is the current step's
+UE demand vector in Mbps, $P_{\mathrm{total}}(t-1)/1000$ is the previous
+step's total power in kW, $\tau(t)/24$ is the hour of day normalized to
+$[0,1]$, and $\bar{T}$, $\bar{P}/1000$ are the rolling-window mean
+throughput (Mbps) and mean power (kW) over the last
+$\min(t, N)$ steps -- the mechanism by which lower-level (fast) performance
+metrics are propagated into the state the upper-level (slow) decision
+observes, per Concept Note Section 5.2. At the default scenario scale
+($R=4$, $U=8$, $S=3$), $d = 32 + 4 + 12 + 8 + 4 = 60$.
+
+\subsection{Action Space}
+
+The action $a(t) = (v(t), c(t), p(t), \beta(t))$ has four branches:
+\begin{align}
+  v(t) &\in \{0,1\}^R && \text{RU activation (discrete, upper timescale)} \label{eq:action-v}\\
+  c(t) &\in \{0,1,\dots,S-1\}^R && \text{Functional split choice (discrete, upper timescale)} \label{eq:action-c}\\
+  p(t) &\in [0, P_{\max}]^R && \text{Transmit power per RU (continuous, lower timescale)} \label{eq:action-p}\\
+  \beta(t) &\in [0,1]^R,\ \textstyle\sum_r \beta_r(t) = 1 && \text{PRB share among active RUs (continuous, lower timescale)} \label{eq:action-beta}
+\end{align}
+Inactive RUs' power and split entries are forced to zero by the
+environment ($p_r(t) \gets 0$, $c_r(t) \gets 0$ for $r \notin \mathcal{M}(t)$)
+before the reward and power computations of Section~\ref{sec:oran-power}
+are evaluated, and the raw PRB vector is re-normalized over active RUs
+only so that Eq.~\ref{eq:action-beta}'s constraint holds with respect to
+$\mathcal{M}(t)$, not the full RU set.
+
+\subsection{Transition Dynamics}
+
+The channel realization is redrawn independently every step
+(Eq.~\ref{eq:oran-channel}; no temporal correlation), and the UE demand
+vector is redrawn from the traffic envelope at the new hour
+(Eq.~\ref{eq:oran-demand}):
+\begin{equation}
+  P\big(s(t+1) \mid s(t), a(t)\big) = P\big(H(t+1)\big)\, P\big(D(t+1) \mid \tau(t+1)\big),
+  \label{eq:oran-transition}
+\end{equation}
+i.e., the next channel and demand realizations are conditionally
+independent of the current state given the (implicit) hour-of-day clock,
+which itself advances deterministically, $\tau(t+1) = (\tau(t)+1) \bmod 24$.
+
+\subsection{Reward Function}
+
+Each UE $u$ is served by its strongest active RU,
+$r^*(u) = \arg\max_{r \in \mathcal{M}(t)} p_r(t)\,|h_{r,u}(t)|^2$, and
+experiences co-channel interference from every other simultaneously-active
+RU:
+\begin{align}
+  \mathrm{SINR}_u(t) &= \frac{p_{r^*(u)}(t)\,|h_{r^*(u),u}(t)|^2}{\Big(\sum_{r \in \mathcal{M}(t)} p_r(t)\,|h_{r,u}(t)|^2\Big) - p_{r^*(u)}(t)\,|h_{r^*(u),u}(t)|^2 + P_{\mathrm{noise}}^{\mathrm{W}}}, \label{eq:oran-sinr}\\
+  C_u(t) &= \beta_{r^*(u)}(t)\, B\, \log_2\!\big(1 + \mathrm{SINR}_u(t)\big), \label{eq:oran-capacity}
+\end{align}
+where $C_u(t)$ is UE $u$'s achievable Shannon capacity given the PRB share
+$\beta_{r^*(u)}(t)$ its serving RU has allocated it. Total throughput is
+$C_{\mathrm{total}}(t) = \sum_u C_u(t)$ (Mbps, after unit conversion), and
+energy efficiency is
+\begin{equation}
+  \mathrm{EE}(t) = \frac{C_{\mathrm{total}}(t)}{P_{\mathrm{total}}(t) + \epsilon}\ \ \text{[Mbit/Joule]}, \qquad \epsilon = 10^{-6},
+  \label{eq:oran-ee}
+\end{equation}
+with $\epsilon$ a numerical-stability term, not a design parameter. The
+reward is
+\begin{equation}
+  r(t) = \alpha\, \mathrm{EE}(t) \;-\; \beta_{\mathrm{qos}} \sum_{u=1}^{U} \frac{\max\big(0,\, D_u(t) - C_u(t)\big)}{10^6} \;-\; \gamma_{\mathrm{sw}}\, n_{\mathrm{sw}}(t),
+  \label{eq:oran-reward}
+\end{equation}
+where $\alpha = 1.0$ (\texttt{alpha\_energy}), $\beta_{\mathrm{qos}} = 10.0$
+(\texttt{beta\_qos}) weights the total QoS shortfall in Mbps, and
+$\gamma_{\mathrm{sw}} = 0.5$ (\texttt{gamma\_switch}) weights the exact
+count of switching events $n_{\mathrm{sw}}(t)$ -- RU activation flips plus
+split changes among RUs active in both the previous and current step
+(the same event count that determines $P_{\mathrm{sw}}(t)$ in
+Eq.~\ref{eq:oran-switch-power}, so a switching event is penalized once in
+the reward via $\gamma_{\mathrm{sw}}$ and, separately, through its
+contribution to $P_{\mathrm{total}}(t)$ inside $\mathrm{EE}(t)$ itself).
+Table~\ref{tab:oran-state-action-reward} summarizes the state, action, and
+reward quantities defined above.
+
+\begin{table}[htbp]
+\centering
+\caption{Summary of the MDP formulation's state, action, and reward
+  components, with default values at $R=4$, $U=8$, $S=3$.}
+\label{tab:oran-state-action-reward}
+\begin{tabular}{lll}
+\toprule
+Component & Symbol & Dimension / Default \\
+\midrule
+State & $s(t)$ & $\mathbb{R}^{60}$ (Eq.~\ref{eq:oran-state}) \\
+Action -- RU activation & $v(t)$ & $\{0,1\}^4$ \\
+Action -- split choice & $c(t)$ & $\{0,1,2\}^4$ \\
+Action -- transmit power & $p(t)$ & $[0, 2\,\mathrm{W}]^4$ \\
+Action -- PRB share & $\beta(t)$ & $[0,1]^4$, sums to 1 over active RUs \\
+Reward weights & $\alpha,\ \beta_{\mathrm{qos}},\ \gamma_{\mathrm{sw}}$ & $1.0,\ 10.0,\ 0.5$ \\
+Discount factor & $\gamma$ & $0.99$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Problem Formulation as Constrained Optimization}
+\label{sec:oran-optimization}
+
+The underlying control problem this MDP approximates is
+\begin{align}
+  \max_{\pi}\quad & \mathbb{E}_\pi\!\left[\sum_{t=0}^{T} \gamma^t\, r(t)\right] \label{eq:oran-objective}\\
+  \text{s.t.}\quad & 0 \leq p_r(t) \leq P_{\max}, && \forall r, t \label{eq:oran-constraint-power}\\
+  & v_r(t) \in \{0,1\}, && \forall r, t \label{eq:oran-constraint-binary}\\
+  & c_r(t) \in \{0,\dots,S-1\}, && \forall r, t \label{eq:oran-constraint-split}\\
+  & \textstyle\sum_{r \in \mathcal{M}(t)} \beta_r(t) = 1, && \forall t. \label{eq:oran-constraint-prb}
+\end{align}
+The QoS constraint $C_u(t) \geq D_u(t)$ is not enforced as a hard
+constraint but folded into the objective as the shortfall penalty in
+Eq.~\ref{eq:oran-reward}, since a hard per-step QoS constraint is
+generally infeasible under bursty Poisson demand and would otherwise force
+every RU permanently active. A model-free RL approach is preferred over a
+convex or heuristic solver for this problem for the same reasons argued in
+the adjacent C-RAN literature (Chapter~\ref{chap:oran-literature}): the
+channel (Eq.~\ref{eq:oran-channel}) and traffic
+(Eq.~\ref{eq:oran-traffic-envelope}--\ref{eq:oran-demand}) processes are
+stochastic and non-stationary over the diurnal cycle, the optimal policy
+is plausibly history-dependent (via the propagated rolling-window state
+terms in Eq.~\ref{eq:oran-state}), and Eq.~\ref{eq:oran-objective} is not
+convex in $(v, c, p, \beta)$ jointly, since $\mathrm{SINR}_u(t)$
+(Eq.~\ref{eq:oran-sinr}) is a ratio of terms each RU's own decision
+variables enter both the numerator (its own signal) and every other UE's
+denominator (as interference).
+
+\section{BMPP-DQN: Architecture}
+\label{sec:oran-bmpp-architecture}
+
+BMPP-DQN addresses Eq.~\ref{eq:oran-objective}--\ref{eq:oran-constraint-prb}
+by combining Branching DQN's per-RU discrete decomposition
+(Chapter~\ref{chap:oran-literature}, Section~\ref{sec:lit-drl-hybrid}) with
+MP-DQN's multi-pass masking, split across two independently-parameterized
+encoders that realize the upper/lower timescale separation of
+Figure~\ref{fig:oran-architecture}. Figure~\ref{fig:oran-bmpp-arch} shows
+the resulting network architecture.
+
+\begin{figure}[htbp]
+\centering
+\begin{verbatim}
+                              s(t)  [state, dim d]
+                        +-------+-------+
+                        |               |
+                        v               v
+              +-------------------+  +-------------------+
+              |   Upper Encoder    |  |   Lower Encoder    |
+              |  FC(128)-ReLU-LN   |  |  FC(128)-ReLU-LN   |
+              |  FC(64)-ReLU-LN    |  |  FC(64)-ReLU-LN    |
+              +---------+----------+  +----------+----------+
+                        | feat_u                  | feat_l
+                        |                         v
+                        |               +-------------------+
+                        |               | ContinuousParamNet |
+                        |               |  power_head->sigmoid|
+                        |               |  prb_head->softmax  |
+                        |               +----------+----------+
+                        |                          | x(t) = (p_ratio, beta), per RU
+                        |          +---------------+
+                        v          v
+              +-----------------------------------------------------+
+              |               BranchingCritic (single, no twin)      |
+              |                                                       |
+              |   for r = 1 .. R:   (MULTI-PASS loop, MP-DQN)         |
+              |     x_r  <- x(t)[r] only (mask out all other RUs)     |
+              |     param_feat <- ReLU(Linear(x_r))                  |
+              |     fused_r <- ReLU(Linear([feat_u ; param_feat]))   |
+              |     Q_act[r]   <- DuelingHead_act_r(fused_r)  (2 vals)|
+              |     Q_split[r] <- DuelingHead_split_r(fused_r) (S vals)|
+              +-----------------------------------------------------+
+                        |                          |
+                        v                          v
+              activation_q (R x 2)         split_q (R x S)
+              argmax -> v(t)               argmax -> c(t)
+                 (only every N steps -- see Fig. 3.6)
+\end{verbatim}
+\caption{BMPP-DQN network architecture. Two independently-parameterized
+  encoders (upper, lower) feed a single (non-twin) branching critic and a
+  continuous parameter network respectively. The critic's multi-pass loop
+  (MP-DQN mechanism) evaluates each RU's branch using only that RU's own
+  continuous parameters, eliminating the cross-talk gradient P-DQN's
+  original single-pass design would introduce
+  (Chapter~\ref{chap:oran-literature}, Section~\ref{sec:lit-drl-hybrid}).}
+\label{fig:oran-bmpp-arch}
+\end{figure}
+
+\textbf{Encoders.} $h_{\mathrm{up}}(s\,|\,\theta_{\mathrm{up}})$ and
+$h_{\mathrm{low}}(s\,|\,\theta_{\mathrm{low}})$ are separate two-layer
+feedforward networks (hidden sizes $[128, 64]$, ReLU activation, LayerNorm
+after each layer), with independent weights -- \emph{not} a single shared
+encoder feeding both branches. This is a deliberate departure from a
+literal reading of Concept Note Section 5.2 (which describes ``two
+Q-networks,'' one per timescale); Section 10.4's implementation addendum
+records the correction actually realized in code: one \emph{critic}
+(shared across both discrete branch-groups), fed by the upper encoder, and
+one continuous parameter network, fed by the lower encoder.
+
+\textbf{Continuous parameter network.} From the lower encoder's feature
+$\mathrm{feat}_{\mathrm{low}} \in \mathbb{R}^{64}$, a linear power head
+followed by a sigmoid produces a per-RU power ratio
+$\hat{p}(t) \in [0,1]^R$ (scaled to $p(t) = \hat{p}(t) \cdot P_{\max}$
+before being sent to the environment), and a linear PRB head followed by a
+softmax produces $\hat\beta(t) \in [0,1]^R$ with $\sum_r \hat\beta_r(t)=1$
+(over \emph{all} $R$ RUs; the environment re-normalizes this over active
+RUs only, as noted after Eq.~\ref{eq:action-beta}).
+
+\textbf{Branching critic.} For each RU $r$, a masked pass encodes only
+that RU's own $(\hat{p}_r(t), \hat\beta_r(t))$ pair through a small linear
+layer (\texttt{param\_encoder}, output dimension 64), concatenates it with
+the upper encoder's feature, and passes the result through a fusion layer
+to produce $\mathrm{fused}_r \in \mathbb{R}^{64}$. Two dueling head groups
+then read $\mathrm{fused}_r$:
+\begin{equation}
+  Q_r^{v}(s, k) = V^{v}(\mathrm{fused}_r) + \Big(A_r^{v}(\mathrm{fused}_r)_k - \tfrac{1}{2}\textstyle\sum_{k'} A_r^{v}(\mathrm{fused}_r)_{k'}\Big),\quad k \in \{0,1\},
+  \label{eq:oran-dueling-act}
+\end{equation}
+and analogously $Q_r^{c}(s, k)$ for $k \in \{0,\dots,S-1\}$, where the
+value head $V(\cdot)$ is shared across all $R$ branches within a
+branch-group (activation or split) while each branch has its own advantage
+head $A_r(\cdot)$ -- the standard Branching DQN factorization
+(Chapter~\ref{chap:oran-literature}), reproduced here per branch-group
+rather than per single discrete action set. Only branch $r$'s own output
+slice is kept from pass $r$; the $R$ passes are otherwise independent
+forward computations through the same critic weights.
+
+\section{BMPP-DQN: Training Procedure}
+\label{sec:oran-bmpp-training}
+
+Figure~\ref{fig:oran-cadence} illustrates the two-timescale decision and
+update cadence; Algorithm~\ref{alg:bmpp-dqn} gives the full training loop.
+
+\begin{figure}[htbp]
+\centering
+\begin{verbatim}
+  env step:          1    2    3    4    5   ...   N   N+1  N+2  ...
+  discrete (v,c):    D -- held -- held -- held -- held --   D -- held -- ...
+  continuous(p,b):   D    D    D    D    D    ...   D    D    D   ...
+  update_lower():    U    U    U    U    U    ...   U    U    U   ...
+  update_upper():    U    U    U    U    U    ...   U    U    U   ...  (*)
+  upper buffer push:                                *                  (window-sum reward)
+  lower buffer push: *    *    *    *    *   ...    *    *    *        (per-step reward)
+\end{verbatim}
+\caption{Two-timescale decision and update cadence
+  (\texttt{upper\_level\_period\_steps}$=N=10$ by default). ``D'' marks a
+  freshly-made decision; ``held'' marks a cached decision replayed
+  unchanged. Both \texttt{update\_lower()} and \texttt{update\_upper()}
+  are in fact called \emph{every} environment step by the training loop
+  (\texttt{oran\_training/train\_bmpp\_dqn.py}) -- the two-timescale
+  design is realized entirely through the decision/action cadence above
+  and through the upper replay buffer's refill rate (marked (*): a new
+  upper-buffer transition, with reward summed over the $N$ intervening
+  steps, is pushed only once per window), \emph{not} through a
+  differential gradient-update frequency. Concretely, this means
+  \texttt{update\_upper()} resamples and retrains on the same, slowly
+  growing upper buffer up to $N$ times before that buffer receives a
+  single new transition.}
+\label{fig:oran-cadence}
+\end{figure}
+
+Two design choices in the training procedure are worth stating explicitly,
+since both were adopted to fix genuine training-instability failure modes
+documented during development (Chapter~\ref{chap:oran-results} reports the
+before/after evidence):
+
+\begin{enumerate}
+  \item \textbf{Reward normalization.} Both replay buffers store a reward
+    divided by a running (Welford's-algorithm) estimate of that buffer's
+    own reward stream standard deviation, \emph{never} mean-shifted (only
+    scaling, not shifting, preserves which policy is reward-optimal). The
+    upper buffer's window-summed reward is normalized against its own,
+    separately-tracked running statistic, since it is naturally larger in
+    magnitude than the lower buffer's per-step reward.
+  \item \textbf{Target-network bootstrapping for the continuous actor.}
+    The continuous parameter network's update maximizes the branching
+    critic's greedy activation-branch value, but bootstraps this
+    maximization off the \emph{frozen}, Polyak-averaged
+    \texttt{critic\_target}/\texttt{upper\_encoder\_target} rather than the
+    online critic being updated every step from this same actor's own
+    output -- avoiding a tight online-online feedback loop between the two
+    networks.
+\end{enumerate}
+
+\begin{algorithm}[htbp]
+\caption{BMPP-DQN training loop}
+\label{alg:bmpp-dqn}
+\begin{algorithmic}[1]
+\State \textbf{Input:} upper encoder $\theta_{\mathrm{up}}$, lower encoder
+  $\theta_{\mathrm{low}}$, branching critic $\theta_Q$, continuous
+  parameter net $\phi$; target copies of all four; replay buffers
+  $\mathcal{D}_{\mathrm{low}}$, $\mathcal{D}_{\mathrm{up}}$; decision
+  period $N$; Polyak rate $\tau$
+\For{episode $=1$ to $E$}
+  \State $s \gets$ \texttt{env.reset()}; steps\_since\_decision $\gets 0$
+  \For{$t = 0$ to $T-1$}
+    \State $\mathrm{feat}_{\mathrm{low}} \gets h_{\mathrm{low}}(s\,|\,\theta_{\mathrm{low}})$;\quad
+      $(\hat p, \hat\beta) \gets$ \textsc{ContinuousParamNet}$(\mathrm{feat}_{\mathrm{low}}\,|\,\phi)$
+    \State add exploration noise to $\hat p$ (Gaussian, std decayed once per episode)
+    \If{steps\_since\_decision $= 0$}
+      \State with prob.\ $\epsilon$: sample $(v, c)$ uniformly at random \Comment{$\epsilon$-greedy, decayed once per episode}
+      \State otherwise: $\mathrm{feat}_{\mathrm{up}} \gets h_{\mathrm{up}}(s\,|\,\theta_{\mathrm{up}})$;\quad
+        $(v, c) \gets \arg\max_k Q^{v,c}_r(\mathrm{feat}_{\mathrm{up}}, x)$ for each $r$ \Comment{multi-pass, Eq.~\ref{eq:oran-dueling-act}}
+      \State cache $(v, c)$
+    \Else
+      \State replay cached $(v, c)$
+    \EndIf
+    \State $a \gets (v, c, \hat p \cdot P_{\max}, \hat\beta)$;\quad $s', r, \mathrm{done} \gets$ \texttt{env.step}$(a)$
+    \State push $(s, (\hat p, \hat\beta), r/\hat\sigma_{\mathrm{low}}, s', \mathrm{done})$ to $\mathcal{D}_{\mathrm{low}}$ \Comment{normalized}
+    \State accumulate $r$ into the pending upper-window sum
+    \If{steps\_since\_decision $= N-1$ or done}
+      \State push $(s_{\mathrm{decision}}, v, c, \sum r / \hat\sigma_{\mathrm{up}}, s', \mathrm{done})$ to $\mathcal{D}_{\mathrm{up}}$
+    \EndIf
+    \State \Call{UpdateLower}{} \Comment{every step}
+    \State \Call{UpdateUpper}{} \Comment{also every step -- resamples the same, slowly-growing
+      upper buffer up to $N$ times per new transition; the two-timescale
+      separation is realized only through the decision cadence and buffer
+      refill rate above, not through gradient-update frequency}
+    \State steps\_since\_decision $\gets$ (steps\_since\_decision $+1) \bmod N$;\quad $s \gets s'$
+  \EndFor
+  \State decay $\epsilon$ and the continuous exploration noise std
+\EndFor
+\Statex
+\Function{UpdateLower}{}
+  \State sample batch from $\mathcal{D}_{\mathrm{low}}$; recompute $(\hat p, \hat\beta)$ at sampled states via $\phi, \theta_{\mathrm{low}}$
+  \State $Q^v \gets$ multi-pass critic evaluated via \emph{target} nets $\theta_{\mathrm{up}}^{-}, \theta_Q^{-}$ at these $(\hat p, \hat\beta)$
+  \State param\_loss $\gets -\,\mathbb{E}\big[\max_k Q^v_r(k)\big]$; backprop through $\phi, \theta_{\mathrm{low}}$ only
+  \State soft-update $\theta_{\mathrm{low}}^{-} \gets \tau\theta_{\mathrm{low}} + (1-\tau)\theta_{\mathrm{low}}^{-}$;\ \ $\phi^{-} \gets \tau\phi + (1-\tau)\phi^{-}$
+\EndFunction
+\Statex
+\Function{UpdateUpper}{}
+  \State sample batch from $\mathcal{D}_{\mathrm{up}}$
+  \State $(v^*, c^*) \gets \arg\max$ of \emph{online} multi-pass critic at $s'$ \Comment{Double-DQN: online selects}
+  \State $y \gets r + \gamma(1-\mathrm{done})\, Q^{-}(s', v^*, c^*)$ \Comment{target net evaluates}
+  \State critic\_loss $\gets \mathrm{MSE}(Q_\theta(s, v, c), y)$, summed over both branch-groups
+  \State backprop through $\theta_{\mathrm{up}}, \theta_Q$; soft-update $\theta_{\mathrm{up}}^{-}, \theta_Q^{-}$
+\EndFunction
+\end{algorithmic}
+\end{algorithm}
+
+Default hyperparameters (\texttt{config/oran\_default.yaml}): discount
+$\gamma=0.99$, Polyak rate $\tau=0.005$, decision period $N=10$, batch size
+$128$, learning rates $10^{-4}$ (critic) and $3\times10^{-4}$ (continuous
+actor), $\epsilon$ decayed from $1.0$ to $0.01$ at rate $0.995$ per
+episode, continuous exploration noise std decayed from $0.1$ to $0.01$ at
+the same rate, and gradient norm clipping at $1.0$. Explicitly \emph{not}
+present, per the concept note's own scope (Section 10.4): twin critics,
+target-policy-smoothing noise, and delayed (policy-lag-gated) actor
+updates -- the TD3-style machinery the C-RAN track's own Branching MP-DQN
+architecture adds and this track's concept note deliberately omits.
+Chapter~\ref{chap:oran-results} reports what this design, evaluated
+against the DQN, DDPG, and MP-DQN baselines under the model specified in
+this chapter, actually achieves.
+
+% ---------------------------------------------------------------------------
+% Local reference list for this chapter (IEEE numbered style). Keys shared
+% with earlier chapters (oran2021mvp, qazzaz2026oreo, xiong2018pdqn,
+% bester2019mpdqn, tavakoli2018branching) are repeated verbatim; new keys
+% introduced in this chapter follow. Merge into a single thesis-wide
+% references.bib once main.tex exists.
+% ---------------------------------------------------------------------------
+\begin{thebibliography}{9}
+
+\bibitem{oran2021mvp}
+O-RAN Alliance, ``O-RAN Minimum Viable Plan and Commercialization
+Strategy,'' Jun. 2021.
+
+\bibitem{threegpp38801}
+3GPP, ``Study on New Radio Access Technology: Radio Access Architecture and
+Interfaces,'' TR 38.801, V0.4.0, Aug. 2016.
+
+\bibitem{threegpp38864}
+3GPP, ``Study on Network Energy Savings for NR,'' TR 38.864, 2024.
+
+\bibitem{xiong2018pdqn}
+J. Xiong, Q. Wang, Z. Yang, P. Sun, L. Han, Y. Zheng, H. Fu, T. Zhang, J. Liu,
+and H. Liu, ``Parametrized Deep Q-Networks Learning: Reinforcement Learning
+with Discrete-Continuous Hybrid Action Space,'' arXiv preprint
+arXiv:1810.06394, 2018.
+
+\bibitem{bester2019mpdqn}
+C.~J. Bester, S.~D. James, and G.~D. Konidaris, ``Multi-Pass Q-Networks for
+Deep Reinforcement Learning with Parameterised Action Spaces,'' arXiv
+preprint arXiv:1905.04388, 2019.
+
+\bibitem{tavakoli2018branching}
+A. Tavakoli, F. Pardo, and P. Kormushev, ``Action Branching Architectures for
+Deep Reinforcement Learning,'' in \emph{Proc. AAAI Conference on Artificial
+Intelligence}, 2018.
+
+\bibitem{auer2011earth}
+G. Auer et al., ``How Much Energy Is Needed to Run a Wireless Network?,''
+\emph{IEEE Wireless Communications}, vol.~18, no.~5, pp.~40--49, Oct. 2011.
+
+\bibitem{benetel2024ran550}
+Benetel, ``RAN550 Outdoor/Indoor O-RU Datasheet (n78/n79, Split 7.2x),''
+product datasheet. Max.\ TX output power (total EIRP): 2\,W (33\,dBm).
+
+\bibitem{qazzaz2026oreo}
+M.~M.~H. Qazzaz, A. Salama, M. Hafeez, and S.~A.~R. Zaidi,
+``OREO: Open RAN Energy Optimization via Deep Reinforcement Learning for 6G
+Networks,'' \emph{IEEE Open Journal of the Communications Society}, vol.~7,
+pp.~4165--4182, 2026.
+
+\end{thebibliography}
