@@ -121,3 +121,30 @@ def test_checkpointed_matrix_script_resumes_across_two_invocations(tmp_path):
     manifest = load_manifest(manifest_path)
     assert manifest["all_on/seed42"]["status"] == "done"
     assert manifest["greedy/seed42"]["status"] == "done"
+
+
+def test_resolve_methods_defaults_to_full_track_list():
+    """No --methods override -- must return each track's own full,
+    unmodified default list (CRAN_METHODS/ORAN_METHODS)."""
+    from scripts.run_checkpointed_matrix import (
+        CRAN_METHODS,
+        ORAN_METHODS,
+        resolve_methods,
+    )
+
+    assert resolve_methods("cran", None) == CRAN_METHODS
+    assert resolve_methods("oran", None) == ORAN_METHODS
+
+
+def test_resolve_methods_override_excludes_unlisted_methods():
+    """A --methods override (e.g. to exclude a specific baseline for a
+    reduced-scope pass, per docs/daily_log.md's 2026-09-20 entry) must be
+    used verbatim, not merged with the default list."""
+    from scripts.run_checkpointed_matrix import CRAN_METHODS, resolve_methods
+
+    reduced = [m for m in CRAN_METHODS if m != "mpdqn"]
+    result = resolve_methods("cran", reduced)
+
+    assert result == reduced
+    assert "mpdqn" not in result
+    assert "hybrid" in result  # the actual proposed method stays included

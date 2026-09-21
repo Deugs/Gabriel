@@ -20,7 +20,17 @@ established conventions: C-RAN's 3000-episode convergence target and full
 10-seed list (README.md's Key Decisions Log; `scripts/run_cran_experiments.sh`),
 O-RAN's 500-episode cap and 3-seed list (`config/oran_default.yaml`;
 `scripts/run_oran_experiments.sh`) -- override `--episodes`/`--seeds`
-explicitly for a reduced-scope first pass.
+explicitly for a reduced-scope first pass. Use `--methods` to exclude a
+specific baseline whose per-seed cost is impractical in an ephemeral,
+reclaim-prone sandbox -- e.g. C-RAN's MP-DQN baseline projects to ~87h/seed
+at real n_rrh=12 scale (deliberately so, per its own module docstring), and
+this script only checkpoints at (method, seed) job boundaries, so an
+interrupted single ~87h job restarts from episode 0 rather than resuming
+mid-job:
+
+    python3 scripts/run_checkpointed_matrix.py --track cran \
+        --episodes 3000 --seeds 42 123 456 \
+        --methods all_on greedy nmbs convex ddqn ann_gsbf ddqn_socp ddpg pdqn hybrid
 
 Runs one track per invocation by design: PyTorch defaults to using every
 available core, so two unpinned invocations racing for the same cores thrash
@@ -139,6 +149,12 @@ def _make_oran_job_fn(config_path: str):
     return job_fn
 
 
+def resolve_methods(track, methods_override):
+    """`--methods` override, or the track's full default list unchanged."""
+    default = CRAN_METHODS if track == "cran" else ORAN_METHODS
+    return methods_override or default
+
+
 def build_jobs(methods, seeds, episodes, save_root):
     jobs = []
     for method in methods:
@@ -162,6 +178,16 @@ def main():
     parser.add_argument("--config", default=None, help="Config file path")
     parser.add_argument("--episodes", type=int, required=True)
     parser.add_argument("--seeds", type=int, nargs="+", default=None)
+    parser.add_argument(
+        "--methods",
+        nargs="+",
+        default=None,
+        help=(
+            "Override the default method list for this track (e.g. to "
+            "exclude a specific baseline for a reduced-scope pass). Omit "
+            "for the full default list (CRAN_METHODS/ORAN_METHODS)."
+        ),
+    )
     parser.add_argument("--save-dir", default=None, help="Root save directory")
     parser.add_argument("--manifest", default=None, help="Checkpoint manifest path")
     parser.add_argument(
@@ -198,14 +224,13 @@ def main():
 
         torch.set_num_threads(args.num_threads)
 
+    methods = resolve_methods(args.track, args.methods)
     if args.track == "cran":
-        methods = CRAN_METHODS
         config_path = args.config or "config/default.yaml"
         seeds = args.seeds or CRAN_DEFAULT_SEEDS
         save_root = args.save_dir or "data/results/checkpointed_matrix"
         job_fn = _make_cran_job_fn(config_path)
     else:
-        methods = ORAN_METHODS
         config_path = args.config or "config/oran_default.yaml"
         seeds = args.seeds or ORAN_DEFAULT_SEEDS
         save_root = args.save_dir or "data/results_oran/checkpointed_matrix"
