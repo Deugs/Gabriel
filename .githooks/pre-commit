@@ -39,7 +39,13 @@ else
 fi
 
 if command -v mypy >/dev/null 2>&1; then
-  mypy $existing_py_dirs --ignore-missing-imports || { echo "pre-commit: type checking failed."; exit 1; }
+  # --no-incremental: this hook's mypy invocation must not share a mutable
+  # on-disk cache with any concurrently-running mypy process (e.g. an IDE's
+  # own type-checking extension) -- incremental cache reads/writes are not
+  # safe under concurrent access and have been observed to crash with a
+  # KeyError deep in mypy's cache deserializer when raced this way. Slower
+  # per run, but immune to that class of corruption.
+  mypy $existing_py_dirs --ignore-missing-imports --no-incremental || { echo "pre-commit: type checking failed."; exit 1; }
 else
   echo "pre-commit: mypy not installed — skipping type check"
 fi

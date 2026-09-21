@@ -89,6 +89,108 @@ nothing about the other.
 
 ---
 
+## Running the Experiments
+
+Three ways to run either track's experiments, quickest to most reproducible:
+
+| Path | Setup | Best for |
+|------|-------|----------|
+| A. Bare-metal Python | `venv` + `pip install -r requirements.txt` | Local development, debugging |
+| B. Docker (CPU, default) | `docker compose build && docker compose run --rm <service>` | Reproducible runs on any machine, no GPU needed |
+| C. Docker (GPU, opt-in) | Add `-f docker-compose.gpu.yml`; requires the NVIDIA Container Toolkit | Full-scale thesis-grade runs on a CUDA machine |
+
+Full step-by-step runbooks (every experiment run one at a time, with
+expected outputs) live in
+[docs/cran_experiment_guide.md](docs/cran_experiment_guide.md) and
+[docs/oran_experiment_guide.md](docs/oran_experiment_guide.md); the
+commands below are the quick-start versions of the same content.
+
+### Option A: Bare-metal Python (CPU or GPU)
+
+```bash
+python -m venv venv
+source venv/bin/activate        # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+
+# CPU-only PyTorch (smaller download, works on any machine):
+pip install torch==2.3.1 torchvision==0.18.1 torchaudio==2.3.1 \
+  --index-url https://download.pytorch.org/whl/cpu
+# -- or, on a CUDA machine, the GPU wheel instead:
+#   pip install torch==2.3.1 torchvision==0.18.1 torchaudio==2.3.1 \
+#     --index-url https://download.pytorch.org/whl/cu121
+
+pre-commit install
+export PYTHONPATH="$(pwd):$PYTHONPATH"   # Windows (PowerShell): $env:PYTHONPATH = "$pwd;$env:PYTHONPATH"
+pytest tests/ -q                          # verify the setup
+```
+
+Run the full required experiment suite for either track in one command:
+
+```bash
+bash scripts/run_cran_experiments.sh    # C-RAN: 10 seeds x 11 methods + all evaluations
+bash scripts/run_oran_experiments.sh    # O-RAN: 3 seeds x 4 methods + aggregation
+```
+
+Both scripts read every parameter (episodes, seeds, save directories) from
+environment variables with thesis-scale defaults already set — see each
+script's own header comment for the full list. For a fast smoke test
+before committing to a full (multi-hour) run:
+
+```bash
+EPISODES=5 bash scripts/run_cran_experiments.sh
+EPISODES=5 bash scripts/run_oran_experiments.sh
+```
+
+Optional (O-RAN track): check whether the power model's needs-validation
+constants (§10.5 of its concept note) affect the headline method
+comparison:
+
+```bash
+python -m oran_evaluation.power_sensitivity --train-episodes 500 --seeds 42 123 456
+```
+
+### Option B / C: Docker
+
+`docker-compose.yml` builds a small CPU-only image (`Dockerfile.cpu`) and
+runs with no GPU reservation by default, so `docker compose run` works on
+any Docker host — no NVIDIA driver or `nvidia-container-toolkit` required:
+
+```bash
+docker compose build
+docker compose run --rm full-cran      # C-RAN track, full experiment suite
+docker compose run --rm full-oran      # O-RAN track, full experiment suite
+docker compose run --rm oran-power-sensitivity \
+  --train-episodes 500 --seeds 42 123 456
+```
+
+To use an NVIDIA GPU instead, layer `docker-compose.gpu.yml` on top (builds
+from the CUDA-based `Dockerfile` and adds a GPU device reservation to each
+service; requires the [NVIDIA Container
+Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml build
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml run --rm full-cran
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml run --rm full-oran
+```
+
+Single-seed quick checks and every other named command (`hybrid`,
+`baselines`, `hpsearch`, `sweeps`, `oran_hybrid`, `oran_baselines`,
+`oran_power_sensitivity`) work the same way against either compose file —
+see `entrypoint.sh` for the full dispatch table:
+
+```bash
+docker compose run --rm train hybrid --config config/default.yaml --seed 42
+docker compose run --rm train-oran oran_hybrid --config config/oran_default.yaml --seed 42
+```
+
+Results land on the host via bind mounts (`data/results/`,
+`data/results_oran/`, `thesis/figures/`, `thesis/figures_oran/`,
+`thesis/tables/`, `thesis/tables_oran/`) — the same paths Option A writes
+to, so the two are interchangeable/resumable across runs.
+
+---
+
 ## Key Decisions Log (C-RAN / Publications Track)
 
 The O-RAN track has no equivalent iterated log — it's governed by a single supervisor-approved concept document (`manuscript/ORAN_BMPP_DQN_Concept_Note_v1.md`) rather than a series of revised drafts; its scope/design decisions live in that document's own §4-§6, not here.

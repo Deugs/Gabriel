@@ -1,0 +1,43 @@
+# CPU-only image for running the C-RAN and O-RAN DRL experiment suites
+# without a GPU (see docs/dev_guide.md). Functionally identical to
+# `Dockerfile` -- same entrypoint, same commands -- but built on a much
+# smaller base image (no CUDA runtime) and installing the CPU-only PyTorch
+# wheel, so it builds and runs on any Docker host, no NVIDIA driver or
+# nvidia-container-toolkit required. Agents already fall back to CPU
+# automatically whenever torch.cuda.is_available() is False, so no code
+# changes are needed to use this image; it is simply lighter and faster
+# to pull/build than `Dockerfile` when no GPU is available or wanted.
+#
+# This is the image docker-compose.yml's services build by default. To use
+# the GPU image (`Dockerfile`) instead, layer docker-compose.gpu.yml on top
+# -- see that file's own header comment and README.md's "Running the
+# Experiments" section.
+FROM python:3.10-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PYTHONPATH=/app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY requirements.txt .
+
+# CPU-only wheel index -- versions matched to Dockerfile's CUDA build so
+# both images run identical code paths.
+RUN pip install --upgrade pip && \
+    pip install torch==2.3.1 torchvision==0.18.1 torchaudio==2.3.1 \
+    --index-url https://download.pytorch.org/whl/cpu
+
+RUN pip install -r requirements.txt
+
+COPY . .
+
+RUN chmod +x entrypoint.sh
+
+ENTRYPOINT ["./entrypoint.sh"]
+CMD ["hybrid", "--config", "config/default.yaml"]

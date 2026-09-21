@@ -18,7 +18,9 @@ wandb/
 .git/
 .dockerignore
 Dockerfile
+Dockerfile.cpu
 docker-compose.yml
+docker-compose.gpu.yml
 
 # Thesis materials not needed at training runtime
 manuscript/

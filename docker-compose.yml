@@ -1,39 +1,104 @@
+# Container recipes for both DRL research tracks in this repo (C-RAN and
+# O-RAN/BMPP-DQN -- see README.md's own "Running the Experiments" section
+# for what each service does and how to run the same commands without
+# Docker at all).
+#
+# CPU by default: every service here builds from Dockerfile.cpu and runs
+# with no GPU reservation, so `docker compose run --rm <service>` works on
+# any Docker host -- no NVIDIA driver or nvidia-container-toolkit required.
+#
+# GPU (optional, opt-in): to use an NVIDIA GPU instead, layer
+# docker-compose.gpu.yml on top, which overrides each service's build to
+# use the CUDA-based `Dockerfile` and adds the GPU device reservation:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml \
+#     run --rm train hybrid --config config/default.yaml --seed 42
+# That requires the NVIDIA Container Toolkit on the host -- see
+# https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html.
 services:
+  # Single-seed C-RAN training run (a quick check, not the full suite).
   train:
-    build: .
-    image: gabriel-cran-drl:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.cpu
+    image: gabriel-cran-drl-cpu:latest
     environment:
       - PYTHONUNBUFFERED=1
       - WANDB_API_KEY=${WANDB_API_KEY:-}
     volumes:
       - ./data/results:/app/data/results
       - ./config:/app/config:ro
-    # GPU reservation (Compose v2 / `docker compose`, requires nvidia-container-toolkit
-    # on the host). On legacy standalone docker-compose v1, replace this `deploy` block
-    # with a top-level `runtime: nvidia` key instead.
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
     command: ["hybrid", "--config", "config/default.yaml", "--seed", "42"]
 
+  # Single-seed O-RAN (BMPP-DQN) training run (a quick check).
   train-oran:
-    build: .
-    image: gabriel-cran-drl:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.cpu
+    image: gabriel-cran-drl-cpu:latest
     environment:
       - PYTHONUNBUFFERED=1
     volumes:
       - ./data/results_oran:/app/data/results_oran
       - ./config:/app/config:ro
-    # GPU reservation, same convention as the `train` service above.
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
     command: ["oran_hybrid", "--config", "config/oran_default.yaml", "--seed", "42"]
+
+  # Full required C-RAN experiment matrix (scripts/run_cran_experiments.sh):
+  # all 10 baselines + the proposed method, 10 seeds, scalability/ablation/
+  # CSI-robustness/generalization/latency sweeps. Long-running -- see
+  # docs/cran_experiment_guide.md. Override EPISODES (default 3000) via the
+  # host environment, e.g. `EPISODES=5 docker compose run --rm full-cran`
+  # for a smoke test.
+  full-cran:
+    build:
+      context: .
+      dockerfile: Dockerfile.cpu
+    image: gabriel-cran-drl-cpu:latest
+    environment:
+      - PYTHONUNBUFFERED=1
+      - WANDB_API_KEY=${WANDB_API_KEY:-}
+      - EPISODES=${EPISODES:-3000}
+    volumes:
+      - ./data/results:/app/data/results
+      - ./config:/app/config:ro
+      - ./thesis/figures:/app/thesis/figures
+      - ./thesis/tables:/app/thesis/tables
+    command: ["full_cran"]
+
+  # Full required O-RAN experiment matrix (scripts/run_oran_experiments.sh):
+  # all 3 baselines + BMPP-DQN, 3 seeds, statistical aggregation, latency
+  # benchmark. See docs/oran_experiment_guide.md. Override EPISODES
+  # (default 500) / SEEDS (default "42 123 456") via the host environment.
+  full-oran:
+    build:
+      context: .
+      dockerfile: Dockerfile.cpu
+    image: gabriel-cran-drl-cpu:latest
+    environment:
+      - PYTHONUNBUFFERED=1
+      - EPISODES=${EPISODES:-500}
+      - SEEDS=${SEEDS:-42 123 456}
+    volumes:
+      - ./data/results_oran:/app/data/results_oran
+      - ./config:/app/config:ro
+      - ./thesis/figures_oran:/app/thesis/figures_oran
+      - ./thesis/tables_oran:/app/thesis/tables_oran
+    command: ["full_oran"]
+
+  # O-RAN power-model constant sensitivity analysis
+  # (oran_evaluation/power_sensitivity.py) -- perturbs the needs-validation
+  # power-model constants and checks whether the 4-method reward ranking is
+  # robust. Pass extra CLI flags after the service name, e.g.:
+  #   docker compose run --rm oran-power-sensitivity \
+  #     --train-episodes 500 --seeds 42 123 456
+  oran-power-sensitivity:
+    build:
+      context: .
+      dockerfile: Dockerfile.cpu
+    image: gabriel-cran-drl-cpu:latest
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./data/results_oran:/app/data/results_oran
+      - ./config:/app/config:ro
+      - ./thesis/figures_oran:/app/thesis/figures_oran
+    command: ["oran_power_sensitivity", "--quick"]

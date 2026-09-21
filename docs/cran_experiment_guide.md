@@ -21,17 +21,32 @@ pre-commit install
 export PYTHONPATH="$(pwd):$PYTHONPATH"   # no setup.py/pyproject.toml -- needed for every command below
 ```
 
-**Option B: Docker (GPU, CUDA 12.1)**
+**Option B: Docker (CPU by default; GPU opt-in)**
 
 ```bash
 docker compose build
 docker compose run --rm train hybrid --config config/default.yaml --seed 42
+
+# Full 10-seed/11-method experiment matrix in the container:
+docker compose run --rm full-cran
 ```
 
-See the `Dockerfile`/`docker-compose.yml`/`entrypoint.sh` at the repo root —
-`entrypoint.sh` dispatches `hybrid`, `baselines`, `hpsearch`, and `sweeps` to
-the matching `training/*.py` script. Falls back to CPU automatically if run
-without `--gpus`/without an `nvidia-container-toolkit` host.
+See the `Dockerfile`/`Dockerfile.cpu`/`docker-compose.yml`/
+`docker-compose.gpu.yml`/`entrypoint.sh` at the repo root — `entrypoint.sh`
+dispatches `hybrid`, `baselines`, `hpsearch`, `sweeps`, and `full_cran` (the
+entire matrix above) to the matching `training/*.py` script or
+`scripts/run_cran_experiments.sh`. `docker-compose.yml` builds a small
+CPU-only image (`Dockerfile.cpu`) and requests no GPU by default, so this
+works on any Docker host. To use an NVIDIA GPU instead (requires the NVIDIA
+Container Toolkit), layer the GPU override:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml build
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml run --rm full-cran
+```
+
+See README.md's "Running the Experiments" section for the full command
+reference across both tracks.
 
 **Verify the setup**:
 

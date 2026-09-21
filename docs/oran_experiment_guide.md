@@ -22,16 +22,31 @@ pre-commit install
 export PYTHONPATH="$(pwd):$PYTHONPATH"   # needed for every command below
 ```
 
-**Option B: Docker (GPU, CUDA 12.1)**
+**Option B: Docker (CPU by default; GPU opt-in)**
 
 ```bash
 docker compose build
 docker compose run --rm train-oran oran_hybrid --config config/oran_default.yaml --seed 42
+
+# Full 3-seed/4-method experiment matrix in the container:
+docker compose run --rm full-oran
 ```
 
-`entrypoint.sh` also dispatches `oran_hybrid`/`oran_bmpp_dqn` and
-`oran_baselines` to the matching `oran_training/*.py` script. Falls back to
-CPU automatically without `--gpus`.
+`entrypoint.sh` also dispatches `oran_hybrid`/`oran_bmpp_dqn`,
+`oran_baselines`, `full_oran` (the entire matrix above), and
+`oran_power_sensitivity` to the matching script. `docker-compose.yml`
+builds a small CPU-only image (`Dockerfile.cpu`) and requests no GPU, so
+this works on any Docker host. To use an NVIDIA GPU instead (requires the
+NVIDIA Container Toolkit), layer the GPU override:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml build
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml \
+  run --rm full-oran
+```
+
+See README.md's "Running the Experiments" section for the full command
+reference across both tracks.
 
 **Verify the setup**:
 
@@ -107,6 +122,37 @@ run_latency_benchmark(config_path='config/oran_default.yaml', save_dir='thesis/f
 figures for BMPP-DQN vs. all 3 baselines. `run_latency_benchmark` measures a
 single scenario (this track's focused single-gNB scope, Concept Note
 §6.1/7.1) — not a scalability sweep like the C-RAN track's.
+
+### 3.4 Power-model constant sensitivity analysis (optional, recommended before citing any power-model-derived number)
+
+`oran_env/power_model.py`'s RU/DU/CU/fronthaul constants are literature-style
+placeholders (Concept Note §10.5) — nine literature-verification passes
+found no source that validates them directly (see that module's own
+docstring). `oran_evaluation/power_sensitivity.py` instead checks whether
+the 4-method comparison's ranking is an artifact of any single unvalidated
+constant, by perturbing each constant group within the ranges the
+literature review brackets and retraining all 4 methods from scratch at
+each point:
+
+```bash
+python -m oran_evaluation.power_sensitivity \
+  --train-episodes 500 \
+  --seeds 42 123 456
+```
+
+For a fast sanity check before committing to the full sweep (7 scenarios ×
+4 methods × N seeds, each a from-scratch training run):
+
+```bash
+python -m oran_evaluation.power_sensitivity --quick
+```
+
+Output: `data/results_oran/power_sensitivity/summary.json` (per-scenario
+metrics and a `robustness` verdict against the unperturbed baseline's
+ranking) and one bar chart per scenario in `thesis/figures_oran/`. This
+does not validate the power model's absolute values — nothing can, per the
+disclosure above — only whether the comparative finding reported in
+Chapter 4 depends on any single placeholder constant.
 
 ## 4. After the runs
 

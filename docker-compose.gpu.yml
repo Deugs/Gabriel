@@ -1,0 +1,73 @@
+# GPU override for docker-compose.yml. Layer this on top to build from the
+# CUDA-based `Dockerfile` instead of `Dockerfile.cpu` and reserve an NVIDIA
+# GPU for each service, e.g.:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml build
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml \
+#     run --rm train hybrid --config config/default.yaml --seed 42
+#
+# Requires the NVIDIA Container Toolkit on the host -- see
+# https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html.
+# On legacy standalone docker-compose v1 (not the `docker compose` v2
+# plugin), replace each `deploy` block below with a top-level
+# `runtime: nvidia` key instead.
+services:
+  train:
+    build:
+      dockerfile: Dockerfile
+    image: gabriel-cran-drl:latest
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  train-oran:
+    build:
+      dockerfile: Dockerfile
+    image: gabriel-cran-drl:latest
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  full-cran:
+    build:
+      dockerfile: Dockerfile
+    image: gabriel-cran-drl:latest
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  full-oran:
+    build:
+      dockerfile: Dockerfile
+    image: gabriel-cran-drl:latest
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  oran-power-sensitivity:
+    build:
+      dockerfile: Dockerfile
+    image: gabriel-cran-drl:latest
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

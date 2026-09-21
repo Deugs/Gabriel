@@ -712,7 +712,7 @@ def test_mpdqn_param_loss_optimization_is_exactly_equivalent(default_config):
     agent = ORANMPDQNAgent(state_dim=12, n_ru=2, n_splits=2, config=cfg)
 
     batch = 5
-    feat_for_param = torch.randn(batch, agent.encoder.output_dim)
+    feat_for_param = torch.randn(batch, agent.encoder.output_dim, device=agent.device)
 
     # OLD formula: evaluate ALL n_joint_actions with gradients, then gather
     # the greedy one (this is exactly what update() did before the fix).
