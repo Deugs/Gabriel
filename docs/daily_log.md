@@ -2,6 +2,60 @@
 
 > Filled instances of `docs/daily_log_template.md`. Newest entry first.
 
+## Date: 2026-09-22 (C-RAN reduced 3-seed matrix complete; hybrid shows the same seed-dependent lock-in as BMPP-DQN)
+
+### What I Did Today
+- [x] Per the candidate's instruction, ran the C-RAN checkpointed matrix as a reduced-scope first pass: 10 methods (all 11 minus `mpdqn`, deliberately excluded -- see below) x 3 seeds (42/123/456) x 3000 episodes, via `scripts/run_checkpointed_matrix.py --track cran --episodes 3000 --seeds 42 123 456 --methods ... hybrid` (30 jobs total).
+- [x] `mpdqn` was excluded from this pass: it projects to ~87h/seed at this repo's real `n_rrh=12` scale (documented, intentional per its own module docstring -- the baseline the proposed method's branching decomposition is meant to outperform on scalability, not a fast baseline), and this script only checkpoints at (method, seed) job boundaries, not mid-job -- an ~87h single job with no mid-job resumability was too large a loss surface given this sandbox's repeated container reclaims (see Blockers). Added `--methods` to the script for exactly this kind of exclusion, with `resolve_methods()` extracted as an independently-tested helper (`tests/test_checkpointed_runner.py`).
+- [x] The run needed 4 separate relaunches across ~30 hours of wall-clock time due to repeated container reclaims (the sandbox killed the background process at least 4 times, seemingly independent of my own engagement with the session) -- each time, the checkpointed manifest and on-disk job outputs were confirmed intact before relaunching, and the runner correctly skipped every already-done job and resumed at the right one. One relaunch attempt raced: a reclaim notification arrived, but the "old" process (467) had not actually died, and I started a second instance (4470) writing to the same log file and the same `hybrid/seed456` output directory before noticing the duplicate PIDs. Caught this from `ps aux` showing two PIDs for the same command, killed both immediately, verified no corrupted output (only one stale, safely-overwritable `checkpoint_ep500.pt`, no `summary.json`, manifest correctly missing the job), and relaunched a single clean instance.
+- [x] All 30 jobs completed. Full results:
+
+| Method | Reward (seed 42/123/456) | Power | QoS |
+|---|---|---|---|
+| all_on | -187,307 (identical, all 3 seeds) | 1135.6W | 0.0% |
+| greedy | -173,656 (identical) | 1074.0W | 0.0% |
+| nmbs | -113,857 (identical) | 917.5W | 2.9% |
+| convex | -206,789 (identical) | 1048.0W | 0.0% |
+| ann_gsbf | -186,680 (identical) | 1100.7W | 0.0% |
+| ddqn_socp | -206,761 / -206,766 / -206,745 | ~1020-1047W | 0.0% |
+| ddqn | -53,241 / -42,648 / -53,241 | 734.4W | 6.8% / 7.2% / 6.8% |
+| ddpg | -46,868 / -60,842 / -42,648 | 734.4W | 5.9% / 4.1% / 7.2% |
+| pdqn | -139,046 / -141,769 / -115,219 | ~1004-1066W | 0.0% / 0.0% / 0.2% |
+| **hybrid (proposed)** | **-123,280 / -52,137 / -50,556** | 860.9W / 734.4W / 734.4W | 0.0% / 6.3% / 5.6% |
+
+- [x] Noticed the same lock-in signature investigated in the O-RAN track (2026-09-20/21 entries): `hybrid`'s per-seed eval history shows long runs of bit-identical eval reward across many consecutive checkpoints (seed456: -50,555.80 exactly repeated for 16 of 20 eval checkpoints, from episode 600 through 3000; seed123: -52,136.999557018695 for 15 of 20, episode 600 through 3000), then never moving again. Two of the three seeds (123, 456) locked onto a fixed point competitive with the best learning baselines (DDPG, DQN); one seed (42) locked onto a distinctly worse fixed point matching the same qualitative "collapsed" pattern as BMPP-DQN (0.0% QoS). This is a real, disclosable finding, not something fixed today: `hybrid` did not clearly outperform the simpler DDQN/DDPG baselines in this reduced 3-seed pass, and shows real seed-to-seed variance in *which* fixed point it lands on -- unlike this pass's 5 non-learning baselines (all_on/greedy/convex/ann_gsbf/ddqn_socp), which are bit-identical across seeds because they never learn at all.
+
+### Time Spent
+| Activity | Hours |
+|----------|-------|
+| Coding | 0.3 (`--methods` flag + test) |
+| Writing | 0.3 |
+| Reading | 0.1 |
+| Debugging | 0.2 (diagnosing and resolving the duplicate-process race after a reclaim notification) |
+| Running experiments | ~30 (wall-clock monitoring across repeated container reclaims and relaunches, most of it unattended background training) |
+| **Total** | ~31 |
+
+### Decisions Made
+| Decision | Rationale |
+|----------|-----------|
+| Excluded `mpdqn` from this reduced pass rather than let it run for the full ~87h/seed | No mid-job checkpointing exists for a single training run, and this sandbox has now demonstrated (this run) that it will reclaim the background process multiple times over a 30-hour span regardless of continuous engagement -- an ~87h single job under those conditions has a real, non-negligible chance of never completing (repeatedly restarting from episode 0). Deferred to dedicated persistent/GPU compute per the candidate's own choice. |
+| Killed both processes immediately on discovering the duplicate-PID race, rather than letting either continue | Two processes writing to the same save directory could silently corrupt `summary.json`/checkpoint files with interleaved writes from two independent training runs -- verifying and restarting clean was the only way to guarantee the eventual result is trustworthy. |
+| Reported `hybrid`'s mixed result honestly (competitive on 2/3 seeds, collapsed on 1/3) rather than only reporting its best or its mean | Averaging across seeds here would hide the real, decision-relevant signal: this method's outcome depends heavily on which fixed point it happens to lock into, the same instability already documented for BMPP-DQN in the O-RAN track. |
+
+### Blockers
+| Blocker | Severity | Plan |
+|---------|----------|------|
+| This sandbox reclaimed the background matrix-runner process at least 4 times across ~30 hours during this single reduced-scope pass, apparently independent of session engagement (unlike earlier O-RAN monitoring, where staying continuously engaged reliably prevented reclaims) | Medium -- the checkpointed-matrix design tolerates this for individual (method, seed) jobs, but makes any single job longer than a session's typical uptime a real risk | For `mpdqn` and any full 10-seed run, plan for dedicated persistent/GPU compute rather than this ephemeral sandbox, as previously recommended |
+
+### Tomorrow's Plan
+- [ ] Ask the candidate whether/how to proceed on `mpdqn` and the remaining 7 seeds needed for the full 10-seed convention, given the reclaim risk observed today
+- [ ] Consider whether `hybrid`'s seed-dependent lock-in (this entry) warrants the same kind of investigation given to BMPP-DQN's (2026-09-21), or whether to document it as-is pending more seeds
+
+### Notes
+The C-RAN track's proposed method shows a real, evidence-based parallel to the O-RAN track's BMPP-DQN finding: both are branching architectures, and both show training runs that lock onto a fixed evaluation policy early and never move again, with the specific fixed point (good or bad) varying by seed. This is disclosed here rather than treated as settled either way -- 3 seeds is not enough to characterize how often `hybrid` lands on a good vs. bad fixed point, and the full 10-seed convention (README.md's Key Decisions Log) exists precisely to give that kind of question real statistical power.
+
+---
+
 ## Date: 2026-09-20 (O-RAN matrix complete; found and fixed BMPP-DQN's training divergence)
 
 ### What I Did Today
