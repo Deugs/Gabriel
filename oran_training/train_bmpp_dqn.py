@@ -39,6 +39,7 @@ def evaluate_agent(
     eval_rewards = []
     eval_powers = []
     eval_qos_rates = []
+    eval_qos_per_ue_rates = []
     eval_active_rus = []
     eval_switching_events = []
     eval_throughputs = []
@@ -47,7 +48,9 @@ def evaluate_agent(
         agent.reset_decision_cadence()
         obs, _ = env.reset(seed=1000 + ep)
         ep_reward = 0.0
-        ep_power, ep_qos, ep_active, ep_switch, ep_throughput = [], [], [], [], []
+        ep_power, ep_qos, ep_qos_per_ue, ep_active, ep_switch, ep_throughput = (
+            [], [], [], [], [], [],
+        )
 
         done = False
         while not done:
@@ -56,6 +59,7 @@ def evaluate_agent(
             ep_reward += reward
             ep_power.append(info.get("total_power_w", 0.0))
             ep_qos.append(1.0 if info.get("qos_violations_count", 0) == 0 else 0.0)
+            ep_qos_per_ue.append(info.get("qos_ue_satisfaction_frac", 0.0))
             ep_active.append(info.get("active_rus", 0))
             ep_switch.append(info.get("switching_events", 0))
             ep_throughput.append(info.get("throughput_mbps", 0.0))
@@ -64,6 +68,7 @@ def evaluate_agent(
         eval_rewards.append(ep_reward)
         eval_powers.append(float(np.mean(ep_power)))
         eval_qos_rates.append(float(np.mean(ep_qos)))
+        eval_qos_per_ue_rates.append(float(np.mean(ep_qos_per_ue)))
         eval_active_rus.append(float(np.mean(ep_active)))
         eval_switching_events.append(float(np.mean(ep_switch)))
         eval_throughputs.append(float(np.mean(ep_throughput)))
@@ -73,6 +78,7 @@ def evaluate_agent(
         "eval_std_reward": float(np.std(eval_rewards)),
         "eval_mean_power_w": float(np.mean(eval_powers)),
         "eval_qos_satisfaction_rate": float(np.mean(eval_qos_rates)),
+        "eval_qos_per_ue_rate": float(np.mean(eval_qos_per_ue_rates)),
         "eval_mean_active_rus": float(np.mean(eval_active_rus)),
         "eval_mean_switching_events": float(np.mean(eval_switching_events)),
         "eval_mean_throughput_mbps": float(np.mean(eval_throughputs)),
@@ -126,6 +132,7 @@ def train_bmpp_dqn_agent(
         "episode_rewards": [],
         "episode_powers": [],
         "qos_rates": [],
+        "qos_per_ue_rates": [],
         "active_rus": [],
         "switching_events": [],
         "param_losses": [],
@@ -139,7 +146,7 @@ def train_bmpp_dqn_agent(
         agent.reset_decision_cadence()
         obs, _ = env.reset()
         ep_reward = 0.0
-        ep_powers, ep_qos, ep_active, ep_switch = [], [], [], []
+        ep_powers, ep_qos, ep_qos_per_ue, ep_active, ep_switch = [], [], [], [], []
         param_loss_list, critic_loss_list = [], []
 
         done = False
@@ -159,6 +166,7 @@ def train_bmpp_dqn_agent(
             ep_reward += reward
             ep_powers.append(info.get("total_power_w", 0.0))
             ep_qos.append(1.0 if info.get("qos_violations_count", 0) == 0 else 0.0)
+            ep_qos_per_ue.append(info.get("qos_ue_satisfaction_frac", 0.0))
             ep_active.append(info.get("active_rus", 0))
             ep_switch.append(info.get("switching_events", 0))
 
@@ -169,6 +177,7 @@ def train_bmpp_dqn_agent(
 
         mean_power = float(np.mean(ep_powers)) if ep_powers else 0.0
         qos_rate = float(np.mean(ep_qos)) if ep_qos else 0.0
+        qos_per_ue_rate = float(np.mean(ep_qos_per_ue)) if ep_qos_per_ue else 0.0
         mean_active = float(np.mean(ep_active)) if ep_active else 0.0
         mean_switching = float(np.mean(ep_switch)) if ep_switch else 0.0
         mean_param_loss = float(np.mean(param_loss_list)) if param_loss_list else 0.0
@@ -177,6 +186,7 @@ def train_bmpp_dqn_agent(
         history["episode_rewards"].append(float(ep_reward))
         history["episode_powers"].append(mean_power)
         history["qos_rates"].append(qos_rate)
+        history["qos_per_ue_rates"].append(qos_per_ue_rate)
         history["active_rus"].append(mean_active)
         history["switching_events"].append(mean_switching)
         history["param_losses"].append(mean_param_loss)
@@ -198,7 +208,8 @@ def train_bmpp_dqn_agent(
                 f"Ep {ep:4d}/{episodes} | Train Reward: {ep_reward:8.2f} | "
                 f"Eval Reward: {eval_metrics['eval_mean_reward']:8.2f} | "
                 f"Power: {eval_metrics['eval_mean_power_w']:6.1f}W | "
-                f"QoS: {eval_metrics['eval_qos_satisfaction_rate']*100:5.1f}% | "
+                f"QoS: {eval_metrics['eval_qos_satisfaction_rate']*100:5.1f}% "
+                f"(per-UE: {eval_metrics['eval_qos_per_ue_rate']*100:5.1f}%) | "
                 f"Active RUs: {eval_metrics['eval_mean_active_rus']:4.1f}/{env.n_ru}"
             )
 
@@ -230,6 +241,7 @@ def train_bmpp_dqn_agent(
         "final_eval_reward": last_eval.get("eval_mean_reward", 0.0),
         "final_eval_power_w": last_eval.get("eval_mean_power_w", 0.0),
         "final_qos_rate": last_eval.get("eval_qos_satisfaction_rate", 0.0),
+        "final_qos_per_ue_rate": last_eval.get("eval_qos_per_ue_rate", 0.0),
         "final_switching_events": last_eval.get("eval_mean_switching_events", 0.0),
         "final_eval_throughput_mbps": last_eval.get("eval_mean_throughput_mbps", 0.0),
         "final_upper_level_decisions": episodes

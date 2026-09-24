@@ -384,6 +384,16 @@ class ORANEnv(gym.Env):
             "throughput_mbps": total_throughput_mbps,
             "qos_violations_count": int(np.sum(qos_violations_bps > 0.0)),
             "qos_shortfall_mbps": float(np.sum(qos_violations_bps) / 1e6),
+            # Fraction of the n_ue UEs with zero shortfall this step -- a
+            # continuous, per-UE-averaged QoS signal, distinct from
+            # "qos_violations_count == 0" (which requires *every* UE to be
+            # simultaneously satisfied and is therefore much stricter: with
+            # n_ue independent-ish per-step failure chances, the all-UE rate
+            # falls off sharply even when most individual UEs are usually
+            # satisfied). See docs/oran_thesis_guide.md's QoS-metric note.
+            "qos_ue_satisfaction_frac": float(
+                np.sum(qos_violations_bps <= 0.0) / self.n_ue
+            ),
             "active_rus": int(np.sum(ru_on)),
         }
         return obs, float(reward), terminated, truncated, info

@@ -1,0 +1,14 @@
+\begin{table}[h]
+\centering
+\caption{O-RAN Track: Performance Comparison and Statistical Significance.}
+\begin{tabular}{lcccccc}
+\hline
+Algorithm & Mean Reward (95\% CI) & Mean Power (W) & QoS Rate (\%) & Switching Freq. & $p$-value (vs Proposed) & Cohen's $d$ \\
+\hline
+BMPP_DQN & -100730.93 [-100739.37, -100722.50] & 145.2 & 20.8\% & 0.22 & N/A (Proposed) & N/A (Proposed) \\
+ddpg & -74645.11 [-93211.30, -56078.92] & 200.4 & 24.7\% & 0.04 & 0.0263 & -3.489 \\
+dqn & -58772.18 [-70182.60, -47361.77] & 167.0 & 24.9\% & 0.55 & 0.0040 & -9.141 \\
+mpdqn & -63758.87 [-106810.50, -20707.24] & 148.0 & 28.6\% & 0.54 & 0.0661 & -2.133 \\
+\hline
+\end{tabular}
+\end{table}

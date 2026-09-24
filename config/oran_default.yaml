@@ -19,7 +19,20 @@ network:
                           # levels c=0/1/2 -- Concept Note Section 10.2 (needs validation)
   area_size_m: 500
   carrier_freq_ghz: 3.5
-  bandwidth_mhz: 20
+  # 2026-09-24: raised from 20 -> 100 MHz. Empirical check (best-case
+  # all-RU/max-power/equal-PRB policy, 300 steps): at 20 MHz, mean
+  # aggregate demand (~101 Mbps, driven by this scenario's Poisson
+  # burstiness) already approached mean achievable throughput (~77 Mbps)
+  # even under that generous reference policy, leaving essentially no
+  # headroom for any policy -- including the intended learned ones -- to
+  # satisfy QoS. 100 MHz raises mean achievable throughput to ~384 Mbps
+  # under the same reference policy (best-case per-UE satisfaction
+  # 74%->84%), giving real headroom while still being a standard,
+  # precedented channel bandwidth for this model's own n78-band carrier
+  # frequency (3.5 GHz) -- not an arbitrary tuning choice. See
+  # docs/oran_thesis_guide.md's QoS-metric note for the accompanying
+  # per-UE-vs-all-UE metric distinction this same investigation surfaced.
+  bandwidth_mhz: 100
   noise_power_dbm: -102
 
 # ============================================================

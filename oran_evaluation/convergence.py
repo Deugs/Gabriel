@@ -70,6 +70,14 @@ def analyze_convergence(
     algo_scores: Dict[str, Dict[int, float]] = {}
     algo_powers: Dict[str, Dict[int, float]] = {}
     algo_qos: Dict[str, Dict[int, float]] = {}
+    # Per-UE-averaged QoS rate (fraction of UEs satisfied per step, averaged
+    # over the episode), distinct from algo_qos above (which requires *all*
+    # UEs satisfied simultaneously and is therefore much stricter -- see
+    # oran_env/oran_env.py's qos_ue_satisfaction_frac docstring note).
+    # Missing/older summary.json files without this field default to 0.0,
+    # not silently omitted, so their absence is visible in the table rather
+    # than averaged away.
+    algo_qos_per_ue: Dict[str, Dict[int, float]] = {}
     algo_switching: Dict[str, Dict[int, float]] = {}
 
     for s_file in summary_files:
@@ -83,11 +91,13 @@ def analyze_convergence(
                 reward = float(data.get("final_eval_reward", 0.0))
                 power = float(data.get("final_eval_power_w", 0.0))
                 qos = float(data.get("final_qos_rate", 0.0))
+                qos_per_ue = float(data.get("final_qos_per_ue_rate", 0.0))
                 switching = float(data.get("final_switching_events", 0.0))
 
                 algo_scores.setdefault(algo, {})[seed] = reward
                 algo_powers.setdefault(algo, {})[seed] = power
                 algo_qos.setdefault(algo, {})[seed] = qos
+                algo_qos_per_ue.setdefault(algo, {})[seed] = qos_per_ue
                 algo_switching.setdefault(algo, {})[seed] = switching
             elif isinstance(data, list):
                 for item in data:
@@ -96,11 +106,13 @@ def analyze_convergence(
                     reward = float(item.get("mean_reward", 0.0))
                     power = float(item.get("mean_power_w", 0.0))
                     qos = float(item.get("qos_satisfaction_rate", 0.0))
+                    qos_per_ue = float(item.get("qos_per_ue_rate", 0.0))
                     switching = float(item.get("mean_switching_events", 0.0))
 
                     algo_scores.setdefault(algo, {})[seed] = reward
                     algo_powers.setdefault(algo, {})[seed] = power
                     algo_qos.setdefault(algo, {})[seed] = qos
+                    algo_qos_per_ue.setdefault(algo, {})[seed] = qos_per_ue
                     algo_switching.setdefault(algo, {})[seed] = switching
         except Exception as e:
             print(f"Warning: Failed to parse {s_file}: {e}")
@@ -127,6 +139,9 @@ def analyze_convergence(
             "mean_qos_rate": float(
                 np.mean(list(algo_qos.get(algo, {}).values()) or [0.0])
             ),
+            "mean_qos_per_ue_rate": float(
+                np.mean(list(algo_qos_per_ue.get(algo, {}).values()) or [0.0])
+            ),
             "mean_switching_events": float(
                 np.mean(list(algo_switching.get(algo, {}).values()) or [0.0])
             ),
@@ -152,11 +167,15 @@ def analyze_convergence(
     latex_content = (
         "\\begin{table}[h]\n"
         "\\centering\n"
-        "\\caption{O-RAN Track: Performance Comparison and Statistical Significance.}\n"
-        "\\begin{tabular}{lcccccc}\n"
+        "\\caption{O-RAN Track: Performance Comparison and Statistical Significance. "
+        "``QoS Rate'' requires every UE satisfied simultaneously each step; "
+        "``Per-UE QoS'' is the average fraction of UEs satisfied per step -- "
+        "see this chapter's QoS-metric note for why the two differ sharply.}\n"
+        "\\begin{tabular}{lccccccc}\n"
         "\\hline\n"
         "Algorithm & Mean Reward (95\\% CI) & Mean Power (W) & "
-        "QoS Rate (\\%) & Switching Freq. & $p$-value (vs Proposed) & Cohen's $d$ \\\\\n"
+        "QoS Rate (\\%) & Per-UE QoS (\\%) & Switching Freq. & "
+        "$p$-value (vs Proposed) & Cohen's $d$ \\\\\n"
         "\\hline\n"
     )
 
@@ -173,10 +192,11 @@ def analyze_convergence(
                 p_val_str = "N/A (insufficient data)"
                 d_val_str = "N/A (insufficient data)"
         qos_pct = m["mean_qos_rate"] * 100
+        qos_per_ue_pct = m["mean_qos_per_ue_rate"] * 100
 
         latex_content += (
             f"{algo} & {m['mean_reward']:.2f} [{m['ci_95_lower']:.2f}, {m['ci_95_upper']:.2f}] & "
-            f"{m['mean_power_w']:.1f} & {qos_pct:.1f}\\% & "
+            f"{m['mean_power_w']:.1f} & {qos_pct:.1f}\\% & {qos_per_ue_pct:.1f}\\% & "
             f"{m['mean_switching_events']:.2f} & {p_val_str} & {d_val_str} \\\\\n"
         )
 

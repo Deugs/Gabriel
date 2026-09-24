@@ -34,13 +34,15 @@ def _evaluate_oran_baseline(
     training-time running-average reward against the proposed method's
     held-out final_eval_reward is not a fair comparison -- this gives
     every baseline the same held-out-eval treatment BMPP-DQN already gets."""
-    eval_rewards, eval_powers, eval_qos = [], [], []
+    eval_rewards, eval_powers, eval_qos, eval_qos_per_ue = [], [], [], []
     eval_active, eval_switch, eval_throughput = [], [], []
 
     for ep in range(eval_episodes):
         obs, _ = env.reset(seed=1000 + ep)
         total_reward = 0.0
-        powers, qos_flags, actives, switches, throughputs = [], [], [], [], []
+        powers, qos_flags, qos_per_ue_flags, actives, switches, throughputs = (
+            [], [], [], [], [], [],
+        )
 
         done = False
         while not done:
@@ -50,6 +52,7 @@ def _evaluate_oran_baseline(
             total_reward += reward
             powers.append(info.get("total_power_w", 0.0))
             qos_flags.append(1.0 if info.get("qos_violations_count", 0) == 0 else 0.0)
+            qos_per_ue_flags.append(info.get("qos_ue_satisfaction_frac", 0.0))
             actives.append(info.get("active_rus", 0))
             switches.append(info.get("switching_events", 0))
             throughputs.append(info.get("throughput_mbps", 0.0))
@@ -58,6 +61,7 @@ def _evaluate_oran_baseline(
         eval_rewards.append(float(total_reward))
         eval_powers.append(float(np.mean(powers)))
         eval_qos.append(float(np.mean(qos_flags)))
+        eval_qos_per_ue.append(float(np.mean(qos_per_ue_flags)))
         eval_active.append(float(np.mean(actives)))
         eval_switch.append(float(np.mean(switches)))
         eval_throughput.append(float(np.mean(throughputs)))
@@ -67,6 +71,7 @@ def _evaluate_oran_baseline(
         "std_reward": float(np.std(eval_rewards)),
         "mean_power_w": float(np.mean(eval_powers)),
         "qos_satisfaction_rate": float(np.mean(eval_qos)),
+        "qos_per_ue_rate": float(np.mean(eval_qos_per_ue)),
         "mean_active_rus": float(np.mean(eval_active)),
         "mean_switching_events": float(np.mean(eval_switch)),
         "mean_throughput_mbps": float(np.mean(eval_throughput)),
@@ -157,13 +162,15 @@ def run_oran_baseline_benchmarks(
                 raise
 
             batch_size = int(cfg.get("algorithm", {}).get("batch_size", 128))
-            ep_rewards, ep_powers, ep_qos_rates = [], [], []
+            ep_rewards, ep_powers, ep_qos_rates, ep_qos_per_ue_rates = [], [], [], []
             ep_active_rus, ep_switching_events, ep_throughputs = [], [], []
 
             for ep in range(episodes):
                 obs, _ = env.reset()
                 total_reward = 0.0
-                powers, qos_flags, actives, switches, throughputs = [], [], [], [], []
+                powers, qos_flags, qos_per_ue_flags, actives, switches, throughputs = (
+                    [], [], [], [], [], [],
+                )
 
                 done = False
                 while not done:
@@ -208,6 +215,7 @@ def run_oran_baseline_benchmarks(
                     qos_flags.append(
                         1.0 if info.get("qos_violations_count", 0) == 0 else 0.0
                     )
+                    qos_per_ue_flags.append(info.get("qos_ue_satisfaction_frac", 0.0))
                     actives.append(info.get("active_rus", 0))
                     switches.append(info.get("switching_events", 0))
                     throughputs.append(info.get("throughput_mbps", 0.0))
@@ -221,6 +229,7 @@ def run_oran_baseline_benchmarks(
                 ep_rewards.append(float(total_reward))
                 ep_powers.append(float(np.mean(powers)))
                 ep_qos_rates.append(float(np.mean(qos_flags)))
+                ep_qos_per_ue_rates.append(float(np.mean(qos_per_ue_flags)))
                 ep_active_rus.append(float(np.mean(actives)))
                 ep_switching_events.append(float(np.mean(switches)))
                 ep_throughputs.append(float(np.mean(throughputs)))
@@ -240,12 +249,14 @@ def run_oran_baseline_benchmarks(
                 "std_reward": eval_metrics["std_reward"],
                 "mean_power_w": eval_metrics["mean_power_w"],
                 "qos_satisfaction_rate": eval_metrics["qos_satisfaction_rate"],
+                "qos_per_ue_rate": eval_metrics["qos_per_ue_rate"],
                 "mean_active_rus": eval_metrics["mean_active_rus"],
                 "mean_switching_events": eval_metrics["mean_switching_events"],
                 "mean_throughput_mbps": eval_metrics["mean_throughput_mbps"],
                 "train_mean_reward": float(np.mean(ep_rewards)),
                 "train_mean_power_w": float(np.mean(ep_powers)),
                 "train_qos_satisfaction_rate": float(np.mean(ep_qos_rates)),
+                "train_qos_per_ue_rate": float(np.mean(ep_qos_per_ue_rates)),
                 "train_mean_active_rus": float(np.mean(ep_active_rus)),
                 "train_mean_switching_events": float(np.mean(ep_switching_events)),
                 "train_mean_throughput_mbps": float(np.mean(ep_throughputs)),
@@ -253,10 +264,12 @@ def run_oran_baseline_benchmarks(
             algo_results.append(seed_summary)
 
             qos_pct = seed_summary["qos_satisfaction_rate"] * 100
+            qos_per_ue_pct = seed_summary["qos_per_ue_rate"] * 100
             print(
                 f"Algo: {algo:6s} | Seed: {seed:4d} | "
                 f"Reward: {seed_summary['mean_reward']:8.2f} | "
-                f"Power: {seed_summary['mean_power_w']:6.1f}W | QoS: {qos_pct:5.1f}%"
+                f"Power: {seed_summary['mean_power_w']:6.1f}W | QoS: {qos_pct:5.1f}% "
+                f"(per-UE: {qos_per_ue_pct:5.1f}%)"
             )
 
             del model, env

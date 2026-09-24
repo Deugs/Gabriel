@@ -1,0 +1,53 @@
+[
+  {
+    "algorithm": "ddpg",
+    "seed": 42,
+    "mean_reward": -69826.50746473271,
+    "std_reward": 8246.483788452548,
+    "mean_power_w": 196.95132507501535,
+    "qos_satisfaction_rate": 0.276,
+    "mean_active_rus": 4.0,
+    "mean_switching_events": 0.04,
+    "mean_throughput_mbps": 202.35246392036976,
+    "train_mean_reward": -81276.0216463577,
+    "train_mean_power_w": 197.72122380258347,
+    "train_qos_satisfaction_rate": 0.22684000000000004,
+    "train_mean_active_rus": 4.0,
+    "train_mean_switching_events": 0.04,
+    "train_mean_throughput_mbps": 113.67711691678484
+  },
+  {
+    "algorithm": "ddpg",
+    "seed": 123,
+    "mean_reward": -83254.8113948389,
+    "std_reward": 10575.084391623277,
+    "mean_power_w": 203.29360873545733,
+    "qos_satisfaction_rate": 0.21400000000000002,
+    "mean_active_rus": 4.0,
+    "mean_switching_events": 0.04,
+    "mean_throughput_mbps": 89.15827818642984,
+    "train_mean_reward": -81826.4760550802,
+    "train_mean_power_w": 204.85574166935237,
+    "train_qos_satisfaction_rate": 0.22228000000000003,
+    "train_mean_active_rus": 4.0,
+    "train_mean_switching_events": 0.04,
+    "train_mean_throughput_mbps": 118.57316411904827
+  },
+  {
+    "algorithm": "ddpg",
+    "seed": 456,
+    "mean_reward": -70854.01488397499,
+    "std_reward": 17727.248009308278,
+    "mean_power_w": 200.93158428146276,
+    "qos_satisfaction_rate": 0.25,
+    "mean_active_rus": 4.0,
+    "mean_switching_events": 0.04,
+    "mean_throughput_mbps": 182.86876365352182,
+    "train_mean_reward": -82821.847554216,
+    "train_mean_power_w": 200.6671450356709,
+    "train_qos_satisfaction_rate": 0.21825999999999998,
+    "train_mean_active_rus": 4.0,
+    "train_mean_switching_events": 0.04,
+    "train_mean_throughput_mbps": 114.35409941110085
+  }
+]

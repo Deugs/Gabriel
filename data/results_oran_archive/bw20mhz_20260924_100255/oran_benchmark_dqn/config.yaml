@@ -1,0 +1,93 @@
+_run:
+  algorithm: dqn
+  config_path: config/oran_default.yaml
+  episodes: 500
+  seeds:
+  - 42
+  - 123
+  - 456
+algorithm:
+  activation: relu
+  batch_size: 128
+  continuous_noise_std: 0.1
+  continuous_noise_std_end: 0.01
+  epsilon_decay: 0.995
+  epsilon_end: 0.01
+  epsilon_start: 1.0
+  gamma: 0.99
+  gradient_clip_norm: 1.0
+  hidden_dims:
+  - 128
+  - 64
+  lower_buffer_size: 1000000
+  lr_actor: 0.0003
+  lr_critic: 0.0003
+  lr_discrete: 0.0001
+  max_episodes: 500
+  max_n_ru_for_flat_joint_action: 6
+  max_steps_per_episode: 100
+  min_buffer_size: 2000
+  name: bmpp_dqn
+  tau: 0.005
+  upper_buffer_size: 200000
+  upper_level_period_steps: 10
+  use_layer_norm: true
+channel:
+  path_loss_exponent: 3.5
+evaluation:
+  checkpoint_freq: 250
+  eval_freq: 50
+  n_eval_episodes: 5
+  n_random_seeds: 3
+  save_checkpoints: true
+hardware:
+  device: cuda
+network:
+  area_size_m: 500
+  bandwidth_mhz: 20
+  carrier_freq_ghz: 3.5
+  n_cu: 1
+  n_du: 1
+  n_ru: 4
+  n_splits: 3
+  n_ue: 8
+  noise_power_dbm: -102
+power:
+  cu:
+    p_dyn_per_ru_w: 1.0
+    p_static_w: 30.0
+  du:
+    p_per_ru_by_split_w:
+    - 5.0
+    - 10.0
+    - 20.0
+    p_static_w: 50.0
+  fronthaul:
+    p_common_w: 10.0
+    p_per_ru_by_split_w:
+    - 3.0
+    - 6.0
+    - 15.0
+  ru:
+    p_max_dbm: 33
+    p_proc_by_split_w:
+    - 10.0
+    - 6.0
+    - 3.0
+    p_sleep_w: 2.0
+    p_switch_split_w: 1.0
+    p_switch_w: 2.0
+    pa_efficiency: 0.25
+reward:
+  alpha_energy: 1.0
+  beta_qos: 10.0
+  gamma_switch: 0.5
+traffic:
+  floor_ratio: 0.2
+  lambda_peak: 0.5
+  packet_size_bits: 4000000.0
+  step_duration_s: 0.1
+  t1: 7.0
+  t2: 10.0
+  t3: 20.0
+  t4: 23.0
