@@ -366,6 +366,51 @@ def test_update_upper_evaluates_next_state_with_target_critic(default_config):
     )
 
 
+def test_update_upper_replays_stored_cont_params_not_fresh_ones(default_config):
+    """Regression guard for the 2026-09-24 fix: update_upper()'s
+    *current*-state Q(s, ru_on, split, x) prediction must use the historical
+    x=(power_ratio, prb_share) actually in effect when that transition's
+    reward was observed -- replayed from the upper buffer -- not a fresh x
+    recomputed from the current (online) param_net. Recomputing fresh
+    decouples the critic's fused input from the very reward label it is
+    being regressed against (the reward has nothing to do with a x drawn
+    *now*, long after the transition was recorded), which is a plausible
+    root cause of the continuous power head's observed collapse to a
+    degenerate near-zero output. After the fix, the online `param_net`
+    must never be called at all inside update_upper() -- only the buffer's
+    stored cont_params (for the current state) and `param_net_target` (for
+    the legitimate next-state bootstrap) are used."""
+    cfg = dict(default_config)
+    cfg["algorithm"] = dict(default_config["algorithm"])
+    cfg["algorithm"]["min_buffer_size"] = 16
+    cfg["algorithm"]["batch_size"] = 8
+    cfg["algorithm"]["upper_level_period_steps"] = 4
+
+    env = ORANEnv(cfg)
+    agent = _make_agent(env, cfg)
+    _populate_agent(agent, env, cfg)
+
+    calls = {"param_net": 0}
+    orig_param_net_forward = agent.param_net.forward
+
+    def spy_param_net(*args, **kwargs):
+        calls["param_net"] += 1
+        return orig_param_net_forward(*args, **kwargs)
+
+    agent.param_net.forward = spy_param_net
+    try:
+        agent.update_upper()
+    finally:
+        agent.param_net.forward = orig_param_net_forward
+
+    assert calls["param_net"] == 0, (
+        "update_upper() called the online param_net -- it must only use "
+        "the historical cont_params replayed from the upper buffer for "
+        "the current-state Q prediction, plus param_net_target for the "
+        "next-state bootstrap."
+    )
+
+
 def test_update_lower_bootstraps_actor_loss_off_target_networks(default_config):
     """Regression guard for the 2026-09-20 fix: update_lower()'s actor loss
     must maximize critic_target(upper_encoder_target(...)), not the online
