@@ -1,0 +1,14 @@
+\begin{table}[h]
+\centering
+\caption{O-RAN Track: Performance Comparison and Statistical Significance. ``QoS Rate'' requires every UE satisfied simultaneously each step; ``Per-UE QoS'' is the average fraction of UEs satisfied per step -- see this chapter's QoS-metric note for why the two differ sharply.}
+\begin{tabular}{lccccccc}
+\hline
+Algorithm & Mean Reward (95\% CI) & Mean Power (W) & QoS Rate (\%) & Per-UE QoS (\%) & Switching Freq. & $p$-value (vs Proposed) & Cohen's $d$ \\
+\hline
+BMPP_DQN & -100733.67 [-100734.59, -100732.75] & 143.7 & 20.8\% & 74.4\% & 0.28 & N/A (Proposed) & N/A (Proposed) \\
+ddpg & -68144.70 [-123253.37, -13036.02] & 198.2 & 32.7\% & 81.7\% & 0.04 & 0.1259 & -1.469 \\
+dqn & -21575.53 [-28488.32, -14662.75] & 211.6 & 45.7\% & 89.2\% & 0.61 & 0.0004 & -28.449 \\
+mpdqn & -16503.98 [-21885.90, -11122.07] & 142.3 & 59.3\% & 92.8\% & 1.09 & 0.0002 & -38.883 \\
+\hline
+\end{tabular}
+\end{table}
