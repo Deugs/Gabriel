@@ -30,10 +30,14 @@ tables, numbered equations).
 
 ## Key Figures/Tables (mirrors docs/thesis_guide.md's Chapter 4 convention)
 
-1. Convergence curves (BMPP-DQN + 3 baselines, 3 seeds) — `oran_evaluation.convergence`
-2. Energy savings comparison table (target: ≥15% vs. baselines, Concept Note §4.2) — `convergence_summary_oran.tex`
-3. Inference-time latency comparison (single scenario, not a scalability sweep — Concept Note §6.1/7.1's focused single-gNB scope) — `oran_evaluation.latency_benchmark`
-4. Multi-timescale convergence discussion (RQ3: does upper/lower branch separation affect convergence?) — `history["param_losses"]`/`history["critic_losses"]` in `oran_training.train_bmpp_dqn`'s summary output
+1. BMPP-DQN learning curve (mean ± std, 3 seeds) vs. each baseline's final performance as a reference line — not a true 4-method convergence figure, since baselines don't log a comparable per-episode series (see the function's own docstring) — `oran_evaluation.results_plots.plot_convergence_curve` → `convergence_curve_oran.{pdf,png}`
+2. Per-metric comparison bar charts, all 4 methods, mean ± std across seeds (reward, power, QoS strict, QoS per-UE, switching frequency, throughput, and a derived throughput-per-watt efficiency chart) — `oran_evaluation.results_plots.generate_comparison_plots` → `{reward,power,qos_strict,qos_per_ue,switching,throughput,efficiency}_comparison_oran.{pdf,png}`
+3. Power-throughput Pareto scatter (frontier highlighted) — `oran_evaluation.results_plots.plot_pareto_scatter` → `pareto_power_throughput_oran.{pdf,png}`
+4. Normalized multi-criteria radar/spider chart (all methods, all criteria at once) and TOPSIS composite-score bar chart — `oran_evaluation.multicriteria.{plot_radar,plot_composite_score}` → `radar_comparison_oran.{pdf,png}`, `composite_score_oran.{pdf,png}`
+5. Energy/performance comparison table with 95% CIs and paired significance tests (target: ≥15% vs. baselines, Concept Note §4.2) — `oran_evaluation.convergence.analyze_convergence` → `convergence_summary_oran.tex`
+6. Multi-criteria composite ranking table (TOPSIS; deliberately excludes reward — see the module's own docstring for why) — `oran_evaluation.multicriteria.run_multicriteria_analysis` → `multicriteria_summary_oran.tex`/`.csv`
+7. Inference-time latency comparison (single scenario, not a scalability sweep — Concept Note §6.1/7.1's focused single-gNB scope) — `oran_evaluation.latency_benchmark`
+8. Multi-timescale convergence discussion (RQ3: does upper/lower branch separation affect convergence?) — `history["param_losses"]`/`history["critic_losses"]` in `oran_training.train_bmpp_dqn`'s summary output
 
 ## Writing Quality Standards
 
@@ -199,3 +203,18 @@ thesis states them as fact:
   `n_ru=4` (matching this repo's own count precisely), with `n_ue=4` (a
   UE:RU ratio of 1.0, at the low end of the DQRL/OREO bracket) — a further
   data point, not a validation of `n_ue=8` specifically
+- `network.bandwidth_mhz` (§10.3, `config/oran_default.yaml`) — **resolved
+  via direct empirical check, not literature**, 2026-09-24: a best-case
+  all-RU/max-power/equal-PRB reference-policy probe found the original
+  placeholder (20 MHz) left mean aggregate demand (~101 Mbps) already
+  exceeding mean achievable throughput (~77 Mbps) even under that generous
+  reference policy — no policy had real headroom to satisfy QoS,
+  regardless of learning quality. Raised to 100 MHz, a standard,
+  precedented channel bandwidth for this model's own 3.5 GHz (n78-band)
+  carrier frequency, not an arbitrary tuning choice; raises mean achievable
+  throughput to ~384 Mbps under the same reference policy. See Concept
+  Note §6.5 and `docs/skills/skill_oran_env.md`'s "Capacity/demand scale"
+  note for the full empirical basis. This is an environment-scenario
+  change (all results from before 2026-09-24 reflect the old, capacity-
+  starved 20 MHz configuration — see `data/results_oran_archive/`), not a
+  code change.

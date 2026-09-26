@@ -77,7 +77,7 @@ nothing about the other.
 
 **Title**: BMPP-DQN Energy Optimization in Open Cloud-RAN with Hybrid Discrete-Continuous Control
 
-**Status**: Environment, proposed agent (`oran_agents/bmpp_dqn.py`), all 3 baselines (`oran_agents/{dqn_agent,ddpg_agent,mpdqn_agent}.py`), training scripts, and evaluation modules are all implemented and unit-tested. No full-scale (3-seed, thesis-scale) experiment runs have been executed yet, and no thesis chapter text has been written for this track (`docs/oran_thesis_guide.md`'s Chapter Content Mapping is a scaffold, not yet filled in).
+**Status**: Environment, proposed agent (`oran_agents/bmpp_dqn.py`), all 3 baselines (`oran_agents/{dqn_agent,ddpg_agent,mpdqn_agent}.py`), training scripts, and evaluation modules are all implemented and unit-tested. The full-scale (3-seed, 500-episode) experiment matrix has now been run (`data/results_oran/`) after fixing a training-signal bug in `oran_agents/bmpp_dqn.py` and recalibrating the environment's bandwidth (see `manuscript/ORAN_BMPP_DQN_Concept_Note_v1.md` §6.5 and `docs/daily_log.md`'s 2026-09-24/26 entries for the full investigative trail): BMPP-DQN's mean reward is now statistically indistinguishable from the best baseline (MP-DQN; paired $t$-test $p=0.854$), with the best strict-QoS rate and lowest switching frequency of all four methods, and ~11% better throughput-per-watt than MP-DQN — a strong, competitive result, though still short of the ≥15% energy-savings target below on the specific power/efficiency metrics (BMPP-DQN's mean power is actually higher than MP-DQN's). No thesis chapter text has been written for this track yet (`docs/oran_thesis_guide.md`'s Chapter Content Mapping is a scaffold, not yet filled in).
 
 **Scope** (Concept Note §6.1): single-gNB, 3 functional split options (3GPP TR 38.801 Options 2/6/8), 4 action branches (RU activation, functional split, transmit power, PRB allocation), downlink only, comparison against 3 baselines (DQN, DDPG, MP-DQN), 3 random seeds.
 
@@ -241,11 +241,11 @@ The environment (`cran_env/`), all 10 baselines (`agents/`, `baselines/`), and t
 
 ### O-RAN / BMPP-DQN Track (Thesis)
 
-The environment (`oran_env/`), all 3 baselines (`oran_agents/{dqn_agent,ddpg_agent,mpdqn_agent}.py`), and the proposed BMPP-DQN agent (`oran_agents/bmpp_dqn.py`) are already implemented and unit-tested. What actually remains:
+The environment (`oran_env/`), all 3 baselines (`oran_agents/{dqn_agent,ddpg_agent,mpdqn_agent}.py`), and the proposed BMPP-DQN agent (`oran_agents/bmpp_dqn.py`) are already implemented and unit-tested. The full 3-seed × 4-method experiment matrix at thesis scale (Concept Note §5.3) has been run (`data/results_oran/`; see Status above and Concept Note §6.5). What actually remains:
 
-1. **Run** the full 3-seed × 4-method experiment matrix at thesis scale (Concept Note §5.3) — everything so far has been verified at short training runs only. See `docs/oran_experiment_guide.md` for setup + step-by-step instructions, or run `bash scripts/run_oran_experiments.sh` to do all of it in one command.
-2. **Resolve** the needs-validation placeholders flagged in `docs/oran_thesis_guide.md` (power-model constants, traffic breakpoints, split→centralization mapping, default scenario scale) before the thesis states any of them as fact
-3. **Write** thesis chapter text per `docs/oran_thesis_guide.md`'s Chapter Content Mapping, once full-scale results are available
+1. **Resolve** the remaining needs-validation placeholders flagged in `docs/oran_thesis_guide.md` (power-model constants, traffic breakpoints, split→centralization mapping, default scenario scale) before the thesis states any of them as fact — `bandwidth_mhz` is now resolved (2026-09-24), the rest are still open
+2. **Investigate** (optional, not required for current scope) whether BMPP-DQN's per-branch-independent discrete heads carry any measurable cost now that the confounding training bug is fixed — no architectural test of this has been run against the corrected baseline (Concept Note §6.5's own disclosed limitation)
+3. **Write** thesis chapter text per `docs/oran_thesis_guide.md`'s Chapter Content Mapping, now that full-scale, corrected results and figures are available (`thesis/figures_oran/`, `thesis/tables_oran/`)
 
 ---
 

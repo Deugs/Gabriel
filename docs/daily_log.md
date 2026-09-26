@@ -2,6 +2,97 @@
 
 > Filled instances of `docs/daily_log_template.md`. Newest entry first.
 
+## Date: 2026-09-26 (O-RAN evaluation suite: comparison plots, TOPSIS multi-criteria ranking)
+
+### What I Did Today
+- [x] Built `oran_evaluation/results_plots.py`: one bar chart per headline metric (reward, power, QoS strict, QoS per-UE, switching frequency, throughput) across all 4 methods, mean ± std across seeds, plus a derived throughput-per-watt efficiency chart. Refactored `oran_evaluation/convergence.py` to expose a shared `load_algo_seed_metrics()` loader (also adding throughput extraction, not parsed anywhere before) so the figures and the existing LaTeX table are always derived from identical parsed data — verified the refactor is behavior-preserving (all 5 existing `test_oran_evaluation.py` tests pass unchanged) before building on it.
+- [x] Added two more figures: a power-vs-throughput Pareto scatter (`plot_pareto_scatter`, frontier highlighted) and a convergence-curve plot (`plot_convergence_curve`) showing BMPP-DQN's actual per-seed learning trajectory (from each seed's own `summary.json.history.eval_history`) against each baseline's final performance as reference lines — baselines don't log a comparable per-episode series, so this isn't a true 4-method convergence figure, only the proposed method's own trajectory referenced against where baselines ultimately landed.
+- [x] Built `oran_evaluation/multicriteria.py`: a TOPSIS (Hwang & Yoon, 1981) composite ranking across power/QoS-strict/QoS-per-UE/switching/throughput, deliberately excluding reward (already a weighted combination of these same metrics at training time — including it too would double-count). Added a radar/spider-chart visualization and a LaTeX+CSV table export.
+- [x] Made `plot_bar_comparison` (shared by every chart in this track) always save both `.pdf` and `.png` from one call, so every figure now has a raster copy alongside the vector one, per request.
+- [x] Caught two bugs before shipping, neither by construction: (1) `export_multicriteria_table` printed `qos`/`qos_per_ue` as raw `[0,1]` fractions under a "(%)" column header — fixed to scale by 100 for display only, CSV kept in raw fractions; (2) a transient Windows file-write error (`OSError: [Errno 22]`) on a `.png` save that had nothing to do with the code — retried and it passed, treated as a one-off lock/AV-scan artifact, not chased further since it didn't recur.
+- [x] Visually verified figures by rendering and looking at them (not just checking files exist, per this project's own standing practice) — the radar chart in particular directly visualizes *why* MP-DQN ranks last on TOPSIS despite strong QoS/power (its polygon collapses to near-center exactly on the switching-frequency axis).
+- [x] Ran the full O-RAN evaluation pipeline end-to-end against the real (post-fix, 100 MHz) `data/results_oran/` and regenerated every figure/table from it; re-ran the full O-RAN test suite (48/48 passing across `test_oran_evaluation.py`, `test_oran_agents.py`, `test_oran_env.py`, `test_oran_training.py`).
+- [x] Updated `manuscript/ORAN_BMPP_DQN_Concept_Note_v1.md` (§6.5's TOPSIS paragraph), `docs/skills/skill_oran_bmpp_dqn.md`, `docs/skills/skill_oran_env.md` to reflect this session's methodology.
+
+### Time Spent
+| Activity | Hours |
+|----------|-------|
+| Coding | 1.2 |
+| Writing | 0.4 |
+| Reading | 0.1 |
+| Debugging | 0.2 (the percentage-formatting bug and the transient PNG write error) |
+| Running experiments | 0.2 (full pipeline re-run + full test suite) |
+| **Total** | ~2.1 |
+
+### Decisions Made
+| Decision | Rationale |
+|----------|-----------|
+| TOPSIS over an ad-hoc weighted sum for the composite score | A standard, citable MCDM method (defensible in a thesis) that handles criteria of very different units/scales (Watts, %, Mbps, events/step) via vector normalization, without needing a hand-picked common unit. |
+| Exclude reward from the TOPSIS criteria set | Reward is already itself a weighted combination of energy efficiency, QoS violation, and switching cost (the environment's own alpha/beta/gamma reward function) baked in at training time — including it alongside its own components would double-count those factors. The composite score is an independent cross-check on the reward-based comparison, not a replacement for it. |
+| Report MP-DQN's last-place TOPSIS rank as-is, with the mechanism disclosed, rather than reweighting to make the ranking "look right" | Verified by hand that the Euclidean-distance computation is correct: MP-DQN's switching frequency (1.04) is a genuine ~4-25x outlier against the other three methods (<=0.29), and TOPSIS's distance-to-ideal formulation legitimately penalizes one extreme axis more than a simple average would. This is a property of the method operating correctly on real data, not a bug to paper over. |
+| Equal weights across the 5 TOPSIS criteria (not weights mirroring the reward function's own alpha/beta/gamma) | Reusing the reward's own weights would just be re-deriving reward under another name; equal weights keep this an independent, neutral audit. Flagged to the user as an easy lever to change if a different weighting philosophy is wanted. |
+
+### Blockers
+| Blocker | Severity | Plan |
+|---------|----------|------|
+| None | — | — |
+
+### Tomorrow's Plan
+- [ ] None currently queued for this track beyond what's already logged as open (Chapter 4/5 write-up incorporating this session's corrected results and figures)
+
+### Notes
+Full figure/table inventory after this session: `thesis/figures_oran/` holds 11 figures x 2 formats (pdf+png) = 22 files; `thesis/tables_oran/` holds `convergence_summary_oran.tex`, `multicriteria_summary_oran.tex`, `multicriteria_summary_oran.csv`. Nothing in this entry required retraining anything — purely an evaluation/analysis layer on top of the `data/results_oran/` produced by the 2026-09-24 entry below.
+
+---
+
+## Date: 2026-09-24 (found and fixed a third BMPP-DQN bug; reverses the 2026-09-20 finding)
+
+### What I Did Today
+- [x] Asked to fix BMPP-DQN's collapse (documented 2026-09-20/21) or find a different approach, and to audit the implementation for correctness before accepting "branch independence" as the explanation. Re-read `oran_agents/bmpp_dqn.py` in full with that specific question in mind, rather than re-deriving the same aggregate-metrics analysis.
+- [x] Found a real bug in `update_upper()`: the critic's current-state Q(s, ru_on, split, x) prediction was fused with continuous parameters `x` recomputed *fresh* from the current (every-step-updated) `param_net`, not the historical `x` actually in effect when that transition's reward was observed and stored. A prior comment defended this as "keeps this self-consistent" — backwards: the reward has no relationship to a fresh `x` computed long after the fact, so the critic could only ever learn a value function decoupled from the continuous action, and `update_lower()`'s deterministic policy gradient then climbed this effectively-noise-driven signal.
+- [x] Verified the mechanism directly before fixing anything: loaded `bmpp_dqn_seed42`'s trained weights from the 2026-09-20 archived run and ran a real deterministic rollout — the power head's sigmoid output was ~1e-11 W (numerically zero) across every RU, a dead-unit collapse, not an environment artifact. Checked the `param_loss`/`critic_loss` trajectory too: matches the already-documented 2026-09-20 "post-fix" shape almost exactly (param_loss climbing 21->113->184 across ep50/200/500; critic_loss large but shrinking), confirming this is the same phenomenon at a finer mechanistic level, not a different, newly-introduced problem.
+- [x] Fixed it: `UpperReplayBuffer` now stores `cont_params` (the actual `(power_ratio, prb_share)` at decision time) alongside `ru_on`/`split`/reward; `update_upper()` replays them for the current-state Q prediction instead of recomputing fresh ones. Left the next-state bootstrap (which legitimately recomputes via `param_net_target` at the *next* state) unchanged.
+- [x] Added a regression test (`test_update_upper_replays_stored_cont_params_not_fresh_ones`) that spies on `param_net.forward()` and asserts it's never called inside `update_upper()` — the online param_net should only ever be touched by `update_lower()` and `select_action()`. Confirmed by inspection this would have failed against the pre-fix code (which explicitly called `self.param_net(lower_feat)` inside `update_upper()`). Full suite: 23/23 passing.
+- [x] Separately, investigated why QoS satisfaction looked low (~20-30%) across *all* methods, not just BMPP-DQN. A best-case (all-RU/max-power/equal-PRB) reference-policy probe found mean aggregate demand (~101 Mbps) already exceeded mean achievable throughput (~77 Mbps) at the environment's original `bandwidth_mhz=20` — a genuine capacity ceiling, not a policy failure. Raised `bandwidth_mhz` to 100 (a real, precedented channel width for this model's own 3.5 GHz carrier) and added a second QoS metric, `qos_ue_satisfaction_frac` (per-UE average satisfaction, vs. the existing much-stricter "all UEs satisfied simultaneously" rate) to `oran_env/oran_env.py`, threaded through both training scripts and `oran_evaluation/convergence.py`.
+- [x] Validated the bug fix at three levels before trusting it, not just "tests pass": (1) unit tests; (2) an early checkpoint probe at episode 250 of a real training run (power mean 0.88 W, throughput mean 1058 Mbps — not collapsed, versus already-collapsed at the same point pre-fix); (3) a full 3-seed x 500-episode retrain of all 4 methods, run on RunPod (RTX A6000 for the 20 MHz confirmation run, L4 for the 100 MHz fixed run; ~$0.9 total compute across both).
+- [x] Result: BMPP-DQN's mean reward went from -100,734 (worst of 4, by a huge margin) to -15,694 (statistically tied with MP-DQN, the best baseline: paired $t$-test $p=0.854$, Cohen's $d=-0.12$), while posting the best strict-QoS rate (59.4%) and lowest switching frequency (0.14) of all four methods. This reverses, not just improves on, the 2026-09-20 finding.
+- [x] Updated `manuscript/ORAN_BMPP_DQN_Concept_Note_v1.md`: marked §6.4 superseded (kept in place as historical record, per this doc's own convention — see the 2026-08-13 entry below for precedent), added §6.5 with the corrected finding, and corrected §6.2's limitations bullet (the *evidence* for a large branch-independence cost was this bug, not a genuine architectural consequence — the representational limitation itself remains real and untested, only the claim that it was already visibly costing 85%+ of reward was wrong).
+- [x] Archived every superseded results/figures/tables directory rather than overwriting in place: `data/results_oran_archive/bw20mhz_20260924_*/`, `bw100mhz_buggy_20260924_*/` (pre-fix, still using the old `update_upper()`) and matching `thesis/figures_oran_archive/`, `thesis/tables_oran_archive/` snapshots.
+
+### Time Spent
+| Activity | Hours |
+|----------|-------|
+| Coding | 0.6 |
+| Writing | 0.4 |
+| Reading | 0.3 (full `bmpp_dqn.py` re-read with a fresh, correctness-focused question) |
+| Debugging | 0.8 (tracing the power-head collapse to a concrete mechanism via direct model inspection, not just aggregate metrics) |
+| Running experiments | 1.5 (RunPod provisioning/monitoring x2, checkpoint probe, full 3-seed retrains x2) |
+| **Total** | ~3.6 |
+
+### Decisions Made
+| Decision | Rationale |
+|----------|-----------|
+| Audited the implementation for a genuine bug before accepting "branch independence" as settled, per an explicit instruction to fix or find a different approach and to audit correctness first | The 2026-09-20 entry's own branch-independence explanation was already disclosed as "the most likely account... not a proven root cause" — appropriately hedged, but a hedge is not the same as ruling out a simpler explanation. Directly inspecting the trained model's own outputs (not just re-analyzing the same aggregate metrics) surfaced a mechanism (power-head saturation) the aggregate-only analysis couldn't have distinguished from "branch independence causes underperformance." |
+| Fixed the continuous-params replay bug without adding any of the excluded TD3/twin-critic machinery | The fix corrects what data the existing critic is trained against — it does not add a second critic, target-policy-smoothing noise, or policy-delay gating. Concept Note §10.4's explicit no-TD3 scope decision is preserved exactly as before. |
+| Raised `bandwidth_mhz` (20->100) as a separate, independently-justified change, not folded silently into "the fix" | This addresses a different problem (environment capacity vs. demand) from the continuous-params-replay bug (training-signal correctness) -- conflating them would make it harder to attribute the reward recovery to the right cause. Both were validated together in the final retrain, but documented and reasoned about separately. |
+| Archived rather than overwrote every superseded results/figures/tables directory | Per this project's standing don't-silently-discard-data practice; also lets a reader directly diff the pre-fix vs. post-fix numbers rather than trusting a prose description of the difference. |
+| Kept Concept Note §6.4 in place, marked superseded, rather than rewriting it to match the new finding | Matches this document's own established convention (see the 2026-08-13 entry's "left the 2026-08-05 entry unedited as a historical record" precedent) -- the investigative trail that led to the *correct* conclusion is only visible if the *incorrect* intermediate conclusion, and why it seemed reasonable at the time, is preserved. |
+
+### Blockers
+| Blocker | Severity | Plan |
+|---------|----------|------|
+| DDPG's own seed456 run collapsed to near-zero throughput (reward -100,511) in the corrected 100 MHz retrain -- a similar-looking failure mode in a different agent's code | Low (out of scope for this fix, but worth a footnote in the thesis) | Not investigated further this session; flagged in §6.5's table as a disclosed anomaly, not silently excluded or averaged away |
+| The branch-independence representational limitation itself (Concept Note §6.2) remains genuinely untested -- no architectural experiment (e.g. conditioning one branch's Q-value on others' proposed actions) has been run against the corrected baseline | Low -- doesn't block current results, but §6.2/6.5 both flag this as unresolved | Candidate future-work item if time allows; not required for the current thesis scope per Concept Note §10.4 |
+
+### Tomorrow's Plan
+- [ ] Generate updated comparison plots/tables from the corrected `data/results_oran/` (done same-day in practice -- see the 2026-09-26 entry above)
+- [ ] Fold the corrected §6.5 finding into the actual thesis Chapter 4/5 text (drafted separately from this concept note)
+
+### Notes
+RunPod housekeeping: both pods (`fhrj741i31p1az`, RTX A6000; `r4zz8jajgz0c8d`, L4) were removed immediately after retrieving results -- no lingering compute cost. Total spend across both provisioning rounds this session: ~$0.9 (a ~48 min A6000 run at $0.53/hr plus a ~63 min L4 run at $0.49/hr). Account balance was verified before each provisioning call (it was briefly negative before the first run this session; the user topped it up before I proceeded -- did not attempt pod creation while the balance was negative).
+
+---
+
 ## Date: 2026-09-20 (O-RAN matrix complete; found and fixed BMPP-DQN's training divergence)
 
 ### What I Did Today

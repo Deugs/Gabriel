@@ -47,38 +47,48 @@ def compute_cohens_d(proposed_scores: np.ndarray, baseline_scores: np.ndarray) -
     return float(np.mean(diffs) / diff_std)
 
 
-def analyze_convergence(
-    results_dir: str = "data/results_oran",
-    save_dir: str = "thesis/figures_oran",
-    table_save_dir: str = "thesis/tables_oran",
-) -> Dict[str, Any]:
-    """Aggregate multi-seed O-RAN benchmark results, compute 95% CIs, run
-    t-tests, and export a LaTeX summary table."""
-    results_path = Path(results_dir)
-    fig_path = Path(save_dir)
-    table_path = Path(table_save_dir)
-    fig_path.mkdir(parents=True, exist_ok=True)
-    table_path.mkdir(parents=True, exist_ok=True)
+def load_algo_seed_metrics(
+    results_dir: str,
+) -> Dict[str, Dict[int, Dict[str, float]]]:
+    """Parse every summary.json under `results_dir` into
+    {algo: {seed: {"reward", "power", "qos", "qos_per_ue", "switching",
+    "throughput"}}}.
 
+    Handles both summary.json shapes this track's training entry points
+    produce: the proposed method's one-dict-per-seed-directory
+    (oran_training/train_bmpp_dqn.py) and the baselines' one-list-of-all-
+    seeds (oran_training/train_oran_baselines.py). A field missing from an
+    older summary.json (e.g. no qos_per_ue_rate) defaults to 0.0 rather
+    than being silently dropped, so its absence stays visible downstream.
+
+    Shared by analyze_convergence() (below) and
+    oran_evaluation/results_plots.py, so the LaTeX table and the
+    comparison figures are always derived from identical parsed data.
+    """
+    results_path = Path(results_dir)
     summary_files = list(results_path.rglob("summary.json"))
     print(f"Found {len(summary_files)} result summary files under {results_dir}")
 
-    # Keyed by seed so paired comparisons genuinely pair the same seed's
-    # runs against each other -- the proposed method saves one summary.json
-    # per seed directory (oran_training/train_bmpp_dqn.py), baselines save
-    # all seeds in one summary.json list (oran_training/train_oran_baselines.py).
-    algo_scores: Dict[str, Dict[int, float]] = {}
-    algo_powers: Dict[str, Dict[int, float]] = {}
-    algo_qos: Dict[str, Dict[int, float]] = {}
-    # Per-UE-averaged QoS rate (fraction of UEs satisfied per step, averaged
-    # over the episode), distinct from algo_qos above (which requires *all*
-    # UEs satisfied simultaneously and is therefore much stricter -- see
-    # oran_env/oran_env.py's qos_ue_satisfaction_frac docstring note).
-    # Missing/older summary.json files without this field default to 0.0,
-    # not silently omitted, so their absence is visible in the table rather
-    # than averaged away.
-    algo_qos_per_ue: Dict[str, Dict[int, float]] = {}
-    algo_switching: Dict[str, Dict[int, float]] = {}
+    metrics: Dict[str, Dict[int, Dict[str, float]]] = {}
+
+    def _record(
+        algo: str,
+        seed: int,
+        reward: float,
+        power: float,
+        qos: float,
+        qos_per_ue: float,
+        switching: float,
+        throughput: float,
+    ) -> None:
+        metrics.setdefault(algo, {})[seed] = {
+            "reward": reward,
+            "power": power,
+            "qos": qos,
+            "qos_per_ue": qos_per_ue,
+            "switching": switching,
+            "throughput": throughput,
+        }
 
     for s_file in summary_files:
         try:
@@ -86,47 +96,59 @@ def analyze_convergence(
                 data = json.load(f)
 
             if isinstance(data, dict):
-                algo = str(data.get("algorithm", "unknown"))
-                seed = int(data.get("seed", -1))
-                reward = float(data.get("final_eval_reward", 0.0))
-                power = float(data.get("final_eval_power_w", 0.0))
-                qos = float(data.get("final_qos_rate", 0.0))
-                qos_per_ue = float(data.get("final_qos_per_ue_rate", 0.0))
-                switching = float(data.get("final_switching_events", 0.0))
-
-                algo_scores.setdefault(algo, {})[seed] = reward
-                algo_powers.setdefault(algo, {})[seed] = power
-                algo_qos.setdefault(algo, {})[seed] = qos
-                algo_qos_per_ue.setdefault(algo, {})[seed] = qos_per_ue
-                algo_switching.setdefault(algo, {})[seed] = switching
+                _record(
+                    str(data.get("algorithm", "unknown")),
+                    int(data.get("seed", -1)),
+                    float(data.get("final_eval_reward", 0.0)),
+                    float(data.get("final_eval_power_w", 0.0)),
+                    float(data.get("final_qos_rate", 0.0)),
+                    float(data.get("final_qos_per_ue_rate", 0.0)),
+                    float(data.get("final_switching_events", 0.0)),
+                    float(data.get("final_eval_throughput_mbps", 0.0)),
+                )
             elif isinstance(data, list):
                 for item in data:
-                    algo = str(item.get("algorithm", "unknown"))
-                    seed = int(item.get("seed", -1))
-                    reward = float(item.get("mean_reward", 0.0))
-                    power = float(item.get("mean_power_w", 0.0))
-                    qos = float(item.get("qos_satisfaction_rate", 0.0))
-                    qos_per_ue = float(item.get("qos_per_ue_rate", 0.0))
-                    switching = float(item.get("mean_switching_events", 0.0))
-
-                    algo_scores.setdefault(algo, {})[seed] = reward
-                    algo_powers.setdefault(algo, {})[seed] = power
-                    algo_qos.setdefault(algo, {})[seed] = qos
-                    algo_qos_per_ue.setdefault(algo, {})[seed] = qos_per_ue
-                    algo_switching.setdefault(algo, {})[seed] = switching
+                    _record(
+                        str(item.get("algorithm", "unknown")),
+                        int(item.get("seed", -1)),
+                        float(item.get("mean_reward", 0.0)),
+                        float(item.get("mean_power_w", 0.0)),
+                        float(item.get("qos_satisfaction_rate", 0.0)),
+                        float(item.get("qos_per_ue_rate", 0.0)),
+                        float(item.get("mean_switching_events", 0.0)),
+                        float(item.get("mean_throughput_mbps", 0.0)),
+                    )
         except Exception as e:
             print(f"Warning: Failed to parse {s_file}: {e}")
 
+    return metrics
+
+
+def analyze_convergence(
+    results_dir: str = "data/results_oran",
+    save_dir: str = "thesis/figures_oran",
+    table_save_dir: str = "thesis/tables_oran",
+) -> Dict[str, Any]:
+    """Aggregate multi-seed O-RAN benchmark results, compute 95% CIs, run
+    t-tests, and export a LaTeX summary table."""
+    fig_path = Path(save_dir)
+    table_path = Path(table_save_dir)
+    fig_path.mkdir(parents=True, exist_ok=True)
+    table_path.mkdir(parents=True, exist_ok=True)
+
+    metrics = load_algo_seed_metrics(results_dir)
+
     analysis_report: Dict[str, Any] = {"algorithms": {}, "paired_ttests": {}}
 
-    proposed_by_seed = algo_scores.get(PROPOSED_ALGO, {})
+    # Keyed by seed so paired comparisons genuinely pair the same seed's
+    # runs against each other.
+    proposed_by_seed = {
+        seed: m["reward"] for seed, m in metrics.get(PROPOSED_ALGO, {}).items()
+    }
 
-    for algo, scores_by_seed in algo_scores.items():
-        arr = (
-            np.array(list(scores_by_seed.values()))
-            if scores_by_seed
-            else np.array([0.0])
-        )
+    for algo, seed_metrics in metrics.items():
+        rewards = [m["reward"] for m in seed_metrics.values()]
+        arr = np.array(rewards) if rewards else np.array([0.0])
         mean, lower, upper = compute_confidence_interval(arr)
 
         analysis_report["algorithms"][algo] = {
@@ -134,24 +156,26 @@ def analyze_convergence(
             "ci_95_lower": float(lower),
             "ci_95_upper": float(upper),
             "mean_power_w": float(
-                np.mean(list(algo_powers.get(algo, {}).values()) or [0.0])
+                np.mean([m["power"] for m in seed_metrics.values()] or [0.0])
             ),
             "mean_qos_rate": float(
-                np.mean(list(algo_qos.get(algo, {}).values()) or [0.0])
+                np.mean([m["qos"] for m in seed_metrics.values()] or [0.0])
             ),
             "mean_qos_per_ue_rate": float(
-                np.mean(list(algo_qos_per_ue.get(algo, {}).values()) or [0.0])
+                np.mean([m["qos_per_ue"] for m in seed_metrics.values()] or [0.0])
             ),
             "mean_switching_events": float(
-                np.mean(list(algo_switching.get(algo, {}).values()) or [0.0])
+                np.mean([m["switching"] for m in seed_metrics.values()] or [0.0])
             ),
         }
 
         if algo != PROPOSED_ALGO:
-            common_seeds = sorted(set(proposed_by_seed) & set(scores_by_seed))
+            common_seeds = sorted(set(proposed_by_seed) & set(seed_metrics))
             if len(common_seeds) > 1:
                 proposed_paired = np.array([proposed_by_seed[s] for s in common_seeds])
-                baseline_paired = np.array([scores_by_seed[s] for s in common_seeds])
+                baseline_paired = np.array(
+                    [seed_metrics[s]["reward"] for s in common_seeds]
+                )
                 t_stat, p_val, is_sig = perform_paired_ttest(
                     proposed_paired, baseline_paired
                 )

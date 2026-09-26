@@ -1,0 +1,14 @@
+\begin{table}[h]
+\centering
+\caption{O-RAN Track: Multi-Criteria Composite Ranking (TOPSIS). Excludes reward (already a weighted combination of these same operational metrics at training time -- see this module's own docstring); an independent, equal-weighted cross-check, not a replacement for the reward-based comparison.}
+\begin{tabular}{lccccccc}
+\hline
+Algorithm & Power (W) & QoS Strict (%) & QoS Per-UE (%) & Switching Freq. & Throughput (Mbps) & TOPSIS Score & Rank \\
+\hline
+BMPP-DQN & 176.50 & 59.4 & 92.6 & 0.14 & 1423.35 & 0.911 & 1 \\
+DDPG & 189.54 & 28.5 & 80.9 & 0.04 & 492.89 & 0.617 & 2 \\
+DQN & 213.37 & 42.8 & 88.4 & 0.29 & 694.51 & 0.597 & 3 \\
+MP-DQN & 160.20 & 54.4 & 92.1 & 1.04 & 1171.27 & 0.330 & 4 \\
+\hline
+\end{tabular}
+\end{table}

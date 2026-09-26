@@ -82,5 +82,10 @@ def plot_bar_comparison(
     if save_path is not None:
         out_file = Path(save_path)
         out_file.parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(out_file)
+        # Always emit both a vector (.pdf, for LaTeX \includegraphics) and a
+        # raster (.png, for quick viewing/slides) copy, regardless of which
+        # extension the caller passed -- callers only need to think about
+        # one save_path.
+        fig.savefig(out_file.with_suffix(".pdf"))
+        fig.savefig(out_file.with_suffix(".png"), dpi=150)
     plt.close(fig)
