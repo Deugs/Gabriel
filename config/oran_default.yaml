@@ -120,7 +120,11 @@ power:
 # ============================================================
 algorithm:
   name: "bmpp_dqn"
-  max_episodes: 500
+  # 2026-09-26: raised from 500 -- BMPP-DQN's own eval_history showed 2 of
+  # 3 seeds still clearly improving (one, seed456, mid a late and dramatic
+  # escape from a bad region) at episode 500, not plateaued. See
+  # docs/daily_log.md's 2026-09-26 entry for the per-seed evidence.
+  max_episodes: 1000
   max_steps_per_episode: 100
 
   # Two-timescale cadence: discrete (upper) decisions held for N lower-level

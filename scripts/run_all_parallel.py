@@ -168,6 +168,52 @@ def _oran_baseline_job(
     return Job("oran", method, f"oran/{method}", code, _job_env(n_threads), marker)
 
 
+def _oran_baseline_seed_job(
+    method: str, seed: int, episodes: int, config_path: str,
+    save_dir: str, n_threads: int,
+) -> Job:
+    """One (algorithm, seed) pair as its own job -- unlike _oran_baseline_job
+    above (all of an algorithm's seeds bundled into one sequential job),
+    this lets a baseline's seeds run as genuinely concurrent processes, the
+    same way the proposed method's seeds already do. Each pair gets its
+    own save_dir (`<save_dir>/per_seed_baselines/<method>_seed<seed>/`) so
+    concurrent seeds of the same algorithm never write the same
+    oran_benchmark_<method>/summary.json file -- oran_evaluation.convergence
+    .load_algo_seed_metrics() walks *all* summary.json files under a
+    results_dir and keys by (algorithm, seed) read from each file's own
+    content, not by its path, so this nested, per-seed layout aggregates
+    identically to the single-file-per-algorithm layout _oran_baseline_job
+    produces; only the on-disk arrangement differs.
+    """
+    per_seed_dir = str(Path(save_dir) / "per_seed_baselines" / f"{method}_seed{seed}")
+    code = (
+        "from oran_training.train_oran_baselines import run_oran_baseline_benchmarks; "
+        f"run_oran_baseline_benchmarks(config_path={config_path!r}, seeds=[{seed}], "
+        f"episodes={episodes}, algorithms=[{method!r}], save_dir={per_seed_dir!r})"
+    )
+    marker = Path(per_seed_dir) / f"oran_benchmark_{method}" / "summary.json"
+    return Job(
+        "oran", method, f"oran/{method}/seed{seed}", code, _job_env(n_threads), marker
+    )
+
+
+def _cran_baseline_seed_job(
+    method: str, seed: int, episodes: int, config_path: str,
+    save_dir: str, n_threads: int,
+) -> Job:
+    """C-RAN analogue of _oran_baseline_seed_job above -- see its docstring."""
+    per_seed_dir = str(Path(save_dir) / "per_seed_baselines" / f"{method}_seed{seed}")
+    code = (
+        "from training.train_baselines import run_baseline_benchmarks; "
+        f"run_baseline_benchmarks(config_path={config_path!r}, seeds=[{seed}], "
+        f"episodes={episodes}, algorithms=[{method!r}], save_dir={per_seed_dir!r})"
+    )
+    marker = Path(per_seed_dir) / f"benchmark_{method}" / "summary.json"
+    return Job(
+        "cran", method, f"cran/{method}/seed{seed}", code, _job_env(n_threads), marker
+    )
+
+
 def _oran_proposed_job(
     seed: int, episodes: int, config_path: str, save_dir: str, n_threads: int,
 ) -> Job:
@@ -202,12 +248,21 @@ def build_jobs(args, n_threads: int) -> List[Job]:
 
     if not args.skip_cran:
         for method in cran_methods:
-            jobs.append(
-                _cran_baseline_job(
-                    method, cran_seeds, args.cran_episodes, args.cran_config,
-                    args.cran_save_dir, n_threads,
+            if args.split_baseline_seeds:
+                for seed in cran_seeds:
+                    jobs.append(
+                        _cran_baseline_seed_job(
+                            method, seed, args.cran_episodes, args.cran_config,
+                            args.cran_save_dir, n_threads,
+                        )
+                    )
+            else:
+                jobs.append(
+                    _cran_baseline_job(
+                        method, cran_seeds, args.cran_episodes, args.cran_config,
+                        args.cran_save_dir, n_threads,
+                    )
                 )
-            )
         if args.cran_methods is None or CRAN_PROPOSED_METHOD in args.cran_methods:
             for seed in cran_seeds:
                 jobs.append(
@@ -219,12 +274,21 @@ def build_jobs(args, n_threads: int) -> List[Job]:
 
     if not args.skip_oran:
         for method in oran_methods:
-            jobs.append(
-                _oran_baseline_job(
-                    method, oran_seeds, args.oran_episodes, args.oran_config,
-                    args.oran_save_dir, n_threads,
+            if args.split_baseline_seeds:
+                for seed in oran_seeds:
+                    jobs.append(
+                        _oran_baseline_seed_job(
+                            method, seed, args.oran_episodes, args.oran_config,
+                            args.oran_save_dir, n_threads,
+                        )
+                    )
+            else:
+                jobs.append(
+                    _oran_baseline_job(
+                        method, oran_seeds, args.oran_episodes, args.oran_config,
+                        args.oran_save_dir, n_threads,
+                    )
                 )
-            )
         if args.oran_methods is None or ORAN_PROPOSED_METHOD in args.oran_methods:
             for seed in oran_seeds:
                 jobs.append(
@@ -300,6 +364,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--dry-run", action="store_true",
         help="Print the planned job list and exit without running anything.",
+    )
+    parser.add_argument(
+        "--split-baseline-seeds", action="store_true",
+        help=(
+            "Run each baseline algorithm's seeds as separate concurrent jobs "
+            "(like the proposed method already does) instead of one job "
+            "covering all of an algorithm's seeds sequentially. Cuts "
+            "wall-clock time roughly proportionally to seed count at the "
+            "cost of a nested per-seed output layout under "
+            "<save-dir>/per_seed_baselines/ -- aggregation "
+            "(oran_evaluation/evaluation.analyze_convergence) is unaffected, "
+            "since it keys results by content, not by directory structure."
+        ),
     )
     parser.add_argument(
         "--force", action="store_true",
