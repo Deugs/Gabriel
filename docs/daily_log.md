@@ -2,6 +2,50 @@
 
 > Filled instances of `docs/daily_log_template.md`. Newest entry first.
 
+## Date: 2026-09-29 (expanded 5-seed validation, MCDA robustness, four candidate QoS fixes -- one kept)
+
+### What I Did Today
+- [x] Re-ran the full 4-method O-RAN benchmark at 5 seeds x 1000 episodes (up from 3 seeds x 500, `algorithm.max_episodes` raised accordingly), on RunPod, after the previous session's own eval-history inspection showed BMPP-DQN still improving at episode 500 for 2 of 3 seeds. Result: BMPP-DQN's mean reward is the worst of four at this larger sample (not the tied-for-best Section 6.5 originally reported at 3 seeds), while retaining the best power and switching-stability numbers -- a genuine trade-off, not a clean win, superseding Section 6.5's headline finding without invalidating its bug fixes.
+- [x] Added two MCDA cross-checks to `oran_evaluation/multicriteria.py` on top of the existing equal-weighted TOPSIS: `compute_entropy_weights()` (Shannon entropy method, Zeleny 1982 -- objective, data-driven criterion weights instead of assumed-equal) and `compute_vikor()` (Opricovic & Tzeng 2004 -- a different aggregation rule than TOPSIS's Euclidean distance). Entropy-weighted TOPSIS reproduced the equal-weighted ranking exactly; VIKOR disagreed sharply, ranking MP-DQN #1 (TOPSIS has it #4) -- traced the disagreement to VIKOR's regret-based logic assigning MP-DQN's worst criterion (switching, a 10-30x outlier) a smaller weighted penalty than DQN's or BMPP-DQN's own worst criteria, since switching carries the smallest entropy weight of the five. Added `export_mcda_robustness_table()` and a "bump chart" (`plot_ranking_robustness()`) visualizing rank-per-scheme for all three methods -- caught my own test bug in the process (a naive "does the value ever differ from greedy" check can't distinguish a shared coin-flip design from independent per-branch coins, since a shared coin's own redraw is still i.i.d. per branch; the real signature is in the *joint* distribution/correlation of mismatches, not the marginal values -- rewrote the test around the "all-branches-simultaneously-match-greedy" rate instead, and verified it actually fails against the pre-fix code before trusting it).
+- [x] Investigated whether BMPP-DQN's lowest-of-four per-UE QoS (90.5%) could be fixed, per explicit instruction to implement and test candidate fixes one at a time rather than just propose them. Implemented three together first (independent per-branch epsilon-greedy exploration -- the existing code drew one shared coin-flip for all 2R discrete branches, which can only ever explore "everything random" or "everything greedy," never a mixed state; prioritized experience replay on the upper buffer; a training-load curriculum ramping traffic 50%->100% over the first 200 episodes) and validated on RunPod: made things worse, not better (reward variance nearly doubled, QoS unchanged, 2 of 5 seeds diverged badly).
+- [x] Isolated each of the three changes (2 seeds each, RunPod) to find out why. Independent exploration alone: converges cleanly to a stable, low-variance reward band from ~episode 350, QoS unchanged. PER alone: causes sudden, unpredictable mid-training collapses out of otherwise-stable states (one seed stable at ~-20,500 for 350 episodes then crashing to ~-97,700 for two consecutive eval checkpoints before partially recovering) -- a classic priority-explosion/overfitting-to-rare-transitions failure mode. Curriculum alone: never converges, oscillating continuously for the full 1000 episodes even well past its own 200-episode ramp, QoS staying below baseline throughout.
+- [x] Followed up on the one clean result (independent exploration) with a fourth candidate: halving `upper_level_period_steps` (10->5) for faster discrete-decision reactivity to bursty traffic. A 2-seed diagnostic looked genuinely promising (power, QoS, and throughput all improved for both tested seeds) -- but did not replicate at the full 5-seed validation: mean per-UE QoS was exactly unchanged and switching frequency nearly tripled (largest effect size of the whole investigation, Cohen's d=0.81). The 2-seed result traced to one outlier seed (456), not a genuine effect -- a concrete, first-hand demonstration of why this project's own quality gate wants >=10 seeds before trusting a result.
+- [x] Kept only the independent-exploration fix: architecturally correct on its own merits regardless of benchmark outcome, and empirically cuts BMPP-DQN's reward variance ~3x (std 9,679 -> 3,598 across 5 seeds) without costing mean power or QoS (both statistically unchanged). Reverted PER, curriculum, and the cadence change. None of the four candidate fixes closed the original per-UE QoS gap -- reported as a genuine negative result, not spun as a win.
+- [x] Archived (not deleted, per this doc's own established convention) the pre-exploration-fix 5-seed baseline and all four candidate-fix experiment datasets under `data/results_oran_archive/`; promoted the kept (exploration-only) 5-seed run to the canonical `data/results_oran/` (baselines carried over unchanged from the pre-fix archive, since only BMPP-DQN's own code changed) and regenerated every downstream table/figure/MCDA output from it.
+- [x] Used RunPod for every training/validation run today (7 separate pod sessions: expanded validation, combined-3-changes validation, 6-job isolation ablation, exploration-only validation, 2-seed cadence-5 diagnostic, full 5-seed cadence-5 validation) -- balance checked before each provision, GPU availability checked and a fallback (RTX 4090) used when A40 was out of stock twice, direct SSH used throughout (the SSH proxy required a PTY this environment's tooling doesn't support), and every pod torn down immediately after retrieving results, confirmed via `list-pods` returning empty each time.
+- [x] Updated `manuscript/ORAN_BMPP_DQN_Concept_Note_v1.md` (new §6.6 for the expanded/MCDA-robustness work, new §6.7 for the four-candidate-fix investigation).
+
+### Time Spent
+| Activity | Hours |
+|----------|-------|
+| Coding | 2.5 |
+| Writing | 0.6 |
+| Reading | 0.3 |
+| Debugging | 0.4 (the exploration-independence test's statistical design, the mypy `Optional[Tuple]` fix in `PrioritizedUpperReplayBuffer`) |
+| Running experiments | ~9.0 (seven RunPod sessions, wall-clock; mostly unattended wait time) |
+| **Total** | ~12.8 |
+
+### Decisions Made
+| Decision | Rationale |
+|----------|-----------|
+| Isolate each candidate fix individually rather than trusting the combined result | The combined 3-change run was net negative, but a combined result alone can't say *which* change caused it. 2-seed isolation runs are cheap enough to answer this before committing to expensive full validations of the wrong hypothesis. |
+| Re-validate the promising 2-seed cadence-5 result at full 5 seeds before keeping it | It didn't replicate -- concrete evidence that a 2-seed sample can look like a real effect and not be one, reinforcing why this thesis's own quality gate requires >=10 seeds for a trusted claim. |
+| Keep the independent-exploration fix despite it not fixing QoS | It is architecturally correct per the branching-DQN literature independent of this benchmark's outcome, and has its own genuine, reproducible benefit (reward variance reduction) uncontingent on the QoS question. Reverting a correct fix because it didn't solve an unrelated problem would be the wrong lesson to draw. |
+| Report all four negative/mixed results in the concept note rather than only documenting the one kept change | Matches this document's own established practice (Section 6.4 kept as historical record after being superseded) -- the negative results are themselves evidence about where the QoS deficit does *not* come from, useful for whoever investigates it next. |
+
+### Blockers
+| Blocker | Severity | Plan |
+|---------|----------|------|
+| BMPP-DQN's per-UE QoS deficit vs. the three baselines remains unresolved | Medium | Documented as open in Concept Note Section 6.7; most likely next levers are reward-weight reweighting (`beta_qos`) or a genuine environment capacity ceiling, neither tested yet |
+
+### Tomorrow's Plan
+- [ ] None currently queued beyond what's logged as open in Section 6.7 (reward reweighting as a possible next lever, if resumed)
+
+### Notes
+Full RunPod cost today: approximately $6-7 across seven pod sessions (A40 at $0.49/hr where available, RTX 4090 at $0.74/hr as fallback when A40 was out of stock), all pods confirmed terminated via `list-pods` returning empty after each session -- no idle billing left running.
+
+---
+
 ## Date: 2026-09-26 (O-RAN evaluation suite: comparison plots, TOPSIS multi-criteria ranking)
 
 ### What I Did Today

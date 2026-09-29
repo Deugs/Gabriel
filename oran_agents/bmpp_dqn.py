@@ -440,17 +440,39 @@ class BMPPDQNAgent:
 
             self.last_action_was_decision = self._steps_since_decision == 0
             if self.last_action_was_decision:
-                if not evaluate and random.random() < self.epsilon:
-                    self._cached_ru_on = np.random.randint(0, 2, size=self.n_ru)
-                    self._cached_split = np.random.randint(
-                        0, self.n_splits, size=self.n_ru
-                    )
+                upper_feat = self.upper_encoder(state_t)
+                cont_params = torch.stack([power_ratio, prb_share], dim=-1)
+                activation_q, split_q = self._multi_pass_q(upper_feat, cont_params)
+                greedy_ru_on = activation_q[0].argmax(dim=-1).cpu().numpy()
+                greedy_split = split_q[0].argmax(dim=-1).cpu().numpy()
+
+                if evaluate:
+                    self._cached_ru_on = greedy_ru_on
+                    self._cached_split = greedy_split
                 else:
-                    upper_feat = self.upper_encoder(state_t)
-                    cont_params = torch.stack([power_ratio, prb_share], dim=-1)
-                    activation_q, split_q = self._multi_pass_q(upper_feat, cont_params)
-                    self._cached_ru_on = activation_q[0].argmax(dim=-1).cpu().numpy()
-                    self._cached_split = split_q[0].argmax(dim=-1).cpu().numpy()
+                    # Independent per-branch epsilon-greedy (Tavakoli et
+                    # al. 2018's branching-DQN convention): each of the
+                    # n_ru activation branches and each of the n_ru split
+                    # branches rolls its own explore/exploit coin, rather
+                    # than one shared coin-flip forcing every branch to
+                    # randomize (or none) together. The previous
+                    # single-coin version could only ever explore "all
+                    # RUs random" or "all RUs greedy" jointly, so it could
+                    # never discover a mixed policy like "keep this one
+                    # congested RU on, shut the rest off" -- a plausible
+                    # contributor to this agent's comparatively weak
+                    # per-UE QoS satisfaction relative to the baselines
+                    # (see docs/daily_log.md's MCDA-robustness discussion).
+                    explore_act = np.random.random(self.n_ru) < self.epsilon
+                    explore_split = np.random.random(self.n_ru) < self.epsilon
+                    random_ru_on = np.random.randint(0, 2, size=self.n_ru)
+                    random_split = np.random.randint(0, self.n_splits, size=self.n_ru)
+                    self._cached_ru_on = np.where(
+                        explore_act, random_ru_on, greedy_ru_on
+                    )
+                    self._cached_split = np.where(
+                        explore_split, random_split, greedy_split
+                    )
 
         self._steps_since_decision = (
             self._steps_since_decision + 1

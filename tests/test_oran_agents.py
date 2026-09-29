@@ -162,6 +162,61 @@ def test_discrete_decision_held_constant_across_upper_level_period(default_confi
     assert any(not np.array_equal(p, power_choices[0]) for p in power_choices[1:])
 
 
+def test_exploration_is_independent_per_branch(default_config):
+    """Each RU's activation decision must roll its own independent
+    explore/exploit coin (Tavakoli et al. 2018's branching-DQN
+    convention), not one coin shared across all n_ru branches.
+
+    A single shared coin and n_ru independent coins actually produce
+    superficially similar-looking *values* when exploring (both redraw
+    each RU's bit i.i.d.), so a naive "did some but not all branches
+    differ from greedy" check can't tell them apart -- under a shared
+    coin, whenever it lands on "explore," every branch is *also*
+    independently redrawn, so partial mismatches already occur often
+    under the old design too. The real signature is in how often *every*
+    branch simultaneously matches greedy: under a shared coin (epsilon
+    e), that happens with probability (1-e) + e*0.5^n_ru -- inflated by
+    the "coin landed on exploit" case, where all branches trivially match
+    with certainty. Under independent per-branch coins, it happens with
+    probability (1 - e/2)^n_ru only. For n_ru=4, epsilon=0.5 these are
+    0.531 (shared) vs. 0.316 (independent) -- different enough to
+    separate reliably over a few hundred trials.
+
+    continuous_noise_std=0.0 isolates the discrete-branch exploration
+    mechanism as the only source of variation (otherwise noise
+    perturbing the continuous params fed into the multi-pass Q
+    computation could itself occasionally flip a greedy argmax,
+    confounding the measurement with an unrelated effect)."""
+    cfg = dict(default_config)
+    cfg["algorithm"] = dict(default_config["algorithm"])
+    cfg["algorithm"]["epsilon_start"] = 0.0
+    cfg["algorithm"]["continuous_noise_std"] = 0.0
+
+    env = ORANEnv(cfg)
+    obs, _ = env.reset(seed=42)
+    agent = _make_agent(env, cfg)
+
+    agent.reset_decision_cadence()
+    greedy_ru_on = agent.select_action(obs, evaluate=True)["ru_on"]
+
+    agent.epsilon = 0.5
+    n_trials = 400
+    n_all_match = 0
+    for _ in range(n_trials):
+        agent.reset_decision_cadence()
+        action = agent.select_action(obs, evaluate=False)
+        if np.array_equal(action["ru_on"], greedy_ru_on):
+            n_all_match += 1
+
+    all_match_rate = n_all_match / n_trials
+    assert all_match_rate < 0.45, (
+        f"all-branches-match rate {all_match_rate:.3f} over {n_trials} "
+        "trials is too high for independent per-branch exploration "
+        "(expected ~0.316; a shared coin-flip design would read ~0.531) "
+        "-- looks like a shared, not per-branch, explore/exploit decision"
+    )
+
+
 def test_remember_flushes_pending_upper_transition_at_episode_end(default_config):
     """Guards against silently losing the trailing partial upper-level
     window when max_steps_per_episode isn't an exact multiple of
