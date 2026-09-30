@@ -34,10 +34,12 @@ tables, numbered equations).
 2. Per-metric comparison bar charts, all 4 methods, mean ± std across seeds (reward, power, QoS strict, QoS per-UE, switching frequency, throughput, and a derived throughput-per-watt efficiency chart) — `oran_evaluation.results_plots.generate_comparison_plots` → `{reward,power,qos_strict,qos_per_ue,switching,throughput,efficiency}_comparison_oran.{pdf,png}`
 3. Power-throughput Pareto scatter (frontier highlighted) — `oran_evaluation.results_plots.plot_pareto_scatter` → `pareto_power_throughput_oran.{pdf,png}`
 4. Normalized multi-criteria radar/spider chart (all methods, all criteria at once) and TOPSIS composite-score bar chart — `oran_evaluation.multicriteria.{plot_radar,plot_composite_score}` → `radar_comparison_oran.{pdf,png}`, `composite_score_oran.{pdf,png}`
-5. Energy/performance comparison table with 95% CIs and paired significance tests (target: ≥15% vs. baselines, Concept Note §4.2) — `oran_evaluation.convergence.analyze_convergence` → `convergence_summary_oran.tex`
+5. Energy/performance comparison table with 95% CIs and paired significance tests (target: ≥15% vs. baselines, Concept Note §4.2 — **not met by any result gathered; see §6.10's own explicit reconciliation, do not state this target as satisfied**) — `oran_evaluation.convergence.analyze_convergence` → `convergence_summary_oran.tex`
 6. Multi-criteria composite ranking table (TOPSIS; deliberately excludes reward — see the module's own docstring for why) — `oran_evaluation.multicriteria.run_multicriteria_analysis` → `multicriteria_summary_oran.tex`/`.csv`
 7. Inference-time latency comparison (single scenario, not a scalability sweep — Concept Note §6.1/7.1's focused single-gNB scope) — `oran_evaluation.latency_benchmark`
 8. Multi-timescale convergence discussion (RQ3: does upper/lower branch separation affect convergence?) — `history["param_losses"]`/`history["critic_losses"]` in `oran_training.train_bmpp_dqn`'s summary output
+9. MCDA ranking-robustness bump chart and table (TOPSIS-equal vs. TOPSIS-entropy vs. VIKOR — does the composite ranking depend on weighting/aggregation choice, Concept Note §6.6) — `oran_evaluation.multicriteria.{plot_ranking_robustness,export_mcda_robustness_table}` → `mcda_robustness_oran.{pdf,png,tex,csv}`
+10. Power-model sensitivity sweep: BMPP-DQN's TOPSIS score/rank across all 9 configurations, and reward/power for all 4 methods across the same configurations (Concept Note §6.9) — `oran_evaluation.sensitivity_plots.{plot_sensitivity_topsis,plot_sensitivity_reward_power}` → `sensitivity_topsis_oran.{pdf,png}`, `sensitivity_reward_power_oran.{pdf,png}`; table form `sensitivity_summary_oran.{tex,csv}`
 
 ## Writing Quality Standards
 

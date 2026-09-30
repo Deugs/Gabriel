@@ -20,6 +20,11 @@ from oran_evaluation.results_plots import (
     plot_convergence_curve,
     plot_pareto_scatter,
 )
+from oran_evaluation.sensitivity_plots import (
+    plot_sensitivity_reward_power,
+    plot_sensitivity_topsis,
+    run_sensitivity_plots,
+)
 
 __all__ = [
     "analyze_convergence",
@@ -37,4 +42,7 @@ __all__ = [
     "export_mcda_robustness_table",
     "plot_ranking_robustness",
     "run_multicriteria_analysis",
+    "plot_sensitivity_topsis",
+    "plot_sensitivity_reward_power",
+    "run_sensitivity_plots",
 ]
