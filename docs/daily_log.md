@@ -2,6 +2,50 @@
 
 > Filled instances of `docs/daily_log_template.md`. Newest entry first.
 
+## Date: 2026-09-30, later the same day (closed the remaining thesis-readiness gaps: RQ3 ablation, missing sensitivity figures, n=10 validation)
+
+### What I Did Today
+- [x] Asked directly whether the O-RAN track was ready to complete the thesis (method + results) against the concept note's own objectives. Answered honestly rather than optimistically: RQ1/RQ2 answered, but RQ3 (multi-timescale design's effect on convergence) had never actually been tested -- only qualitative logging of the two-timescale system on its own existed -- and n=3 seeds gives weak statistical power for several close comparisons. Also caught, independently, that the previous session's power-model sensitivity sweep shipped a table with no figure -- a real gap given the scale of that analysis.
+- [x] Fixed the missing sensitivity-sweep figure first: `oran_evaluation/sensitivity_plots.py` (two new figures -- BMPP-DQN's own TOPSIS score/rank across all 9 configurations, and reward/power for all 4 methods across the same configurations, the latter backing the module's cross-method claims, not just BMPP-DQN's own rank), wired into the public API, referenced from the concept note and thesis guide, covered by two smoke tests.
+- [x] Ran the RQ3 ablation (Gap 1): collapsed `upper_level_period_steps` from 10 to 1 (`config/rq3_single_timescale.yaml`), degenerating the two-timescale separation to a no-op with zero architecture change, and re-ran BMPP-DQN at the identical 3-seed/500-episode protocol on RunPod (A40, 54.2 min, 0 failed). Result: switching frequency increases ~6x without the two-timescale separation (the largest effect size found anywhere in this document, $d=1.93$, $p=0.079$), with no meaningful difference in reward, power, or QoS ($|d|<0.3$ throughout) -- a clean, positive answer to a research question the concept note posed but had never tested. Built `oran_evaluation/rq3_ablation_plots.py` (figure + smoke test) and added Concept Note §6.11.
+- [x] Ran the seed-expansion validation (Gap 3) on the same pod immediately after: 7 new seeds (789, 1011, 1213, 1415, 1617, 1819, 2021) x 4 methods = 28 jobs via `--split-baseline-seeds`, reaching this thesis's own eventually-desired $n\geq10$ quality gate when combined with the existing 3 seeds. Took considerably longer than estimated (214.2 min, not the ~90-150 min projected) -- 28 concurrent jobs on 96 cores gives only ~3 threads/job, materially slower per job than earlier smaller batches; reported the revised estimate honestly mid-run rather than letting the original one stand uncorrected. 0 failed.
+- [x] Merged the new 7 seeds with the existing 3 into `data/results_oran_10seed/` (verified all 4 methods correctly aggregate to exactly 10 seeds each via `load_algo_seed_metrics()` before trusting any downstream number) and regenerated the *full* existing evaluation suite against it (`analyze_convergence`, `generate_comparison_plots`, `plot_pareto_scatter`, `plot_convergence_curve`, `run_multicriteria_analysis`) into a parallel `thesis/tables_oran_10seed/`/`figures_oran_10seed/` location -- deliberately reusing every existing tool rather than writing new one-off code, and deliberately *not* overwriting the canonical $n=3$ artifacts, since the researcher was explicit this validation supplements, not replaces, the supervisor-approved protocol.
+- [x] The larger sample resolved one comparison (BMPP-DQN now significantly beats DDPG on reward, $p=0.036$, up from a zero-crossing 95% CI at $n=3$) and sharpened two others without reversing either's direction (DQN: still tied; MP-DQN: still trending ahead of BMPP-DQN, $p=0.071$, down from $p=0.093$). The multi-criteria ranking shifted more than at $n=5$ (Section 6.6) -- TOPSIS-equal now favors DDPG over BMPP-DQN, reversing the $n=3$ order, while TOPSIS-entropy and VIKOR both still favor BMPP-DQN/MP-DQN -- underscoring, with yet more evidence, that no single ranking number should be cited without naming which weighting/aggregation scheme produced it. Added Concept Note §6.12.
+- [x] Updated README and `docs/oran_thesis_guide.md` to reference both new sections and all new figures/tests. Full O-RAN suite: 62/62 passing; mypy and flake8 both fully clean across all 24 source files (two new modules included).
+
+### Time Spent
+| Activity | Hours |
+|----------|-------|
+| Coding | 1.0 (two new plotting modules, RQ3 config, merge script) |
+| Writing | 0.8 (Concept Note §§6.11-6.12, README, thesis guide, this entry) |
+| Reading | 0.2 |
+| Debugging | 0.1 |
+| Running experiments | ~4.5 (one RunPod session: RQ3 ablation + seed expansion, mostly unattended wait time) |
+| **Total** | ~6.6 |
+
+### Decisions Made
+| Decision | Rationale |
+|----------|-----------|
+| Isolate RQ3 via a pure config change (`upper_level_period_steps: 1`), not a new agent variant | Changes exactly one variable (the timescale separation) while holding the architecture fixed, giving a clean ablation rather than confounding the timescale question with an implementation difference. |
+| Keep the n=10 validation as a supplementary layer, not a replacement for the canonical n=3 result | Explicit instruction from the previous session's back-and-forth (expand -> revert) not to repeat: the supervisor-approved protocol stays the official reported scale; this validation exists alongside it, in its own directory and file names, not overwriting anything. |
+| Report the revised, longer time estimate for Gap 3 mid-run rather than staying silent until completion | The original estimate was wrong (28 concurrent jobs at ~3 threads/job, not the assumed higher parallelism) -- caught via a direct progress check, not guessed, and corrected transparently rather than letting a stale estimate stand. |
+| Reuse every existing evaluation function for the n=10 validation rather than writing new one-off aggregation code | This is the same analysis type as the canonical n=3 result, just a different sample size -- new code would risk a subtle inconsistency with the already-tested canonical pipeline for no benefit. |
+
+### Blockers
+| Blocker | Severity | Plan |
+|---------|----------|------|
+| Concept Note §4.2's ≥15% objective still needs a supervisor conversation | Medium | Unchanged from the prior entry -- this is the one remaining gap that isn't closeable in code |
+| No actual thesis chapter prose exists yet | Medium | Sequenced last, after this entry's technical gaps closed and the supervisor conversation above happens |
+
+### Tomorrow's Plan
+- [ ] Offer to draft Chapter 3 (System Model) prose, since it has no dependency on the remaining supervisor conversation
+- [ ] Await the researcher's supervisor conversation outcome before drafting Chapter 4/5
+
+### Notes
+RunPod cost today: one session, ~4.5 hours at $0.49/hr (A40) = approximately $2.20, confirmed terminated immediately after result retrieval both times (once after the RQ3 ablation alone, again after the seed expansion on the same pod). Method+results readiness against the concept note's own objectives is now materially closer: of the four gaps identified earlier today, two (RQ3, statistical power) are closed, one (thesis prose) is sequenced and ready to start, and one (the ≥15% objective's reframing) remains a human decision, not a technical one.
+
+---
+
 ## Date: 2026-09-30 (independent code/documentation critique; fixed every weakness found, within the original supervisor-approved protocol)
 
 ### What I Did Today

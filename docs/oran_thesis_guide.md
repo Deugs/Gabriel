@@ -37,9 +37,11 @@ tables, numbered equations).
 5. Energy/performance comparison table with 95% CIs and paired significance tests (target: ≥15% vs. baselines, Concept Note §4.2 — **not met by any result gathered; see §6.10's own explicit reconciliation, do not state this target as satisfied**) — `oran_evaluation.convergence.analyze_convergence` → `convergence_summary_oran.tex`
 6. Multi-criteria composite ranking table (TOPSIS; deliberately excludes reward — see the module's own docstring for why) — `oran_evaluation.multicriteria.run_multicriteria_analysis` → `multicriteria_summary_oran.tex`/`.csv`
 7. Inference-time latency comparison (single scenario, not a scalability sweep — Concept Note §6.1/7.1's focused single-gNB scope) — `oran_evaluation.latency_benchmark`
-8. Multi-timescale convergence discussion (RQ3: does upper/lower branch separation affect convergence?) — `history["param_losses"]`/`history["critic_losses"]` in `oran_training.train_bmpp_dqn`'s summary output
+8. Multi-timescale convergence discussion (RQ3: does upper/lower branch separation affect convergence?) — **answered directly by item 11 below (2026-09-30 ablation)**, not just the qualitative `param_losses`/`critic_losses` logging this item originally pointed to
 9. MCDA ranking-robustness bump chart and table (TOPSIS-equal vs. TOPSIS-entropy vs. VIKOR — does the composite ranking depend on weighting/aggregation choice, Concept Note §6.6) — `oran_evaluation.multicriteria.{plot_ranking_robustness,export_mcda_robustness_table}` → `mcda_robustness_oran.{pdf,png,tex,csv}`
 10. Power-model sensitivity sweep: BMPP-DQN's TOPSIS score/rank across all 9 configurations, and reward/power for all 4 methods across the same configurations (Concept Note §6.9) — `oran_evaluation.sensitivity_plots.{plot_sensitivity_topsis,plot_sensitivity_reward_power}` → `sensitivity_topsis_oran.{pdf,png}`, `sensitivity_reward_power_oran.{pdf,png}`; table form `sensitivity_summary_oran.{tex,csv}`
+11. RQ3 ablation: reward and switching frequency, two-timescale (proposed) vs. single-timescale (`upper_level_period_steps=1`) BMPP-DQN (Concept Note §6.11) — `oran_evaluation.rq3_ablation_plots.plot_rq3_ablation` → `rq3_ablation_oran.{pdf,png}`
+12. Supplementary $n=10$ statistical-power validation (Concept Note §6.12) — the full item-1-through-9 suite above, regenerated against `data/results_oran_10seed/` instead of the canonical $n=3$ `data/results_oran/`, into a parallel `thesis/tables_oran_10seed/`/`figures_oran_10seed/` location (does not overwrite the canonical $n=3$ artifacts)
 
 ## Writing Quality Standards
 

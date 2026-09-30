@@ -20,6 +20,7 @@ from oran_evaluation.results_plots import (
     plot_convergence_curve,
     plot_pareto_scatter,
 )
+from oran_evaluation.rq3_ablation_plots import plot_rq3_ablation
 from oran_evaluation.sensitivity_plots import (
     plot_sensitivity_reward_power,
     plot_sensitivity_topsis,
@@ -45,4 +46,5 @@ __all__ = [
     "plot_sensitivity_topsis",
     "plot_sensitivity_reward_power",
     "run_sensitivity_plots",
+    "plot_rq3_ablation",
 ]
