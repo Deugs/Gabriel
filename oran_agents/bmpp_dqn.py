@@ -146,7 +146,8 @@ class _BranchingHeads(nn.Module):
 
 
 class ContinuousParameterNetwork(nn.Module):
-    """Deterministic continuous parameter network producing (power_ratio, prb_share) per RU."""
+    """Deterministic continuous parameter network producing (power_ratio,
+    prb_share) per RU."""
 
     def __init__(self, feature_dim: int, n_ru: int):
         super().__init__()

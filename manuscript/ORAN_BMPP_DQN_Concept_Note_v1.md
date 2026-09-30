@@ -165,7 +165,9 @@ The more likely explanation, traced directly from the code rather than inferred,
 
 This explanation is reported as the most likely account supported by two independent pieces of evidence (the learning-rate-independence experiment and the direct mechanistic code trace), not as a proven root cause verified by an equivalence test in the way the two numerical fixes above were. A direct architectural test (e.g., conditioning each branch's Q-value on a summary of the other branches' currently-proposed actions) was considered but deliberately not attempted within this benchmark round, since it would depart from the two-timescale, no-twin-critic, per-branch-independent architecture Section 10 specifies for this thesis; it is noted here as a candidate direction for future work rather than folded into the reported comparison.
 
-### 6.5 Corrected Empirical Result (2026-09-24): BMPP-DQN Competitive with the Best Baseline
+### 6.5 [SUPERSEDED — see Section 6.10] Corrected Empirical Result (2026-09-24): BMPP-DQN Competitive with the Best Baseline
+
+> **Status (2026-09-30): superseded, kept as historical record, not corrected in place.** This section's table was generated with the shared-coin exploration bug described in Section 6.7 still present (not yet discovered as of this section's own writing). After that bug was fixed, reverted, and re-fixed (Sections 6.7-6.8's own trail), the corrected code was re-run at this section's exact 3-seed/500-episode protocol; the result changed materially (BMPP-DQN's mean reward moved from statistically tied with the best baseline to clearly behind it, though still not significantly so at $n=3$) — see Section 6.10 for the current table and Section 6.9 for a power-model sensitivity analysis fulfilling this section's own "if conducted" placeholder (Section 6.3). Do not cite this section's table as current.
 
 *Supersedes Section 6.4's headline finding, per that section's own status note. Drafted for Chapter 4 (Simulation Results); the investigative trail (code audit, unit-test regression guard, checkpoint-level validation, full GPU retrain on RunPod) is logged in `docs/daily_log.md`'s 2026-09-24 entry.*
 
@@ -194,7 +196,9 @@ BMPP-DQN's reward is now statistically indistinguishable from MP-DQN's (paired $
 
 **What this does and does not settle.** It does not prove branch independence is cost-free — no architectural test of that specific question was run, matching Section 6.4's own disclosed limitation. It does show that Section 6.4's specific *evidence* for a large branch-independence cost (BMPP-DQN losing to all three baselines by a wide, consistent margin) was an artifact of this third bug, not a genuine consequence of the architecture, since fixing an unrelated critic-training bug fully closed the gap. Any future architectural test of branch independence's own cost should be run against this corrected baseline, not Section 6.4's.
 
-### 6.6 Expanded Validation (5 Seeds, 1000 Episodes) and Multi-Criteria Robustness Analysis (2026-09-26/27)
+### 6.6 [SUPERSEDED — see Section 6.8] Expanded Validation (5 Seeds, 1000 Episodes) and Multi-Criteria Robustness Analysis (2026-09-26/27)
+
+> **Status (2026-09-29, later the same day): superseded, kept as historical record, not corrected in place.** The 5-seed/1000-episode expansion and the code change reported in Section 6.7 were reverted at the researcher's explicit request, restoring both the codebase and the canonical benchmark to this thesis's originally-reported 3-seed/500-episode scale (Section 6.5) — see Section 6.8. This was a scope decision, not a retraction: nothing in Sections 6.6-6.7's findings was found to be wrong. Do not cite this section's table as the current result; use Section 6.5 (unchanged) or Section 6.8.
 
 *Extends Section 6.5 with a larger sample and a second, independent ranking method, per this thesis's own Quality Gate 5 (≥10 seeds is the eventual target; 5 is an intermediate step past Section 6.5's 3). Drafted for Chapter 4.*
 
@@ -211,7 +215,9 @@ None of the pairwise differences reach significance ($p=0.23$–$0.35$, $n=5$), 
 
 **Multi-criteria cross-check.** TOPSIS (equal weights: power, QoS-strict, QoS-per-UE, switching, throughput) ranks the four methods DDPG (0.893) > BMPP-DQN (0.810) > DQN (0.463) > MP-DQN (0.189) — BMPP-DQN second, driven by its power/switching advantage outweighing its reward/QoS deficit in the composite. Two further checks were added specifically to test whether this ranking is an artifact of TOPSIS's own aggregation choice (`oran_evaluation/multicriteria.py`'s `compute_entropy_weights()` and `compute_vikor()`): entropy-weighted TOPSIS (objective, data-driven weights — power 0.253, QoS-strict 0.174, QoS-per-UE 0.238, switching 0.158, throughput 0.178 — derived from how much each criterion actually discriminates between the four methods, rather than assumed-equal) reproduces the *same* ranking and ordering exactly, but VIKOR (Opricovic & Tzeng, 2004; a different aggregation rule — weighted-sum "group utility" plus worst-single-criterion "regret," rather than TOPSIS's Euclidean distance to an ideal point) disagrees sharply: MP-DQN #1 ($Q=0.099$), DDPG #2 ($Q=0.340$), BMPP-DQN #3 ($Q=0.590$), DQN #4 ($Q=1.000$). Tracing the disagreement: MP-DQN's own worst criterion is switching (a ~10-30x outlier vs. the other three methods), but switching carries the *smallest* entropy weight (0.158) of the five criteria, so its worst-case regret ends up smaller in absolute terms than DQN's worst-case (power, weight 0.253) or BMPP-DQN's worst-case (QoS-per-UE, weight 0.238) — a legitimate property of VIKOR's regret-based logic, not a bug, but genuine evidence that **the composite ranking is robust to the choice of TOPSIS weighting scheme but not robust to the choice of aggregation rule (TOPSIS vs. VIKOR) — specifically for MP-DQN's rank.** A "bump chart" visualization (`plot_ranking_robustness()`, `thesis/figures_oran/mcda_robustness_oran.pdf`) makes this pattern visible at a glance: DDPG/BMPP-DQN/DQN hold flat, unchanged ranks across both TOPSIS weightings, while MP-DQN and DDPG cross dramatically under VIKOR.
 
-### 6.7 Investigating BMPP-DQN's Per-UE QoS Deficit: Four Candidate Fixes, One Kept (2026-09-27–29)
+### 6.7 [SUPERSEDED — see Section 6.8] Investigating BMPP-DQN's Per-UE QoS Deficit: Four Candidate Fixes, One Kept (2026-09-27–29)
+
+> **Status (2026-09-29, later the same day): superseded, kept as historical record, not corrected in place.** The independent-branch-exploration code change this section reports as "kept" was itself reverted at the researcher's explicit request, back to the exact code (and, via Section 6.6's own revert, the exact 3-seed/500-episode data) reported in Section 6.5. This section's investigation and its negative findings for prioritized replay, the training curriculum, and the shortened decision cadence remain valid and worth keeping as a historical record of what was tried and ruled out — only the "kept" conclusion no longer describes the current codebase. See Section 6.8.
 
 *Extends Section 6.6. Drafted for Chapter 4/5; the full investigative trail (isolation ablation methodology, per-experiment RunPod logs) is in `docs/daily_log.md`'s 2026-09-29 entry.*
 
@@ -239,14 +245,85 @@ The multi-criteria composite ranking is essentially unchanged from Section 6.6 (
 
 Every superseded/negative-result dataset from this investigation is archived, not deleted, per this document's own convention: the pre-fix 5-seed baseline (`data/results_oran_archive/5seed_1000ep_pre_exploration_fix_20260929/`) and all four candidate-fix experiments (`data/results_oran_archive/ablation_and_diagnostic_studies_20260929/`).
 
+### 6.8 [SUPERSEDED — see Section 6.10] Reverted to the Section 6.5 Baseline (2026-09-29, later the same day)
+
+> **Status (2026-09-30): superseded, kept as historical record, not corrected in place.** This section's own table restated Section 6.5's, which (per Section 6.5's own updated status note above) was itself generated with a since-refixed exploration bug present. This section's revert-the-code decision was reconsidered the same evening: the shared-coin exploration bug was re-fixed (Section 6.9), since it is a genuine implementation defect independent of the supervisor-approved experimental *design* (3 seeds, 500 episodes, no expansion), not a scope change to revert alongside the 5-seed/1000-episode expansion. See Section 6.10 for the current table.
+
+*Supersedes Sections 6.6 and 6.7's headline results per their own status notes above. Drafted for Chapter 4/5.*
+
+At the researcher's explicit request, both the 5-seed/1000-episode expansion (Section 6.6) and the independent-branch-exploration code change (Section 6.7) were reverted: `oran_agents/bmpp_dqn.py` and `tests/test_oran_agents.py` were restored byte-for-byte to their state immediately before Section 6.7's fix (git commit `dabbc8f`, the parent of the commit that introduced it), `config/oran_default.yaml`'s `algorithm.max_episodes` was restored from 1000 to 500, and the canonical `data/results_oran/` was restored to the original 3-seed/500-episode dataset (`data/results_oran_archive/3seed_500ep_20260926/`). This was a scope decision — returning the thesis to its originally-reported, narrower benchmark scale — not a correction of an error in Sections 6.6-6.7's own findings, which remain valid as reported and are kept as historical record rather than deleted, per this document's standing convention (see Section 6.4's own precedent).
+
+The 5-seed/1000-episode dataset and the reverted code change are themselves archived, not discarded: `data/results_oran_archive/5seed_1000ep_exploration_fix_20260929/`.
+
+**Current governing result — identical to Section 6.5, restated here as the confirmed, current state of the codebase and canonical data:**
+
+| Algorithm | Mean Reward (95% CI) | Power (W) | QoS Rate | Per-UE QoS | Switching | $p$ vs. Proposed | Cohen's $d$ |
+|---|---|---|---|---|---|---|---|
+| BMPP-DQN (proposed) | −15,694 [−19,711, −11,677] | 176.5 | 59.4% | 92.6% | 0.14 | — | — |
+| DDPG | −68,537 [−152,305, 15,232] | 189.5 | 28.5% | 80.9% | 0.04* | 0.122 | 1.50 |
+| DQN | −21,965 [−32,491, −11,438] | 213.4 | 42.8% | 88.4% | 0.29 | 0.103 | 1.66 |
+| MP-DQN | −15,453 [−24,459, −6,447] | 160.2 | 54.4% | 92.1% | 1.04 | 0.854 | −0.12 |
+
+*DDPG's low switching frequency is an artifact of one seed (456) collapsing to near-zero throughput, not genuine policy stability — see Section 6.5's own footnote.
+
+TOPSIS composite ranking (`oran_evaluation/multicriteria.py`, regenerated from the restored data): BMPP-DQN #1 (0.911) > DDPG #2 (0.617) > DQN #3 (0.597) > MP-DQN #4 (0.330) — matching Section 6.5's own reported ranking exactly, as expected, since this is the same underlying dataset.
+
+**What remains open.** Sections 6.6-6.7's own findings are not invalidated by this revert: the expanded sample did show a genuine power/switching-stability-vs-reward trade-off at 5 seeds that the 3-seed sample here does not have the statistical power to detect either way, and none of the four candidate QoS fixes investigated in Section 6.7 were shown to work. Both remain available for a future resumption of that line of investigation, should thesis scope permit revisiting it; the code and data to do so are preserved in the archives referenced above, not deleted.
+
+### 6.9 Power-Model Sensitivity Analysis (2026-09-30)
+
+*Finalizes Section 6.3's own bracketed placeholder ("[If conducted: a] sensitivity analysis... [This sentence should be finalized once/if that sensitivity analysis is actually run]"), left open since that section was written. Drafted for Chapter 4/5; full per-config, per-method results are in `data/results_oran_sensitivity/*/` (not deleted, referenced directly rather than reproduced in full here).*
+
+Section 6.3 disclosed that every RU/DU/CU/fronthaul power constant is an unvalidated literature-style placeholder, chosen only to preserve a monotonic energy trade-off across functional splits. To check whether the qualitative comparison between BMPP-DQN and the three baselines is an artifact of any single one of these unvalidated constants, each of the four component groups (RU, DU, CU, fronthaul) was independently scaled by an order of magnitude in both directions (10x and 0.1x, one group perturbed at a time, all others held at their Section 10.5 default), and the full 4-method x 3-seed x 500-episode protocol (unchanged from Sections 6.5/6.8/6.10 — the original supervisor-approved scale, not expanded) was re-run under each of the 8 resulting configurations, on top of the original (Section 6.10) default. `pa_efficiency` and `p_max_dbm` were left untouched, since both are independently literature-validated (Section 10.5), not placeholders.
+
+| Config | BMPP-DQN reward rank (of 4) | BMPP-DQN TOPSIS rank (of 4) | TOPSIS score |
+|---|---|---|---|
+| Default | 2 | 1 | 0.833 |
+| RU x10 | 3 | 1 | 0.873 |
+| RU x0.1 | 3 | 1 | 0.893 |
+| DU x10 | 3 | 1 | 0.791 |
+| DU x0.1 | 3 | 1 | 0.848 |
+| CU x10 | 3 | 1 | 0.854 |
+| CU x0.1 | 3 | 2 | 0.686 |
+| Fronthaul x10 | 3 | 1 | 0.876 |
+| Fronthaul x0.1 | 4 | 1 | 0.843 |
+
+Two qualitative patterns hold across every one of the 8 perturbed configurations, matching Section 6.10's default-config result exactly in direction if not magnitude: (1) MP-DQN has the best raw reward and BMPP-DQN never does (rank 3 or 4 of 4 throughout) — this is not an artifact of the power model, it holds regardless of which component is scaled or in which direction; (2) BMPP-DQN's TOPSIS multi-criteria composite rank is 1st in 8 of the 9 configurations (the sole exception, CU x0.1, still ranks it 2nd, not last), driven consistently by the same combination of competitive power and the lowest-or-near-lowest switching frequency of the four methods in every single configuration. **The qualitative multi-criteria finding — BMPP-DQN is the best-balanced method by TOPSIS composite — is robust to an order-of-magnitude perturbation of every unvalidated power-model constant group; the qualitative reward finding — MP-DQN has the best raw reward, BMPP-DQN does not — is equally robust, in the opposite direction.** Neither finding is an artifact of any single placeholder constant; both are genuine properties of the four algorithms' learned policies under this environment and reward structure.
+
+### 6.10 Current Governing Result (2026-09-30): Exploration Fix Re-Applied at the Original Protocol Scale
+
+*Supersedes Sections 6.5 and 6.8's tables per their own status notes above. Cite this section, not 6.5 or 6.8, for the thesis's current empirical result. Drafted for Chapter 4/5.*
+
+Section 6.8's revert-the-code decision was reconsidered: the independent-per-branch-exploration fix (Section 6.7) is a genuine correctness fix for a real implementation bug (a shared coin-flip that could only ever explore "all branches random" or "all branches greedy," matching neither the branching-DQN literature's own convention nor a defensible design choice), independent of the separate, legitimate decision to keep the experimental *scale* at the original supervisor-approved 3 seeds/500 episodes rather than Section 6.6's expansion. Reverting a known, cheaply-fixed, evidence-backed bug alongside an unrelated scope decision conflated two independent questions ("what scale should we report at" and "is this code correct") into one. The fix was re-applied (`oran_agents/bmpp_dqn.py`, `tests/test_oran_agents.py` restored to their Section 6.7 state) and BMPP-DQN re-run at the exact Section 6.5 protocol (3 seeds, 500 episodes; baselines unchanged, since only BMPP-DQN's code changed):
+
+| Algorithm | Mean Reward (95% CI) | Power (W) | QoS Rate | Per-UE QoS | Switching | $p$ vs. Proposed | Cohen's $d$ |
+|---|---|---|---|---|---|---|---|
+| BMPP-DQN (proposed) | −21,373 [−37,364, −5,382] | 162.5 | 49.5% | 90.4% | 0.20 | — | — |
+| DDPG | −68,537 [−152,305, 15,232] | 189.5 | 28.5% | 80.9% | 0.04* | 0.179 | 1.17 |
+| DQN | −21,965 [−32,491, −11,438] | 213.4 | 42.8% | 88.4% | 0.29 | 0.904 | 0.08 |
+| MP-DQN | −15,453 [−24,459, −6,447] | 160.2 | 54.4% | 92.1% | 1.04 | 0.093 | −1.76 |
+
+*DDPG's low switching frequency is an artifact of one seed (456) collapsing to near-zero throughput, not genuine policy stability — see Section 6.5's own footnote.
+
+This differs materially from Section 6.5's own table for the same protocol: BMPP-DQN's mean reward moved from statistically tied with the best baseline (Section 6.5: $p=0.854$ vs. MP-DQN) to visibly behind it (here: $p=0.093$, Cohen's $d=-1.76$ — a large effect that misses significance only because $n=3$ gives this test very little power, not because the gap is small). This is the direct, expected consequence of fixing the exploration bug: Section 6.6's independent 5-seed/1000-episode validation of the same fix already showed this same pattern (mean reward moves against BMPP-DQN, variance drops sharply) before this section's own 3-seed re-run confirms it again at the original scale. TOPSIS composite ranking (`oran_evaluation/multicriteria.py`, all three schemes agree for the first time in this document's history): BMPP-DQN #1 (equal-weight TOPSIS 0.833, entropy-weight TOPSIS 0.833, VIKOR $Q=0.000$) > DDPG/DQN (#2/#3, order swaps between weighting schemes) > MP-DQN (#4 by TOPSIS, #2 by VIKOR). Section 6.9's sensitivity sweep (immediately above) confirms this composite ranking is not an artifact of the power model's own unvalidated constants.
+
+**Reconciling this against Concept Note Section 4.2's stated research objective.** Section 4.2 states the objective as "Demonstrate energy savings of ≥15% compared to baseline DRL algorithms." This objective is **not met** by this result, and has not been met by any table in this document's history: BMPP-DQN's mean power (162.5 W) is *higher* than the best baseline's (MP-DQN, 160.2 W) here, and MP-DQN or BMPP-DQN alternate as the lower-power method across the Section 6.9 sensitivity sweep without either showing a consistent, let alone ≥15%, advantage over the other. The defensible contribution this evidence actually supports is narrower and different in kind from Section 4.2's original framing: BMPP-DQN is the most *balanced* of the four methods across power, both QoS metrics, switching stability, and throughput simultaneously (the TOPSIS composite finding, robust to power-model uncertainty per Section 6.9), at some cost in raw reward and without a demonstrated raw energy-consumption advantage. Chapter 4/5 should state this directly rather than retaining Section 4.2's ≥15% framing as if it were satisfied — the multi-criteria balance finding is a real, evidenced, and defensible contribution in its own right, but it is not the same claim as an energy-savings percentage, and the two should not be conflated in the thesis's final framing.
+
+**A note on statistical power.** Every table in this section (as in Sections 6.4/6.5/6.8) is built from $n=3$ seeds, the original supervisor-approved sample size. DDPG's own 95% CI here spans $[-152{,}305, 15{,}232]$ — wider than its own point estimate's magnitude, and crossing zero. None of the four pairwise comparisons against BMPP-DQN reach significance at $n=3$, including MP-DQN's, despite a large point-estimate effect size ($d=-1.76$). Section 6.6's independent 5-seed run showed that a larger sample can turn a "not significant" result into a significant one without the underlying policies changing at all — the 3-seed tables in this document should be read as directionally informative, not as having ruled out the differences they fail to find significant.
+
 ## 7. Significance of the Research
+
+> **Status (2026-09-30): the "Energy Savings" bullet below is retained as originally stated (Section 4.2's research objective) but is not supported by the evidence gathered — see Section 6.10's own explicit reconciliation. It is not deleted or silently reworded, per this document's own convention, but should not be read as demonstrated.**
 
 - Integration of branching DQN and MP-DQN architectures, contributing to the DRL literature on hybrid action spaces.
 - **Focused Contribution:** Provides a clear, incremental advancement over existing parameterized DRL methods.
 - **O-RAN Application:** Demonstrates how advanced DRL can address the specific hybrid-action challenges of O-RAN.
-- **Energy Savings:** Directly addresses the critical OPEX challenge of RAN energy consumption.
+- **Energy Savings:** Directly addresses the critical OPEX challenge of RAN energy consumption. *(Not demonstrated — Section 6.10.)*
+- **Multi-Criteria Balance (evidenced, 2026-09-30):** BMPP-DQN is the most balanced of the four compared methods across power, strict QoS, per-UE QoS, switching stability, and throughput simultaneously (TOPSIS composite rank #1 of 4, all three MCDA schemes agreeing — Section 6.10), a finding independently confirmed robust to an order-of-magnitude perturbation of every unvalidated power-model constant (Section 6.9). This is the contribution the gathered evidence actually and directly supports, distinct from the raw energy-savings claim above.
 
 ## 8. Timeline of Thesis Completion
+
+> **Status (2026-09-30): this schedule is a template from the original concept-note submission and has not tracked actual progress.** As of this date, weeks 1-13's milestones (literature review, system modeling, algorithm design, environment/agent implementation, training experiments, baseline comparisons) are complete and substantially exceed this table's own scope (an additional multi-criteria robustness analysis, a four-candidate-fix investigation, and a power-model sensitivity sweep beyond anything originally scoped here — Sections 6.6-6.9). Week 14-16's "results analysis, thesis writing" has not started in earnest: no thesis chapter prose exists yet outside the chapter-draft-labeled subsections of this document's own Section 6, per `docs/oran_thesis_guide.md`'s own tracking. This table is retained unedited as the original submitted plan, not updated to a revised schedule, since no revised schedule has been agreed with the supervisor as of this date.
 
 | Weeks | Milestone |
 |---|---|

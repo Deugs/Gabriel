@@ -627,7 +627,8 @@ class ORANPowerModel:
         prev_active_mask: Optional[np.ndarray] = None,
         prev_split_idx: Optional[np.ndarray] = None,
     ) -> dict:
-        """Compute complete system power breakdown (RU + DU + CU + Fronthaul + Switching).
+        """Compute complete system power breakdown (RU + DU + CU +
+        Fronthaul + Switching).
 
         Args:
             active_mask (np.ndarray): Binary active mask (n_ru,).

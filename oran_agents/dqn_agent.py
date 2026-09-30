@@ -41,7 +41,8 @@ def _resolve_activation(name: str) -> Any:
 
 
 class _BranchQNetwork(nn.Module):
-    """Per-RU factorized heads for both discrete decision types (no continuous fusion)."""
+    """Per-RU factorized heads for both discrete decision types (no
+    continuous fusion)."""
 
     def __init__(
         self,
@@ -172,7 +173,8 @@ class ORANDQNAgent:
     def select_action(
         self, obs: np.ndarray, evaluate: bool = False
     ) -> Dict[str, np.ndarray]:
-        """Epsilon-greedy per-branch discrete selection; fixed heuristic continuous action."""
+        """Epsilon-greedy per-branch discrete selection; fixed heuristic
+        continuous action."""
         if not evaluate and random.random() < self.epsilon:
             ru_on = np.random.randint(0, 2, size=self.n_ru)
             split = np.random.randint(0, self.n_splits, size=self.n_ru)

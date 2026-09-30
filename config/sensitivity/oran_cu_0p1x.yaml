@@ -1,0 +1,92 @@
+network:
+  n_ru: 4
+  n_du: 1
+  n_cu: 1
+  n_ue: 8
+  n_splits: 3
+  area_size_m: 500
+  carrier_freq_ghz: 3.5
+  bandwidth_mhz: 100
+  noise_power_dbm: -102
+channel:
+  path_loss_exponent: 3.5
+traffic:
+  lambda_peak: 0.5
+  floor_ratio: 0.2
+  packet_size_bits: 4000000.0
+  step_duration_s: 0.1
+  t1: 7.0
+  t2: 10.0
+  t3: 20.0
+  t4: 23.0
+power:
+  ru:
+    p_sleep_w: 2.0
+    p_switch_w: 2.0
+    p_switch_split_w: 1.0
+    pa_efficiency: 0.25
+    p_max_dbm: 33
+    p_proc_by_split_w:
+    - 10.0
+    - 6.0
+    - 3.0
+  du:
+    p_static_w: 50.0
+    p_per_ru_by_split_w:
+    - 5.0
+    - 10.0
+    - 20.0
+  cu:
+    p_static_w: 3.0
+    p_dyn_per_ru_w: 0.1
+  fronthaul:
+    p_common_w: 10.0
+    p_per_ru_by_split_w:
+    - 3.0
+    - 6.0
+    - 15.0
+algorithm:
+  name: bmpp_dqn
+  max_episodes: 500
+  max_steps_per_episode: 100
+  upper_level_period_steps: 10
+  upper_buffer_size: 200000
+  lower_buffer_size: 1000000
+  batch_size: 128
+  min_buffer_size: 2000
+  lr_discrete: 0.0001
+  lr_actor: 0.0003
+  lr_critic: 0.0003
+  hidden_dims:
+  - 128
+  - 64
+  activation: relu
+  use_layer_norm: true
+  gamma: 0.99
+  tau: 0.005
+  epsilon_start: 1.0
+  epsilon_end: 0.01
+  epsilon_decay: 0.995
+  continuous_noise_std: 0.1
+  continuous_noise_std_end: 0.01
+  gradient_clip_norm: 1.0
+  max_n_ru_for_flat_joint_action: 6
+reward:
+  alpha_energy: 1.0
+  beta_qos: 10.0
+  gamma_switch: 0.5
+evaluation:
+  eval_freq: 50
+  n_eval_episodes: 5
+  n_random_seeds: 3
+  save_checkpoints: true
+  checkpoint_freq: 250
+hardware:
+  device: cuda
+_sensitivity_meta:
+  group: cu
+  direction: 0p1x
+  factor: 0.1
+  purpose: 'Concept Note Section 6.9 sensitivity sweep: cu power-model constants scaled
+    0.1x from config/oran_default.yaml''s own placeholder values, all else unchanged
+    (3 seeds/500 episodes, matching the original supervisor-approved protocol exactly).'

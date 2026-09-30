@@ -120,11 +120,15 @@ power:
 # ============================================================
 algorithm:
   name: "bmpp_dqn"
-  # 2026-09-26: raised from 500 -- BMPP-DQN's own eval_history showed 2 of
-  # 3 seeds still clearly improving (one, seed456, mid a late and dramatic
-  # escape from a bad region) at episode 500, not plateaued. See
-  # docs/daily_log.md's 2026-09-26 entry for the per-seed evidence.
-  max_episodes: 1000
+  # 2026-09-29: reverted back to 500 (was briefly raised to 1000 on
+  # 2026-09-26; see docs/daily_log.md's 2026-09-26 entry for that
+  # rationale, still valid as a finding, not retracted) -- reverted at the
+  # user's explicit request, back to this thesis's originally-reported
+  # 3-seed/500-episode scale (Concept Note Section 6.5). The 5-seed/
+  # 1000-episode expanded results (Section 6.6-6.7) remain archived at
+  # data/results_oran_archive/5seed_1000ep_pre_exploration_fix_20260929/,
+  # not discarded.
+  max_episodes: 500
   max_steps_per_episode: 100
 
   # Two-timescale cadence: discrete (upper) decisions held for N lower-level
@@ -167,7 +171,20 @@ algorithm:
   max_n_ru_for_flat_joint_action: 6
 
 # ============================================================
-# Reward Function Weights
+# Reward Function Weights (needs validation -- see Concept Note
+# Section 10.7; unlike every power/traffic/split constant in this file,
+# these three weights have never been subjected to a literature check or
+# a sensitivity analysis, despite directly defining the optimization
+# objective every result in this thesis is measured against.
+# oran_env/oran_env.py's step(): reward = alpha_energy * (throughput_mbps
+# / total_power_w) - beta_qos * (qos_shortfall_mbps) - gamma_switch *
+# (switching_events). Chosen only to preserve a reasonable relative
+# magnitude -- beta_qos=10 so a QoS violation (Mbps of shortfall)
+# dominates the throughput-per-watt term, gamma_switch=0.5 as a mild,
+# not dominant, switching penalty -- not derived from any source.
+# 2026-09 sensitivity sweep (Concept Note Section 6.9) perturbs the
+# power-model constants these weights are combined with, not the
+# weights themselves; the weights remain open for future work.
 # ============================================================
 reward:
   alpha_energy: 1.0

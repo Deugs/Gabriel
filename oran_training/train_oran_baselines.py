@@ -155,7 +155,8 @@ def run_oran_baseline_benchmarks(
                 # (mirrors training/train_baselines.py's identical pattern).
                 if algo == "mpdqn":
                     print(
-                        f"  n_ru={env.n_ru:3d} | {algo:6s} | SKIPPED (intractable): {exc}"
+                        f"  n_ru={env.n_ru:3d} | {algo:6s} | "
+                        f"SKIPPED (intractable): {exc}"
                     )
                     skipped = True
                     break

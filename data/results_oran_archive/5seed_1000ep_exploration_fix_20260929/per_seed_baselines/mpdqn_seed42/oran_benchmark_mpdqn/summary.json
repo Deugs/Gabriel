@@ -1,0 +1,21 @@
+[
+  {
+    "algorithm": "mpdqn",
+    "seed": 42,
+    "mean_reward": -19522.059551910686,
+    "std_reward": 8999.198368353578,
+    "mean_power_w": 139.67962029266357,
+    "qos_satisfaction_rate": 0.5439999999999999,
+    "qos_per_ue_rate": 0.9120000000000001,
+    "mean_active_rus": 1.3920000000000001,
+    "mean_switching_events": 1.06,
+    "mean_throughput_mbps": 1409.552599232,
+    "train_mean_reward": -27205.21836787334,
+    "train_mean_power_w": 146.2544358517551,
+    "train_qos_satisfaction_rate": 0.52027,
+    "train_qos_per_ue_rate": 0.903,
+    "train_mean_active_rus": 1.5094900000000002,
+    "train_mean_switching_events": 1.47047,
+    "train_mean_throughput_mbps": 1286.7096641431185
+  }
+]

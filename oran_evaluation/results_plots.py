@@ -166,7 +166,7 @@ def plot_pareto_scatter(
         return
 
     algos = ordered_algos(metrics)
-    points = []
+    points: List[Dict[str, Any]] = []
     for algo in algos:
         xs = [m[x_field] for m in metrics[algo].values()]
         ys = [m[y_field] for m in metrics[algo].values()]
@@ -299,7 +299,8 @@ def plot_convergence_curve(
         if not rewards:
             continue
         ax.axhline(
-            float(np.mean(rewards)), linestyle="--", color=ref_colors[i % len(ref_colors)],
+            float(np.mean(rewards)), linestyle="--",
+            color=ref_colors[i % len(ref_colors)],
             alpha=0.8, label=f"{label_for_algo(algo)} (final mean)",
         )
 

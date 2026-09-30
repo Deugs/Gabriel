@@ -161,7 +161,18 @@ thesis states them as fact:
   the most-open of the four O-RAN needs-validation flags after 9
   literature-check passes across two days, though its broader context
   (and the `pa_efficiency` constant specifically) is now substantially
-  better-supported than at any prior pass
+  better-supported than at any prior pass. **2026-09-30 update**: while
+  the absolute-Watt values remain unvalidated (as above), a full
+  sensitivity sweep (Concept Note §6.9) has now confirmed that the
+  qualitative 4-method comparison does not depend on any single one of
+  these placeholder constants: each of the RU/DU/CU/fronthaul groups was
+  independently scaled 10x and 0.1x (8 configurations, full 4-method/
+  3-seed/500-episode re-run each), and both the reward ranking (MP-DQN
+  best, BMPP-DQN never best) and the multi-criteria TOPSIS ranking
+  (BMPP-DQN 1st in 8 of 9 configurations) held throughout. This resolves
+  §6.3's own long-standing "[if conducted]" sensitivity-analysis
+  placeholder; it does not resolve the constants' own absolute values,
+  which remain open exactly as described above
 - `oran_env/traffic_model.py`'s trapezoidal breakpoints and Poisson rate
   (§10.6, via `config/oran_default.yaml`'s `traffic:` section) —
   **partially resolved** as of a 2026-08-30 check that obtained 3GPP
@@ -218,3 +229,16 @@ thesis states them as fact:
   change (all results from before 2026-09-24 reflect the old, capacity-
   starved 20 MHz configuration — see `data/results_oran_archive/`), not a
   code change.
+- `config/oran_default.yaml`'s reward weights (`reward.alpha_energy`,
+  `reward.beta_qos`, `reward.gamma_switch`) — **still open**, flagged for
+  the first time 2026-09-30. Unlike every constant above, these have never
+  been subjected to a literature check or a sensitivity sweep, despite
+  directly defining the optimization objective every result in this
+  thesis is measured against — Concept Note §6.10 names this (alongside a
+  possible environment capacity constraint) as the most likely remaining
+  explanation for BMPP-DQN's per-UE QoS deficit relative to the
+  baselines, a question this track's own investigation (§6.6-6.8) already
+  ruled out several training-mechanics explanations for without testing
+  this one. No sensitivity sweep of these weights has been run (the
+  2026-09-30 sweep above covers the power-model constants they are
+  combined with, not the weights themselves).

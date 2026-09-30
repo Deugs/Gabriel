@@ -534,7 +534,8 @@ def test_running_normalizer_matches_numpy_std_and_never_shifts_mean():
     samples = rng.normal(loc=50.0, scale=20.0, size=500).tolist()
 
     normalizer = _RunningNormalizer()
-    outputs = [normalizer.normalize(x) for x in samples]
+    for x in samples:
+        normalizer.normalize(x)
 
     # After many samples, the running std should closely track numpy's
     # population std of everything observed so far.

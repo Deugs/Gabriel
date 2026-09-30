@@ -28,7 +28,8 @@ PROPOSED_ALGO = "BMPP_DQN"
 def perform_paired_ttest(
     proposed_scores: np.ndarray, baseline_scores: np.ndarray
 ) -> Tuple[float, float, bool]:
-    """Perform paired t-test between proposed method and baseline scores across seeds."""
+    """Perform paired t-test between proposed method and baseline scores
+    across seeds."""
     if len(proposed_scores) != len(baseline_scores) or len(proposed_scores) < 2:
         return 0.0, 1.0, False
     t_stat, p_val = stats.ttest_rel(proposed_scores, baseline_scores)
@@ -218,8 +219,9 @@ def analyze_convergence(
         qos_pct = m["mean_qos_rate"] * 100
         qos_per_ue_pct = m["mean_qos_per_ue_rate"] * 100
 
+        reward_ci = f"[{m['ci_95_lower']:.2f}, {m['ci_95_upper']:.2f}]"
         latex_content += (
-            f"{algo} & {m['mean_reward']:.2f} [{m['ci_95_lower']:.2f}, {m['ci_95_upper']:.2f}] & "
+            f"{algo} & {m['mean_reward']:.2f} {reward_ci} & "
             f"{m['mean_power_w']:.1f} & {qos_pct:.1f}\\% & {qos_per_ue_pct:.1f}\\% & "
             f"{m['mean_switching_events']:.2f} & {p_val_str} & {d_val_str} \\\\\n"
         )

@@ -219,7 +219,8 @@ class ORANMPDQNAgent:
             tmp = tmp // n_splits
         self.split_digits = digits.to(self.device)  # (n_split_combos, n_ru)
 
-        # Full joint action's (ru_on, split) per index a = ru_idx * n_split_combos + split_idx
+        # Full joint action's (ru_on, split) per index
+        # a = ru_idx * n_split_combos + split_idx
         self.joint_ru_bits = self.ru_bits.repeat_interleave(
             self.n_split_combos, dim=0
         )  # (n_joint_actions, n_ru)

@@ -50,6 +50,96 @@ def test_observation_and_action_shapes(default_config):
     assert isinstance(reward, float)
 
 
+def test_signal_interference_serves_each_ue_by_its_strongest_active_ru(
+    default_config,
+):
+    """`_signal_interference()`'s own documented contract: each UE is served
+    by its strongest active RU, and every *other* active RU's received
+    power at that UE counts as co-channel interference. Directly
+    hand-computed against a fixed, known channel-gain matrix -- the single
+    most decision-relevant piece of the whole environment (it is what the
+    reward's throughput and QoS-violation terms are ultimately built
+    from), previously covered by no test beyond `isinstance(reward,
+    float)`."""
+    cfg = deepcopy(default_config)
+    cfg["network"]["n_ru"] = 2
+    cfg["network"]["n_ue"] = 2
+    env = ORANEnv(cfg)
+    env.reset(seed=42)
+
+    # RU0 is UE0's strong server and UE1's weak interferer; RU1 is UE1's
+    # strong server and UE0's weak interferer. Rows = RU, columns = UE.
+    env.channel_gains = np.array(
+        [[2.0 + 0j, 0.5 + 0j], [0.5 + 0j, 2.0 + 0j]], dtype=np.complex64
+    )
+    power_w = np.array([10.0, 10.0], dtype=np.float32)
+    active_mask = np.array([True, True])
+
+    signal, interference, serving_ru = env._signal_interference(active_mask, power_w)
+
+    # rx_power[ru, ue] = power_w[ru] * |gain[ru, ue]|^2
+    # UE0: RU0 -> 10*4=40 (signal, serves), RU1 -> 10*0.25=2.5 (interference)
+    # UE1: RU1 -> 10*4=40 (signal, serves), RU0 -> 10*0.25=2.5 (interference)
+    assert signal == pytest.approx([40.0, 40.0])
+    assert interference == pytest.approx([2.5, 2.5])
+    assert list(serving_ru) == [0, 1]
+
+
+def test_signal_interference_excludes_inactive_rus_from_signal_and_interference(
+    default_config,
+):
+    """An inactive RU must contribute to neither the signal nor the
+    interference term for any UE, regardless of its configured transmit
+    power -- `power_w` alone (without `active_mask`) cannot express "off"."""
+    cfg = deepcopy(default_config)
+    cfg["network"]["n_ru"] = 2
+    cfg["network"]["n_ue"] = 1
+    env = ORANEnv(cfg)
+    env.reset(seed=42)
+
+    env.channel_gains = np.array([[2.0 + 0j], [2.0 + 0j]], dtype=np.complex64)
+    power_w = np.array([10.0, 10.0], dtype=np.float32)
+
+    signal, interference, serving_ru = env._signal_interference(
+        np.array([True, False]), power_w
+    )
+    assert signal == pytest.approx([40.0])
+    assert interference == pytest.approx([0.0])
+    assert list(serving_ru) == [0]
+
+
+def test_reward_composes_energy_qos_switching_terms_with_configured_weights(
+    default_config,
+):
+    """The reward returned by step() must equal alpha_energy *
+    ee_mbit_per_joule - beta_qos * qos_shortfall_mbps - gamma_switch *
+    switching_events, using this exact step's own returned `info` values
+    -- the actual arithmetic composition, not just that a float comes
+    back. Regression guard against a sign flip or a dropped/duplicated
+    weight in oran_env.py's step()."""
+    cfg = deepcopy(default_config)
+    alpha_energy = cfg["reward"]["alpha_energy"]
+    beta_qos = cfg["reward"]["beta_qos"]
+    gamma_switch = cfg["reward"]["gamma_switch"]
+
+    env = ORANEnv(cfg)
+    obs, _ = env.reset(seed=42)
+    action = env.action_space.sample()
+    _, reward, _, _, info = env.step(action)
+
+    expected_reward = (
+        alpha_energy * info["ee_mbit_per_joule"]
+        - beta_qos * info["qos_shortfall_mbps"]
+        - gamma_switch * info["switching_events"]
+    )
+    assert reward == pytest.approx(expected_reward, rel=1e-5)
+
+    # ee_mbit_per_joule must itself be throughput-per-watt, cross-checked
+    # against this same step's independently-returned raw metrics.
+    expected_ee = info["throughput_mbps"] / (info["total_power_w"] + 1e-6)
+    assert info["ee_mbit_per_joule"] == pytest.approx(expected_ee, rel=1e-5)
+
+
 def test_env_accepts_full_action_dict_regardless_of_upper_level_period(
     default_config,
 ):
