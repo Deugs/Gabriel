@@ -4,6 +4,8 @@ A fully separate test module from tests/test_oran_evaluation.py, matching
 this repo's one-test-file-per-module convention for the O-RAN track.
 """
 
+from pathlib import Path
+
 import pytest
 
 from oran_evaluation.multicriteria import (
@@ -11,6 +13,8 @@ from oran_evaluation.multicriteria import (
     compute_entropy_weights,
     compute_topsis,
     compute_vikor,
+    export_mcda_robustness_table,
+    export_multicriteria_table,
     plot_ranking_robustness,
 )
 
@@ -62,6 +66,29 @@ def test_compute_topsis_equal_weights_by_default():
     )
     result = compute_topsis(metrics)
     assert set(result.keys()) == {"a", "b"}
+
+
+def test_exported_tables_escape_percent_signs(tmp_path):
+    """Regression guard: CRITERION_LABELS' literal '(%)' (correct for the
+    matplotlib labels this same dict feeds) must be escaped to '(\\%)' in
+    the LaTeX tables specifically -- an unescaped '%' starts a LaTeX
+    comment, silently truncating the rest of that line (a real compile
+    bug this once caused)."""
+    metrics = _metrics({"a": _BEST, "b": _WORST})
+    topsis = compute_topsis(metrics)
+    multicriteria_path = export_multicriteria_table(topsis, str(tmp_path))
+    multicriteria_tex = Path(multicriteria_path).read_text()
+    assert "(%)" not in multicriteria_tex
+    assert "(\\%)" in multicriteria_tex
+
+    entropy_weights = compute_entropy_weights(metrics)
+    vikor = compute_vikor(metrics, entropy_weights)
+    robustness_path = export_mcda_robustness_table(
+        topsis, topsis, vikor, entropy_weights, str(tmp_path)
+    )
+    robustness_tex = Path(robustness_path).read_text()
+    assert "(%)" not in robustness_tex
+    assert "(\\%)" in robustness_tex
 
 
 def test_compute_entropy_weights_sum_to_one_and_zero_for_constant_criterion():

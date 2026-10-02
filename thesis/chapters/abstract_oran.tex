@@ -1,0 +1,55 @@
+% Abstract (O-RAN / BMPP-DQN track).
+%
+% Unnumbered, per standard thesis convention; \addcontentsline gives it a
+% Table of Contents entry despite \chapter* not numbering or listing it
+% automatically. Placed in main_oran.tex between \maketitle and
+% \tableofcontents, also the standard position.
+
+\chapter*{Abstract}
+\addcontentsline{toc}{chapter}{Abstract}
+
+Open Radio Access Network (O-RAN) disaggregation exposes energy-relevant
+control decisions -- Radio Unit (RU) activation, functional split
+selection, transmit power, and physical resource block (PRB) allocation --
+that are jointly discrete and continuous and that naturally span two
+control timescales (Non-Real-Time and Near-Real-Time RIC). Existing deep
+reinforcement learning approaches to this problem handle either the
+discrete or the continuous side cleanly, or resolve the hybrid action
+space by thresholding a continuous output, which destroys the discrete
+decision's own gradient signal. This thesis proposes BMPP-DQN (Branching
+Multi-Pass Parameterized DQN), a single coupled architecture that combines
+branching discrete-action decomposition with multi-pass parameterized
+continuous-action processing, to handle this hybrid, multi-timescale
+action space directly.
+
+BMPP-DQN is formulated as a parameterized Markov Decision Process over
+four action branches -- RU activation, split selection, transmit power, and
+PRB share -- and evaluated in a focused, single-gNB O-RAN simulation
+environment against three baselines representing the discrete-only,
+continuous-only, and existing-parameterized-action alternatives (DQN,
+DDPG, and MP-DQN respectively), under a matched 3-seed, 500-episode
+training and evaluation protocol. The comparison is cross-checked with
+three independent multi-criteria decision-analysis schemes
+(equal-weighted and entropy-weighted TOPSIS, and VIKOR), an
+order-of-magnitude sensitivity sweep across the power model's unvalidated
+constants, and a supplementary 10-seed statistical-power validation.
+
+The results do not support this thesis's original target of a
+$\geq15\%$ energy saving relative to the strongest baseline: BMPP-DQN's
+mean power consumption is statistically indistinguishable from the
+best-performing baseline's. What the evidence does support is a
+multi-criteria balance across power, QoS satisfaction, and switching
+stability that BMPP-DQN achieves more consistently than any single
+baseline, a finding that holds across every power-model perturbation
+tested and, substantially though not completely, across the larger
+10-seed sample. A direct ablation further shows that this thesis's
+two-timescale design -- holding discrete RU/split decisions fixed across
+multiple environment steps rather than re-deciding them every step --
+reduces switching frequency more than sixfold without a measurable cost to
+reward, power, or QoS, isolating decision stability, not raw energy
+efficiency, as the two-timescale design's actual contribution. These
+findings are reported alongside the original energy-saving target rather
+than in place of it, and the thesis's remaining limitations -- an
+unvalidated power model and reward weighting, a single-gNB scope, and a
+three-baseline comparison -- are stated explicitly as directions for
+future work.

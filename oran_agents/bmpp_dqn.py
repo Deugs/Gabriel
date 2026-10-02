@@ -691,8 +691,18 @@ class BMPPDQNAgent:
             # Per-branch targets (not one shared/averaged target across
             # branches -- the fixed pattern from agents/branching_mp_dqn.py
             # and agents/ddqn_agent.py).
-            y_activation = rewards + self.gamma * (1.0 - dones) * next_act_eval
-            y_split = rewards + self.gamma * (1.0 - dones) * next_split_eval
+            #
+            # `rewards` here is summed over the upper_level_period_steps=N
+            # lower-level steps spanned by one upper-level transition (the
+            # window-sum push in the training loop), so bootstrapping the
+            # next state's value needs gamma**N, not gamma**1 -- using
+            # self.gamma alone under-discounts next_act_eval/next_split_eval
+            # relative to the N-step reward it is being added to, an N-step
+            # TD-target inconsistency independent of (and in addition to)
+            # the Double-DQN online/target split already fixed above.
+            gamma_n = self.gamma**self.upper_level_period_steps
+            y_activation = rewards + gamma_n * (1.0 - dones) * next_act_eval
+            y_split = rewards + gamma_n * (1.0 - dones) * next_split_eval
 
         upper_feat = self.upper_encoder(states)
         # Continuous params for the *current*-state Q(s, ru_on, split, x)

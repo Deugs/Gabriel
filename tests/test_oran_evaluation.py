@@ -119,6 +119,39 @@ def test_analyze_convergence_handles_baseline_list_shape(tmp_path):
     assert report["algorithms"]["ddpg"]["mean_reward"] == pytest.approx(50.0)
 
 
+def test_convergence_table_escapes_proposed_algo_underscore(tmp_path):
+    """Regression guard: the exported LaTeX table must not emit the raw
+    'BMPP_DQN' algorithm-name string -- its literal underscore breaks
+    LaTeX math-mode parsing (a real compile failure this once caused).
+    label_for_algo() already maps it to the escape-free 'BMPP-DQN' used
+    throughout every other table/figure; the convergence table must use
+    the same mapping instead of the raw PROPOSED_ALGO string."""
+    res_dir = tmp_path / "results"
+    proposed_dir = res_dir / "bmpp_dqn_seed42"
+    proposed_dir.mkdir(parents=True, exist_ok=True)
+    with open(proposed_dir / "summary.json", "w") as f:
+        json.dump(
+            {
+                "algorithm": PROPOSED_ALGO,
+                "seed": 42,
+                "final_eval_reward": 100.0,
+                "final_eval_power_w": 80.0,
+                "final_qos_rate": 0.9,
+            },
+            f,
+        )
+
+    analyze_convergence(
+        results_dir=str(res_dir),
+        save_dir=str(tmp_path / "figures"),
+        table_save_dir=str(tmp_path / "tables"),
+    )
+
+    table_tex = (tmp_path / "tables" / "convergence_summary_oran.tex").read_text()
+    assert "BMPP_DQN" not in table_tex
+    assert "BMPP-DQN" in table_tex
+
+
 def test_latency_benchmark_runs_all_four_methods(tmp_path, default_config):
     config_path = tmp_path / "oran_test_config.yaml"
     with open(config_path, "w") as f:

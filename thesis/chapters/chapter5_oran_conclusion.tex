@@ -1,0 +1,278 @@
+% Chapter 5 -- Conclusion and Future Work (O-RAN / BMPP-DQN track)
+%
+% Governs: manuscript/ORAN_BMPP_DQN_Concept_Note_v1.md (Sections 4.2, 6.10,
+% 6.11, 6.12, 7, 10's needs-validation flags)
+% Chapter mapping: docs/oran_thesis_guide.md
+% Status: DRAFT. Intended to be \input{} from the thesis-wide main.tex once
+% that skeleton exists; a thesis-wide references.bib does not yet exist, so
+% citations below are numbered locally (IEEE style) against the short
+% reference list at the end of this file. Renumber/merge into the
+% thesis-wide bibliography once main.tex is created.
+%
+% This chapter closes the \ref{chap:oran-conclusion} forward-references
+% made throughout Chapters 1, 3, and 4. Per this track's own academic-
+% integrity convention (Chapter 1's own note after its Research Objectives),
+% Objective 4's original >=15% framing is restated here exactly as it was
+% investigated, not retroactively reworded to match the evidence gathered
+% after the fact (HARKing); this chapter states plainly where it was and
+% was not met, per Concept Note Section 6.10's own explicit reconciliation.
+
+\chapter{Conclusion and Future Work}
+\label{chap:oran-conclusion}
+
+\section{Summary of Contributions}
+\label{sec:oran-summary-contributions}
+
+This thesis designed, implemented, and evaluated BMPP-DQN (Branching
+Multi-Pass Parameterized DQN), a deep reinforcement learning architecture
+combining branching discrete-action decomposition~\cite{tavakoli2018branching}
+with multi-pass parameterized continuous-action
+processing~\cite{xiong2018pdqn,bester2019mpdqn} within a single coupled
+network, for joint RU activation, functional split selection, transmit
+power control, and PRB allocation in a simulated O-RAN energy-optimization
+scenario. Four contributions, each evidenced in
+Chapters~\ref{chap:oran-system-model}--\ref{chap:oran-results}, follow from
+this design:
+
+\begin{enumerate}
+  \item \textbf{An architectural integration not previously proposed}
+    (Section~\ref{sec:oran-significance}): BMPP-DQN couples branching's
+    $R$-independent discrete decomposition with multi-pass processing's
+    principled discrete-continuous parameter coupling, closing the gap
+    identified in Section~\ref{sec:oran-problem-statement} between OREO's
+    flat, thresholded continuous relaxation~\cite{qazzaz2026oreo} and the
+    two architectures this design draws on, neither of which alone handles
+    O-RAN's hybrid, multi-timescale action space.
+  \item \textbf{A formal parameterized MDP formulation}
+    (Section~\ref{sec:oran-mdp}) spanning four action branches across two
+    decision timescales, with a fronthaul- and switching-aware reward
+    function (Eq.~\ref{eq:oran-reward}) and a literature-informed power
+    model (Section~\ref{sec:oran-power}).
+  \item \textbf{A four-method comparison under matched conditions}
+    (Chapter~\ref{chap:oran-results}) against DQN, DDPG, and MP-DQN,
+    cross-checked by three independent multi-criteria decision-analysis
+    schemes (equal-weighted TOPSIS, entropy-weighted TOPSIS, and VIKOR;
+    Sections~\ref{sec:oran-mcda}--\ref{sec:oran-mcda-robustness}), a
+    power-model sensitivity sweep across 9 configurations
+    (Section~\ref{sec:oran-sensitivity}), and a supplementary $n=10$-seed
+    statistical-power validation (Section~\ref{sec:oran-n10}) -- a more
+    extensive robustness-checking protocol than this thesis's own original
+    scope required, undertaken specifically to avoid over-claiming from a
+    single table of $n=3$ results.
+  \item \textbf{A direct empirical answer to RQ3}
+    (Section~\ref{sec:oran-rq3}): the two-timescale design's measurable
+    contribution is discrete-decision stability (a $6\times$ reduction in
+    switching frequency), not raw energy or QoS performance, resolving a
+    research question this track's concept note had posed but left
+    empirically untested until this thesis's own ablation.
+\end{enumerate}
+
+\section{Revisiting the Research Objectives}
+\label{sec:oran-revisit-objectives}
+
+Section~\ref{sec:oran-objectives} stated five research objectives. Objectives
+1-3 (design BMPP-DQN; formulate the parameterized MDP; implement the
+focused single-gNB environment) are met in full, as documented in
+Chapter~\ref{chap:oran-system-model}. Objective 5 (analyze the
+two-timescale design's effect on convergence and energy efficiency) is
+answered directly in Section~\ref{sec:oran-rq3}: the design improves
+decision stability without a measurable convergence or efficiency cost in
+either direction.
+
+Objective 4 -- quantify BMPP-DQN's energy-saving performance against DQN,
+DDPG, and MP-DQN, against a target of $\geq15\%$ savings relative to these
+baselines -- is stated here, as Section~\ref{sec:oran-objectives} already
+flagged it would be, without qualification: \textbf{this target is not met
+by the evidence gathered}, at $n=3$ or at the supplementary $n=10$
+validation. BMPP-DQN's mean power is not $15\%$ below any baseline's; it is
+essentially tied with MP-DQN's, the lowest-power baseline, at both sample
+sizes (Table~\ref{tab:oran-convergence}, Table~\ref{tab:oran-convergence-n10}).
+This objective is restated here exactly as it was originally planned and
+investigated, rather than retroactively reworded to match the evidence
+gathered after the fact, per this track's own stated discipline
+(Section~\ref{sec:oran-objectives}'s own forward-reference to this
+chapter).
+
+What the evidence \emph{does} support, in place of a raw energy-savings
+margin, is detailed in Section~\ref{sec:oran-rq-answers}: BMPP-DQN is the
+strongest or joint-strongest method under every multi-criteria scheme
+tested, at both sample sizes, a finding independently robust to an
+order-of-magnitude perturbation of every unvalidated power-model constant
+(Section~\ref{sec:oran-sensitivity}). This is a genuine, evidenced
+contribution -- a multi-criteria balance across power, both QoS metrics,
+and switching stability simultaneously -- but it is a different claim in
+kind from a demonstrated energy-savings percentage, and the two are not
+conflated here or in Section~\ref{sec:oran-significance-revisited} below.
+
+\section{Significance of the Research, Revisited}
+\label{sec:oran-significance-revisited}
+
+Section~\ref{sec:oran-significance} stated this thesis's intended
+significance before its results were known. Revisited in light of
+Chapter~\ref{chap:oran-results}:
+
+\begin{itemize}
+  \item \textbf{Architectural contribution} (DRL literature on hybrid
+    action spaces): unaffected by the results -- the integration of
+    branching and multi-pass processing into a single coupled network is a
+    design contribution independent of how it ultimately performs, and
+    Objective 1/RQ1 (Section~\ref{sec:oran-rq-answers}) confirm it trains
+    stably across every seed tested.
+  \item \textbf{O-RAN application relevance}: unaffected -- the problem
+    formulation (Chapter~\ref{chap:oran-system-model}) remains a faithful
+    structural match to O-RAN's disaggregated RU/DU/CU control surface and
+    its Non-RT/Near-RT RIC timescale split, independent of this specific
+    algorithm's comparative performance.
+  \item \textbf{Energy savings}: \emph{not demonstrated}
+    (Section~\ref{sec:oran-revisit-objectives}). This bullet is retained,
+    not deleted, because it was this thesis's original stated significance
+    claim and the evidence against it is itself part of this thesis's
+    record, not something to omit.
+  \item \textbf{Multi-criteria balance} (evidenced): BMPP-DQN is the most
+    balanced of the four methods across power, strict QoS, per-UE QoS,
+    switching stability, and throughput simultaneously, a finding that
+    survives a power-model sensitivity sweep and that -- with the
+    qualification in Section~\ref{sec:oran-n10} that its strongest form
+    (full three-scheme agreement) is partly an $n=3$-specific result -- also
+    survives the move to $n=10$ seeds under at least one of the three MCDA
+    schemes tested in every case. This, not the energy-savings bullet
+    above, is this thesis's actual, defensible empirical contribution
+    relative to RQ2.
+\end{itemize}
+
+\section{Limitations}
+\label{sec:oran-limitations}
+
+Section~\ref{sec:oran-scope} bounded this thesis's scope in advance; those
+same bounds are this chapter's limitations, read in light of what was
+actually found:
+
+\begin{itemize}
+  \item \textbf{Simulation-only evaluation.} All results use a simplified
+    log-distance-path-loss-plus-Rayleigh-fading channel model
+    (Section~\ref{sec:oran-channel}) and a literature-informed but not
+    independently validated power-consumption model
+    (Section~\ref{sec:oran-power-validation}). No real O-RAN testbed,
+    hardware power measurement, or over-the-air channel was used. The
+    power-model sensitivity sweep (Section~\ref{sec:oran-sensitivity})
+    shows the \emph{comparative} findings are insensitive to this model's
+    unvalidated constants' order of magnitude, but this does not establish
+    that the \emph{absolute} power, reward, or QoS figures reported in this
+    chapter would transfer to a physical deployment.
+  \item \textbf{Single-gNB, downlink-only scope.} The environment models one
+    gNB with $R=4$ RUs, one DU, and one CU (Section~\ref{sec:oran-topology});
+    no multi-cell coordination, inter-cell interference beyond the
+    single-pool model already included, or uplink traffic is considered.
+  \item \textbf{A tractable, 3-option split abstraction.} The three
+    centralization levels used here approximate 3GPP TR~38.801 Options 2, 6,
+    and 8 (Section~\ref{sec:oran-topology}) rather than the full space of
+    standardized functional splits.
+  \item \textbf{Unvalidated reward weights.} The reward function's three
+    weights ($\alpha$, $\beta_{\mathrm{qos}}$, $\gamma_{\mathrm{sw}}$,
+    Section~\ref{sec:oran-mdp}) were chosen to preserve a reasonable
+    relative magnitude, not derived from a literature source or tested in a
+    sensitivity sweep of their own -- unlike the power-model constants, which
+    were swept in Section~\ref{sec:oran-sensitivity}. Given that BMPP-DQN's
+    per-UE QoS deficit relative to the baselines was investigated across
+    several training-mechanics explanations without this one being tested
+    (the independent-exploration fix, PER, and curriculum learning were all
+    ruled in or out; reward-weight sensitivity was not), this remains the
+    most likely untested lever on the energy/QoS/switching trade-off
+    reported in Chapter~\ref{chap:oran-results}.
+  \item \textbf{Thin statistical power at the canonical scale.} The
+    supervisor-approved protocol's $n=3$ seeds is a thin basis for the
+    paired significance tests reported throughout
+    Chapter~\ref{chap:oran-results}; the supplementary $n=10$ validation
+    (Section~\ref{sec:oran-n10}) was undertaken specifically to probe this,
+    and it changed which comparisons reach significance (DDPG's reward
+    deficit) and whether the headline multi-criteria ranking holds under
+    every scheme simultaneously (it does not, at $n=10$, under
+    equal-weighted TOPSIS specifically). Both the $n=3$ and $n=10$ results
+    are reported in this thesis rather than only the more favorable of the
+    two.
+  \item \textbf{Three baselines, not an exhaustive comparison.} BMPP-DQN is
+    compared against DQN, DDPG, and MP-DQN
+    (Section~\ref{sec:oran-scope}); OREO~\cite{qazzaz2026oreo} is discussed
+    only qualitatively (Section~\ref{sec:oran-problem-statement}), and
+    HyAR~\cite{li2022hyar}, a VAE-based hybrid-action alternative considered
+    but not adopted for this architecture, is likewise not reproduced as a
+    baseline.
+\end{itemize}
+
+\section{Future Work}
+\label{sec:oran-future-work}
+
+Four directions follow directly from the limitations above and from
+findings in Chapter~\ref{chap:oran-results} that this thesis's own scope
+could investigate but not resolve.
+
+\textbf{Validate the power model and reward weights against real
+measurements.} Section~\ref{sec:oran-power-validation}'s needs-validation
+constants (the absolute RU/DU/CU/fronthaul wattage figures) and
+Section~\ref{sec:oran-mdp}'s reward weights are the two remaining
+unvalidated numerical components of this thesis's model. The power-model
+sensitivity sweep (Section~\ref{sec:oran-sensitivity}) establishes that the
+comparative ranking is insensitive to the former's order of magnitude;
+whether the same holds for the latter, and whether either can be replaced
+with commercial O-RAN hardware measurements, is open. A real-testbed study
+in the style of Bordin et al.'s ns-O-RAN-based evaluation~\cite{bordin2025design}
+would address both simultaneously.
+
+\textbf{Resolve the ranking volatility surfaced at $n=10$.}
+Section~\ref{sec:oran-n10} found that BMPP-DQN's full three-scheme MCDA
+agreement, this thesis's strongest robustness claim, partly depends on
+sample size. A larger validation run (beyond this thesis's $n=10$,
+approaching the kind of sample size a dedicated follow-up study could
+afford) would establish whether DDPG's equal-weighted-TOPSIS lead at
+$n=10$ is itself an artifact of a still-limited sample, or a genuine,
+larger-sample-confirmed exception to BMPP-DQN's otherwise-consistent
+multi-criteria strength.
+
+\textbf{Extend beyond a single gNB.} This thesis's single-agent,
+single-gNB scope was a deliberate tractability bound
+(Section~\ref{sec:oran-scope}), justified in part by Liang et al.'s
+federated-TD3 O-RAN energy-optimization work~\cite{liang2026federated}
+showing a feasible path to multi-cell coordination via an rApp
+aggregator plus per-cell xApp agents, rather than a single centralized
+policy. Extending BMPP-DQN's branching-plus-multi-pass design to that
+federated setting -- one BMPP-DQN instance per cell, aggregated rather than
+jointly trained -- is a natural next step that preserves this thesis's core
+architectural contribution while removing its single-gNB limitation.
+
+\textbf{Test functional-split abstractions beyond the 3-option mapping.}
+Section~\ref{sec:oran-topology}'s three-level split abstraction is a
+tractability simplification whose bandwidth ratios do not match 3GPP
+TR~38.801's real per-option figures exactly
+(Section~\ref{sec:oran-power-validation}'s own disclosure). A follow-up
+could use the full 8-option split space directly, at the cost of a larger
+discrete action space than this thesis's branching architecture was sized
+for, testing whether BMPP-DQN's branching decomposition scales to that
+larger space without the flat baselines' (MP-DQN's, in particular)
+combinatorial tractability ceiling.
+
+\section{Closing Statement}
+\label{sec:oran-closing}
+
+This thesis set out to answer whether branching action decomposition and
+multi-pass parameterized processing could be combined into a single DRL
+architecture for O-RAN energy optimization, and whether doing so would
+yield energy savings over existing discrete, continuous, and parameterized
+baselines. The first question is answered affirmatively: BMPP-DQN trains
+stably, end-to-end, as the proposed coupled architecture
+(Section~\ref{sec:oran-summary-contributions}). The second is answered in
+the negative, stated plainly rather than reframed after the fact
+(Section~\ref{sec:oran-revisit-objectives}). What the evidence gathered in
+its place supports -- a multi-criteria balance across power, QoS, and
+switching stability, confirmed robust to this model's own unvalidated
+constants and substantially, though not completely, robust to a larger
+statistical sample -- is a narrower contribution than originally targeted,
+but one this thesis can defend with the evidence actually in hand, which is
+the standard Chapter~\ref{chap:oran-results} and this chapter have tried to
+hold themselves to throughout.
+
+% ---------------------------------------------------------------------------
+% This chapter's citations (qazzaz2026oreo, xiong2018pdqn, bester2019mpdqn,
+% tavakoli2018branching, bordin2025design, liang2026federated, li2022hyar)
+% resolve against the consolidated thesis-wide bibliography in
+% thesis/chapters/references_oran.tex, not a local thebibliography here.
+% ---------------------------------------------------------------------------

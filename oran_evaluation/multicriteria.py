@@ -64,6 +64,14 @@ CRITERION_LABELS: Dict[str, str] = {
 }
 
 
+def _latex_label(criterion: str) -> str:
+    """CRITERION_LABELS as a LaTeX-safe string -- the dict itself is
+    shared with matplotlib labels (plot_ranking_robustness(), etc.) where
+    a literal '%' is correct and a '\\%' would show the backslash, so the
+    escape happens only here, at the point of LaTeX table generation."""
+    return CRITERION_LABELS.get(criterion, criterion).replace("%", "\\%")
+
+
 def compute_topsis(
     metrics: Dict[str, Dict[int, Dict[str, float]]],
     criteria: Optional[List[str]] = None,
@@ -397,7 +405,7 @@ def export_multicriteria_table(
     table_path.mkdir(parents=True, exist_ok=True)
 
     ordered = sorted(topsis_results.items(), key=lambda kv: kv[1]["rank"])
-    col_headers = " & ".join(CRITERION_LABELS.get(c, c) for c in criteria)
+    col_headers = " & ".join(_latex_label(c) for c in criteria)
 
     lines = [
         "\\begin{table}[h]",
@@ -478,7 +486,7 @@ def export_mcda_robustness_table(
     ordered = sorted(topsis_equal.items(), key=lambda kv: kv[1]["rank"])
 
     weight_str = ", ".join(
-        f"{CRITERION_LABELS.get(c, c)}={entropy_weights.get(c, 0.0):.2f}"
+        f"{_latex_label(c)}={entropy_weights.get(c, 0.0):.2f}"
         for c in criteria
     )
 

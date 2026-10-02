@@ -111,12 +111,18 @@ class ORANEnv(gym.Env):
         )
 
         traffic_cfg = getattr(cfg, "traffic", cfg)
+        # Also kept on self (not just threaded into ORANTrafficModel) so the
+        # diurnal hour clock below advances in the same time units as the
+        # Poisson arrival process -- previously the clock advanced a full
+        # simulated hour per step regardless of step_duration_s, decoupled
+        # from the rate this same constant already scales the arrivals by.
+        self.step_duration_s = float(getattr(traffic_cfg, "step_duration_s", 0.1))
         self.traffic = ORANTrafficModel(
             n_ue=self.n_ue,
             lambda_peak=float(getattr(traffic_cfg, "lambda_peak", 0.5)),
             floor_ratio=float(getattr(traffic_cfg, "floor_ratio", 0.2)),
             packet_size_bits=float(getattr(traffic_cfg, "packet_size_bits", 4.0e6)),
-            step_duration_s=float(getattr(traffic_cfg, "step_duration_s", 0.1)),
+            step_duration_s=self.step_duration_s,
             t1=float(getattr(traffic_cfg, "t1", 7.0)),
             t2=float(getattr(traffic_cfg, "t2", 10.0)),
             t3=float(getattr(traffic_cfg, "t3", 20.0)),
@@ -312,10 +318,26 @@ class ORANEnv(gym.Env):
             signal > 0.0, signal / (interference + self.noise_power_w), 0.0
         ).astype(np.float32)
 
+        # Split each serving RU's PRB-share bandwidth equally among every UE
+        # it currently serves -- previously each co-served UE was scored
+        # against that RU's *full* share independently of how many other
+        # UEs shared it, so a multi-UE RU's summed capacity scaled with its
+        # served-UE count rather than being bounded by its own allocated
+        # bandwidth (the mechanism behind throughput figures exceeding the
+        # single-UE-per-RU reference policy's own ceiling; see Chapter 4/5).
+        served_ue_count = np.zeros(self.n_ru, dtype=np.float32)
+        served_mask = serving_ru >= 0
+        np.add.at(served_ue_count, serving_ru[served_mask], 1.0)
+        n_co_served = np.where(
+            served_mask,
+            served_ue_count[np.clip(serving_ru, 0, self.n_ru - 1)],
+            1.0,
+        )
+
         user_bandwidth_hz = (
             np.where(
                 serving_ru >= 0,
-                prb_share[np.clip(serving_ru, 0, self.n_ru - 1)],
+                prb_share[np.clip(serving_ru, 0, self.n_ru - 1)] / n_co_served,
                 0.0,
             )
             * self.channel.bandwidth
@@ -359,7 +381,17 @@ class ORANEnv(gym.Env):
         self.active_mask = ru_on
         self.split_idx = split_idx
         self.prev_power_w = p_total
-        self.hour = (self.hour + 1.0) % 24.0
+        # Advances by this step's real duration (hours), not a full hour per
+        # step -- at step_duration_s=0.1s a 100-step episode drifts the
+        # clock by ~10s total, so within one episode the diurnal regime is
+        # effectively fixed at whatever hour reset() drew; the full diurnal
+        # range is still seen across episodes/seeds via that random draw,
+        # not within a single short episode (previously this advanced a
+        # full simulated hour per step, compressing an entire day into ~24
+        # steps and breaking any correspondence to step_duration_s or to
+        # the Non-RT/Near-RT RIC timescales Section 2 motivates this design
+        # with -- see Chapter 4/5's own RQ3 discussion).
+        self.hour = (self.hour + self.step_duration_s / 3600.0) % 24.0
 
         self.channel_gains = self.channel.generate_channel(self.distances, self.rng)
 

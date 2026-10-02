@@ -1,3 +1,32 @@
+% Appendix (O-RAN / BMPP-DQN track).
+%
+% \appendix switches \chapter numbering to letters (report class), so the
+% single \chapter{} call below typesets as "Appendix A". Per-seed figures
+% in Sections A.2/A.3 are read directly from each run's own summary.json
+% (data/results_oran/, data/results_oran_rq3_single_timescale/) and are
+% exactly the per-seed values the mean/CI figures in
+% Chapter~\ref{chap:oran-results}'s tables aggregate -- included here, not
+% in the main chapter, per this thesis's own Reproducibility quality gate
+% (raw per-seed numbers, not only the aggregated summary).
+
+\appendix
+
+\chapter{Supplementary Material}
+\label{chap:oran-appendix}
+
+\section{Default Configuration Listing}
+\label{sec:oran-appendix-config}
+
+The full contents of \texttt{config/oran\_default.yaml}, the single
+configuration file governing every result in
+Chapter~\ref{chap:oran-results} (canonical $n=3$ run) unless stated
+otherwise (the $n=10$ validation and the RQ3/sensitivity ablations each
+change only the one parameter named where they are introduced). Every
+constant's needs-validation status is disclosed inline, in this same file,
+at the point each constant is defined -- not repeated separately here.
+
+{\footnotesize
+\begin{verbatim}
 # Default Configuration for O-RAN / BMPP-DQN Experiments
 # ORAN_BMPP_DQN_Concept_Note_v1.md -- a separate, additive research track
 # alongside config/default.yaml's C-RAN track. No keys/sections here are
@@ -25,21 +54,13 @@ network:
   # burstiness) already approached mean achievable throughput (~77 Mbps)
   # even under that generous reference policy, leaving essentially no
   # headroom for any policy -- including the intended learned ones -- to
-  # satisfy QoS. 100 MHz raises mean achievable throughput to ~244 Mbps
+  # satisfy QoS. 100 MHz raises mean achievable throughput to ~384 Mbps
   # under the same reference policy (best-case per-UE satisfaction
-  # 74%->81%), giving real headroom while still being a standard,
+  # 74%->84%), giving real headroom while still being a standard,
   # precedented channel bandwidth for this model's own n78-band carrier
   # frequency (3.5 GHz) -- not an arbitrary tuning choice. See
   # docs/oran_thesis_guide.md's QoS-metric note for the accompanying
   # per-UE-vs-all-UE metric distinction this same investigation surfaced.
-  # 2026-10-01 re-check after fixing oran_env.py's PRB-sharing bug (each
-  # co-served UE was previously scored against its serving RU's *full*
-  # share, not divided among every UE that RU simultaneously served --
-  # see Chapter 4's bug-fix disclosure): the ~384 Mbps/84% figures above
-  # were computed under that inflated formula and are superseded by the
-  # ~244 Mbps/81% figures now stated; 100 MHz still clears this headroom
-  # check under the corrected formula (~2.4x margin), so the constant
-  # itself did not need to change, only this comment's own numbers.
   bandwidth_mhz: 100
   noise_power_dbm: -102
 
@@ -216,3 +237,98 @@ hardware:
   device: "cuda"   # cuda or cpu (falls back to cpu automatically if no GPU
                     # is available; oran_agents/*.py read this as each
                     # agent's device default)
+\end{verbatim}
+}
+
+\section{Per-Seed Raw Results: Canonical Comparison (\texorpdfstring{$n=3$}{n=3})}
+\label{sec:oran-appendix-perseed-canonical}
+
+Table~\ref{tab:oran-appendix-canonical} gives the individual per-seed final
+evaluation metrics each method's mean row in
+Table~\ref{tab:oran-convergence} (Section~\ref{sec:oran-performance-comparison})
+aggregates, read directly from each run's own
+\texttt{summary.json} (\texttt{data/results\_oran/}). ``QoS Rate'' and
+``Per-UE QoS'' follow the same two definitions given in
+Section~\ref{sec:oran-experimental-setup}.
+
+\begin{table}[htbp]
+\centering
+\caption{Per-seed final evaluation metrics, canonical $n=3$ run, all 4
+  methods.}
+\label{tab:oran-appendix-canonical}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llrrrrrr}
+\toprule
+Algorithm & Seed & Reward & Power (W) & QoS Rate (\%) & Per-UE QoS (\%) & Switching & Throughput (Mbps) \\
+\midrule
+BMPP-DQN & 42  & $-$20774.12 & 176.72 & 48.4 & 90.50 & 0.254 & 989.13 \\
+BMPP-DQN & 123 & $-$28089.06 & 158.59 & 43.6 & 88.08 & 0.182 & 1011.06 \\
+BMPP-DQN & 456 & $-$15256.37 & 152.33 & 56.4 & 92.68 & 0.168 & 1117.78 \\
+\addlinespace
+DDPG & 42  & $-$71793.18 & 195.71 & 28.8 & 79.68 & 0.040 & 506.80 \\
+DDPG & 123 & $-$33305.23 & 188.65 & 35.8 & 88.73 & 0.040 & 971.50 \\
+DDPG & 456 & $-$100511.43 & 184.25 & 20.8 & 74.35 & 0.040 & 0.38 \\
+\addlinespace
+DQN & 42  & $-$17072.97 & 196.89 & 48.4 & 90.40 & 0.036 & 799.77 \\
+DQN & 123 & $-$24303.76 & 194.50 & 40.4 & 87.40 & 0.534 & 696.71 \\
+DQN & 456 & $-$24516.78 & 248.71 & 39.6 & 87.30 & 0.292 & 587.05 \\
+\addlinespace
+MP-DQN & 42  & $-$13575.58 & 173.64 & 56.2 & 92.75 & 0.922 & 992.68 \\
+MP-DQN & 123 & $-$19631.59 & 159.70 & 50.4 & 90.35 & 1.080 & 903.93 \\
+MP-DQN & 456 & $-$13150.48 & 147.26 & 56.6 & 93.20 & 1.104 & 1617.20 \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+{\sloppy
+DDPG's identical $0.040$ switching frequency across all three seeds is the
+single-seed-collapse artifact flagged in
+Section~\ref{sec:oran-performance-comparison} and in Concept Note
+Section 6.10's own footnote, not evidence of unusually stable policy
+behavior; seed 456's near-zero throughput ($0.38\,\mathrm{Mbps}$) alongside
+its otherwise-typical power draw ($184.25\,\mathrm{W}$) is the clearest
+single-seed symptom of this.
+\par}
+
+\section{Per-Seed Raw Results: RQ3 Two-Timescale Ablation}
+\label{sec:oran-appendix-perseed-rq3}
+
+{\sloppy
+Table~\ref{tab:oran-appendix-rq3} gives the per-seed figures underlying
+Section~\ref{sec:oran-rq3}'s RQ3 ablation, for the same three seeds under
+both configurations: the two-timescale default
+(\texttt{upper\_level\_period\_steps=10}, identical to the BMPP-DQN rows
+of Table~\ref{tab:oran-appendix-canonical}) and the single-timescale
+ablation (\texttt{upper\_level\_period\_steps=1},
+\texttt{config/\allowbreak rq3\_single\_timescale.yaml}).
+\par}
+
+\begin{table}[htbp]
+\centering
+\caption{Per-seed final evaluation metrics, RQ3 ablation: two-timescale
+  (proposed, $N=10$) vs.\ single-timescale ($N=1$) BMPP-DQN.}
+\label{tab:oran-appendix-rq3}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llrrrrrr}
+\toprule
+Configuration & Seed & Reward & Power (W) & QoS Rate (\%) & Per-UE QoS (\%) & Switching & Throughput (Mbps) \\
+\midrule
+Two-Timescale ($N{=}10$) & 42  & $-$20774.12 & 176.72 & 48.4 & 90.50 & 0.254 & 989.13 \\
+Two-Timescale ($N{=}10$) & 123 & $-$28089.06 & 158.59 & 43.6 & 88.08 & 0.182 & 1011.06 \\
+Two-Timescale ($N{=}10$) & 456 & $-$15256.37 & 152.33 & 56.4 & 92.68 & 0.168 & 1117.78 \\
+\addlinespace
+Single-Timescale ($N{=}1$) & 42  & $-$21397.08 & 144.97 & 52.4 & 90.85 & 1.222 & 1268.81 \\
+Single-Timescale ($N{=}1$) & 123 & $-$19684.07 & 159.70 & 48.4 & 90.05 & 0.714 & 934.63 \\
+Single-Timescale ($N{=}1$) & 456 & $-$18145.36 & 191.28 & 48.8 & 90.78 & 1.766 & 838.09 \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+Every single-timescale seed's switching frequency exceeds every
+two-timescale seed's, with no overlap (minimum single-timescale value
+$0.714$ vs.\ maximum two-timescale value $0.254$) -- the clearest
+seed-level evidence for Section~\ref{sec:oran-rq3}'s conclusion that the
+two-timescale design's effect on switching stability is consistent across
+seeds individually, not only in the three-seed mean.

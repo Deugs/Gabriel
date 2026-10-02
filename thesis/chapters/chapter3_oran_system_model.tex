@@ -162,7 +162,14 @@ Gaussian draw at every environment step $t$, realized as
 $w_{r,u}(t) = (X + jY)/\sqrt{2}$ for independent
 $X, Y \sim \mathcal{N}(0,1)$ -- i.e., Rayleigh-distributed fading amplitude
 $|w_{r,u}(t)|$, with no correlation between successive steps. The channel
-bandwidth is $B = 20\,\mathrm{MHz}$ (\texttt{bandwidth\_mhz}) and the
+bandwidth is $B = 100\,\mathrm{MHz}$ (\texttt{bandwidth\_mhz}) -- raised
+from an original placeholder of $20\,\mathrm{MHz}$ after a direct
+empirical check found the smaller value left mean aggregate UE demand
+already exceeding mean achievable throughput even under a best-case,
+all-RUs-active reference policy, leaving no policy any real headroom to
+satisfy QoS regardless of learning quality; $100\,\mathrm{MHz}$ is a
+standard, precedented bandwidth for this model's own $3.5\,\mathrm{GHz}$
+(n78-band) carrier frequency, not an arbitrary tuning choice -- and the
 thermal noise floor is $P_{\mathrm{noise}} = -102\,\mathrm{dBm}$
 (\texttt{noise\_power\_dbm}), converted to Watts as
 $P_{\mathrm{noise}}^{\mathrm{W}} = 10^{(P_{\mathrm{noise}}-30)/10}$.
@@ -481,6 +488,15 @@ split changes among RUs active in both the previous and current step
 Eq.~\ref{eq:oran-switch-power}, so a switching event is penalized once in
 the reward via $\gamma_{\mathrm{sw}}$ and, separately, through its
 contribution to $P_{\mathrm{total}}(t)$ inside $\mathrm{EE}(t)$ itself).
+Unlike every power/traffic/split constant in Sections~\ref{sec:oran-channel}--\ref{sec:oran-power},
+$\alpha$, $\beta_{\mathrm{qos}}$, and $\gamma_{\mathrm{sw}}$ have not been
+subjected to a literature check or sensitivity analysis, despite directly
+defining the optimization objective every result in
+Chapter~\ref{chap:oran-results} is measured against; they are chosen only
+to preserve a reasonable relative magnitude ($\beta_{\mathrm{qos}}$ large
+enough that a QoS violation dominates the smaller throughput-per-watt
+term) and remain flagged \emph{needs validation}, unlike $P_{\max}$ and
+$\eta$ in Section~\ref{sec:oran-power}.
 Table~\ref{tab:oran-state-action-reward} summarizes the state, action, and
 reward quantities defined above.
 
@@ -545,6 +561,7 @@ the resulting network architecture.
 
 \begin{figure}[htbp]
 \centering
+{\footnotesize
 \begin{verbatim}
                               s(t)  [state, dim d]
                         +-------+-------+
@@ -581,6 +598,7 @@ the resulting network architecture.
               argmax -> v(t)               argmax -> c(t)
                  (only every N steps -- see Fig. 3.6)
 \end{verbatim}
+}
 \caption{BMPP-DQN network architecture. Two independently-parameterized
   encoders (upper, lower) feed a single (non-twin) branching critic and a
   continuous parameter network respectively. The critic's multi-pass loop
@@ -638,6 +656,7 @@ update cadence; Algorithm~\ref{alg:bmpp-dqn} gives the full training loop.
 
 \begin{figure}[htbp]
 \centering
+{\footnotesize
 \begin{verbatim}
   env step:          1    2    3    4    5   ...   N   N+1  N+2  ...
   discrete (v,c):    D -- held -- held -- held -- held --   D -- held -- ...
@@ -647,6 +666,7 @@ update cadence; Algorithm~\ref{alg:bmpp-dqn} gives the full training loop.
   upper buffer push:                                *                  (window-sum reward)
   lower buffer push: *    *    *    *    *   ...    *    *    *        (per-step reward)
 \end{verbatim}
+}
 \caption{Two-timescale decision and update cadence
   (\texttt{upper\_level\_period\_steps}$=N=10$ by default). ``D'' marks a
   freshly-made decision; ``held'' marks a cached decision replayed
@@ -681,7 +701,7 @@ before/after evidence):
     The continuous parameter network's update maximizes the branching
     critic's greedy activation-branch value, but bootstraps this
     maximization off the \emph{frozen}, Polyak-averaged
-    \texttt{critic\_target}/\texttt{upper\_encoder\_target} rather than the
+    \texttt{critic\_target} / \texttt{upper\_encoder\_target} rather than the
     online critic being updated every step from this same actor's own
     output -- avoiding a tight online-online feedback loop between the two
     networks.
@@ -690,6 +710,7 @@ before/after evidence):
 \begin{algorithm}[htbp]
 \caption{BMPP-DQN training loop}
 \label{alg:bmpp-dqn}
+\footnotesize
 \begin{algorithmic}[1]
 \State \textbf{Input:} upper encoder $\theta_{\mathrm{up}}$, lower encoder
   $\theta_{\mathrm{low}}$, branching critic $\theta_Q$, continuous
@@ -703,9 +724,15 @@ before/after evidence):
       $(\hat p, \hat\beta) \gets$ \textsc{ContinuousParamNet}$(\mathrm{feat}_{\mathrm{low}}\,|\,\phi)$
     \State add exploration noise to $\hat p$ (Gaussian, std decayed once per episode)
     \If{steps\_since\_decision $= 0$}
-      \State with prob.\ $\epsilon$: sample $(v, c)$ uniformly at random \Comment{$\epsilon$-greedy, decayed once per episode}
-      \State otherwise: $\mathrm{feat}_{\mathrm{up}} \gets h_{\mathrm{up}}(s\,|\,\theta_{\mathrm{up}})$;\quad
-        $(v, c) \gets \arg\max_k Q^{v,c}_r(\mathrm{feat}_{\mathrm{up}}, x)$ for each $r$ \Comment{multi-pass, Eq.~\ref{eq:oran-dueling-act}}
+      \State $\mathrm{feat}_{\mathrm{up}} \gets h_{\mathrm{up}}(s\,|\,\theta_{\mathrm{up}})$;\quad
+        $(v^{\mathrm{greedy}}, c^{\mathrm{greedy}}) \gets \arg\max_k Q^{v,c}_r(\mathrm{feat}_{\mathrm{up}}, x)$ for each $r$ \Comment{multi-pass, Eq.~\ref{eq:oran-dueling-act}}
+      \For{$r = 1$ to $R$} \Comment{independent per-branch $\epsilon$-greedy (Tavakoli et al.\ 2018)}
+        \State with prob.\ $\epsilon$: $v_r \gets$ uniform$\{0,1\}$;\ \ otherwise: $v_r \gets v_r^{\mathrm{greedy}}$
+        \State with prob.\ $\epsilon$: $c_r \gets$ uniform$\{0,\dots,S-1\}$;\ \ otherwise: $c_r \gets c_r^{\mathrm{greedy}}$
+      \EndFor
+      \Statex \Comment{each of the $2R$ branches rolls its own coin -- a single shared coin for all
+        branches jointly (explore all-or-nothing) was an early implementation defect, fixed and
+        regression-tested; see Chapter~\ref{chap:oran-results}}
       \State cache $(v, c)$
     \Else
       \State replay cached $(v, c)$
@@ -758,53 +785,9 @@ against the DQN, DDPG, and MP-DQN baselines under the model specified in
 this chapter, actually achieves.
 
 % ---------------------------------------------------------------------------
-% Local reference list for this chapter (IEEE numbered style). Keys shared
-% with earlier chapters (oran2021mvp, qazzaz2026oreo, xiong2018pdqn,
-% bester2019mpdqn, tavakoli2018branching) are repeated verbatim; new keys
-% introduced in this chapter follow. Merge into a single thesis-wide
-% references.bib once main.tex exists.
+% This chapter's citations (oran2021mvp, threegpp38801, threegpp38864,
+% xiong2018pdqn, bester2019mpdqn, tavakoli2018branching, auer2011earth,
+% benetel2024ran550, qazzaz2026oreo) resolve against the consolidated
+% thesis-wide bibliography in thesis/chapters/references_oran.tex, not a
+% local thebibliography here.
 % ---------------------------------------------------------------------------
-\begin{thebibliography}{9}
-
-\bibitem{oran2021mvp}
-O-RAN Alliance, ``O-RAN Minimum Viable Plan and Commercialization
-Strategy,'' Jun. 2021.
-
-\bibitem{threegpp38801}
-3GPP, ``Study on New Radio Access Technology: Radio Access Architecture and
-Interfaces,'' TR 38.801, V0.4.0, Aug. 2016.
-
-\bibitem{threegpp38864}
-3GPP, ``Study on Network Energy Savings for NR,'' TR 38.864, 2024.
-
-\bibitem{xiong2018pdqn}
-J. Xiong, Q. Wang, Z. Yang, P. Sun, L. Han, Y. Zheng, H. Fu, T. Zhang, J. Liu,
-and H. Liu, ``Parametrized Deep Q-Networks Learning: Reinforcement Learning
-with Discrete-Continuous Hybrid Action Space,'' arXiv preprint
-arXiv:1810.06394, 2018.
-
-\bibitem{bester2019mpdqn}
-C.~J. Bester, S.~D. James, and G.~D. Konidaris, ``Multi-Pass Q-Networks for
-Deep Reinforcement Learning with Parameterised Action Spaces,'' arXiv
-preprint arXiv:1905.04388, 2019.
-
-\bibitem{tavakoli2018branching}
-A. Tavakoli, F. Pardo, and P. Kormushev, ``Action Branching Architectures for
-Deep Reinforcement Learning,'' in \emph{Proc. AAAI Conference on Artificial
-Intelligence}, 2018.
-
-\bibitem{auer2011earth}
-G. Auer et al., ``How Much Energy Is Needed to Run a Wireless Network?,''
-\emph{IEEE Wireless Communications}, vol.~18, no.~5, pp.~40--49, Oct. 2011.
-
-\bibitem{benetel2024ran550}
-Benetel, ``RAN550 Outdoor/Indoor O-RU Datasheet (n78/n79, Split 7.2x),''
-product datasheet. Max.\ TX output power (total EIRP): 2\,W (33\,dBm).
-
-\bibitem{qazzaz2026oreo}
-M.~M.~H. Qazzaz, A. Salama, M. Hafeez, and S.~A.~R. Zaidi,
-``OREO: Open RAN Energy Optimization via Deep Reinforcement Learning for 6G
-Networks,'' \emph{IEEE Open Journal of the Communications Society}, vol.~7,
-pp.~4165--4182, 2026.
-
-\end{thebibliography}

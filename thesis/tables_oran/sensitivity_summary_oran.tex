@@ -1,6 +1,8 @@
 \begin{table}[h]
 \centering
 \caption{O-RAN Track: Power-Model Sensitivity Analysis (Concept Note Section 6.9). Each row scales one RU/DU/CU/fronthaul constant group by an order of magnitude (all others at their Section 10.5 default), re-running the full 4-method/3-seed/500-episode protocol.}
+\label{tab:oran-sensitivity}
+\resizebox{\textwidth}{!}{%
 \begin{tabular}{lccc}
 \hline
 Configuration & BMPP-DQN Reward Rank (of 4) & BMPP-DQN TOPSIS Rank (of 4) & TOPSIS Score \\
@@ -15,5 +17,6 @@ CU x0.1 & 3 & 2 & 0.686 \\
 Fronthaul x10 & 3 & 1 & 0.876 \\
 Fronthaul x0.1 & 4 & 1 & 0.843 \\
 \hline
-\end{tabular}
+\end{tabular}%
+}
 \end{table}

@@ -197,3 +197,53 @@ def test_run_oran_baseline_benchmarks_default_seeds_match_n_random_seeds(
             algorithms=["dqn"],
             save_dir=str(tmp_path / "results"),
         )
+
+
+@pytest.mark.parametrize("algo", ["dqn", "mpdqn"])
+def test_discrete_hold_steps_holds_ru_on_and_split_fixed_within_window(
+    make_config_path, tmp_path, monkeypatch, algo
+):
+    """Fair-cadence control regression guard: with discrete_hold_steps=N,
+    DQN/MP-DQN's (ru_on, split) actually sent to env.step() must change
+    only every N steps, matching BMPP-DQN's own two-timescale cadence --
+    not every step, which is what made the original switching-frequency
+    comparison conflate decision cadence with architecture (the critique
+    this fair-cadence control responds to)."""
+    config_path = make_config_path()
+    hold = 3
+    seen_actions = []
+
+    import oran_env.oran_env as oran_env_module
+
+    original_step = oran_env_module.ORANEnv.step
+
+    def spy_step(self, action):
+        seen_actions.append(
+            (action["ru_on"].copy(), action["split"].copy())
+        )
+        return original_step(self, action)
+
+    monkeypatch.setattr(oran_env_module.ORANEnv, "step", spy_step)
+
+    run_oran_baseline_benchmarks(
+        config_path=config_path,
+        seeds=[42],
+        episodes=2,
+        algorithms=[algo],
+        save_dir=str(tmp_path / "results"),
+        discrete_hold_steps=hold,
+    )
+
+    # Training + held-out eval both ran under the hold; every window of
+    # `hold` consecutive env.step() calls within a single episode must
+    # share the same (ru_on, split) -- windows are reset at each episode
+    # boundary (reset() restarts steps_since_decision at 0), so this
+    # checks within-window equality rather than across the whole log.
+    assert len(seen_actions) > hold, "not enough steps recorded to test a hold window"
+    for i in range(1, hold):
+        ru_on_i, split_i = seen_actions[i]
+        ru_on_0, split_0 = seen_actions[0]
+        assert (ru_on_i == ru_on_0).all() and (split_i == split_0).all(), (
+            f"step {i} within the first hold window changed (ru_on, split) "
+            f"without a decision boundary"
+        )

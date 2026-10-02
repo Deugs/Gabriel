@@ -1,0 +1,462 @@
+% Chapter 4 -- Simulation Results (O-RAN / BMPP-DQN track)
+%
+% Governs: manuscript/ORAN_BMPP_DQN_Concept_Note_v1.md (Sections 5.3, 6, 12)
+% Chapter mapping: docs/oran_thesis_guide.md
+% Status: DRAFT. Intended to be \input{} from the thesis-wide main.tex once
+% that skeleton exists; a thesis-wide references.bib does not yet exist, so
+% citations below are numbered locally (IEEE style) against the short
+% reference list at the end of this file. Renumber/merge into the
+% thesis-wide bibliography once main.tex is created.
+%
+% Tables and figures below are \input{}/\includegraphics{}'d directly from
+% thesis/tables_oran/ and thesis/figures_oran/ (paths relative to
+% thesis/chapters/, i.e. one level up) rather than hand-copied, so that
+% re-running the evaluation scripts (oran_evaluation/*) and recompiling is
+% sufficient to keep this chapter's numbers current -- the Quality Gate 6
+% (Code-Text Consistency) discipline this track's other chapters already
+% follow. The canonical results are the 3-seed/500-episode run
+% (data/results_oran/, seeds 42/123/456); Section~\ref{sec:oran-n10}
+% separately reports the supplementary 10-seed validation
+% (data/results_oran_10seed/) from its own parallel table/figure set
+% (thesis/tables_oran_10seed/), which does not overwrite the canonical
+% artifacts.
+
+\chapter{Simulation Results}
+\label{chap:oran-results}
+
+\section{Experimental Setup}
+\label{sec:oran-experimental-setup}
+
+All results in this chapter use the environment, power model, and BMPP-DQN
+architecture specified in Chapter~\ref{chap:oran-system-model}, instantiated
+at this track's single focused scenario: $R=4$ RUs, $U=8$ UEs, one DU, one
+CU, and $S=3$ functional-split options
+(\texttt{config/oran\_default.yaml}). BMPP-DQN is compared against three
+baselines -- a purely discrete method (DQN, thresholding the continuous
+actions), a purely continuous method (DDPG, relaxing the discrete actions),
+and an existing parameterized-action method (MP-DQN, processing the full
+joint discrete-continuous action space in a single flat network, unlike
+BMPP-DQN's per-branch decomposition) -- under matched training and
+evaluation conditions: $500$ training episodes of $100$ environment steps
+each, identical traffic and channel realizations per seed, and the
+hyperparameters listed in Section~\ref{sec:oran-bmpp-training}'s Default
+Hyperparameters paragraph. Training used GPU-accelerated PyTorch on
+RunPod-hosted A40/RTX~4090 instances.
+
+The canonical protocol evaluates every method over $n=3$ random seeds
+($42$, $123$, $456$), per Concept Note Section 5.3 and this thesis's own
+Quality Gate 5 as originally scoped. $n=3$ is a thin basis for statistical
+power; Section~\ref{sec:oran-n10} reports a supplementary $n=10$-seed
+validation of the same four methods that was run specifically to check
+whether the $n=3$ findings below hold up with more statistical power. It
+does not replace the canonical $n=3$ comparison, which remains this
+chapter's primary result.
+
+Five operational metrics are reported for every method: mean episodic
+reward (Eq.~\ref{eq:oran-reward}), mean total power $P_{\mathrm{total}}$ in
+watts, two distinct QoS satisfaction rates, switching frequency
+$n_{\mathrm{sw}}(t)$ averaged per step, and aggregate downlink throughput in
+Mbps. The two QoS rates require separate definitions because they differ
+sharply in practice: \emph{QoS Rate} (``QoS Strict'' in the multi-criteria
+tables) is the fraction of evaluation steps at which \emph{every} UE is
+simultaneously satisfied ($\max_u \max(0, D_u(t)-C_u(t)) = 0$ for all $u$);
+\emph{Per-UE QoS} is the mean, per step, of the \emph{fraction} of UEs that
+are individually satisfied. Because the strict criterion requires $U=8$
+roughly-independent per-UE satisfaction events to co-occur, it falls off far
+more sharply than the per-UE rate even when most individual UEs are usually
+satisfied -- this is why every method in Table~\ref{tab:oran-convergence}
+below shows a QoS Rate in the 30-55\% range alongside a Per-UE QoS above
+80\%, rather than the two tracking each other closely. Both are reported
+because they answer different questions: Per-UE QoS reflects aggregate
+service quality across the UE population, while QoS Rate reflects how often
+the network is in a state where no UE at all is under-served.
+
+Statistical comparisons against BMPP-DQN use a paired $t$-test (paired on
+seed) and Cohen's $d$ for effect size, following this thesis's own Quality
+Gate 5 convention.
+
+\section{Training Convergence}
+\label{sec:oran-convergence}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.8\textwidth]{../figures_oran/convergence_curve_oran.pdf}
+\caption{BMPP-DQN training reward (mean $\pm$ std across 3 seeds) over 500
+  episodes, with each baseline's final evaluation performance shown as a
+  reference line. Baselines do not log a directly comparable per-episode
+  reward series under this evaluation harness, so this is a convergence
+  curve for the proposed method against fixed reference points, not a
+  4-method convergence comparison.}
+\label{fig:oran-convergence-curve}
+\end{figure}
+
+BMPP-DQN's training reward is highly variable in early episodes --
+reflecting both $\epsilon$-greedy exploration at its initial value
+(Section~\ref{sec:oran-bmpp-training}) and the cold-start replay buffers feeding
+both the upper- and lower-level updates -- and stabilizes as exploration and
+continuous noise decay toward their end values. By the final checkpoint
+(episode 500), BMPP-DQN's evaluation performance sits between DQN and MP-DQN
+on reward, consistent with Table~\ref{tab:oran-convergence}
+(Section~\ref{sec:oran-performance-comparison}).
+
+\section{Performance Comparison Against Baselines}
+\label{sec:oran-performance-comparison}
+
+\input{../tables_oran/convergence_summary_oran.tex}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.48\textwidth]{../figures_oran/reward_comparison_oran.pdf}
+\hfill
+\includegraphics[width=0.48\textwidth]{../figures_oran/power_comparison_oran.pdf}
+\\[1em]
+\includegraphics[width=0.48\textwidth]{../figures_oran/qos_strict_comparison_oran.pdf}
+\hfill
+\includegraphics[width=0.48\textwidth]{../figures_oran/qos_per_ue_comparison_oran.pdf}
+\caption{Per-metric comparison across all 4 methods (mean $\pm$ std across
+  3 seeds): reward, power, strict QoS rate, and per-UE QoS rate.}
+\label{fig:oran-comparison-1}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.48\textwidth]{../figures_oran/switching_comparison_oran.pdf}
+\hfill
+\includegraphics[width=0.48\textwidth]{../figures_oran/throughput_comparison_oran.pdf}
+\\[1em]
+\includegraphics[width=0.6\textwidth]{../figures_oran/efficiency_comparison_oran.pdf}
+\caption{Switching frequency, throughput, and derived throughput-per-watt
+  efficiency across all 4 methods.}
+\label{fig:oran-comparison-2}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.7\textwidth]{../figures_oran/pareto_power_throughput_oran.pdf}
+\caption{Power-throughput Pareto scatter across all 4 methods, with the
+  non-dominated frontier highlighted.}
+\label{fig:oran-pareto}
+\end{figure}
+
+Table~\ref{tab:oran-convergence} and Figures~\ref{fig:oran-comparison-1}--\ref{fig:oran-pareto}
+summarize the canonical $n=3$ comparison. Three observations stand out.
+
+First, \textbf{no pairwise reward comparison against BMPP-DQN reaches
+conventional statistical significance at $n=3$}: $p=0.904$ against DQN,
+$p=0.179$ against DDPG, $p=0.093$ against MP-DQN. MP-DQN's reward is the
+best of the four methods (least negative, $-15452.55$), with a large
+negative Cohen's $d$ ($-1.760$) indicating a substantial effect size that
+nonetheless falls short of significance given only 3 seeds -- precisely the
+thin-statistical-power concern this thesis's supplementary $n=10$ check
+(Section~\ref{sec:oran-n10}) was designed to address.
+
+Second, \textbf{BMPP-DQN and MP-DQN post essentially tied mean power}
+($162.5\,\mathrm{W}$ vs.\ $160.2\,\mathrm{W}$), both well below DQN
+($213.4\,\mathrm{W}$) and DDPG ($189.5\,\mathrm{W}$). BMPP-DQN does
+\emph{not} undercut MP-DQN on power, which matters directly for Objective 4
+(Section~\ref{sec:oran-objectives}): a $\geq15\%$ energy-saving target is
+not met against the strongest baseline on this metric alone, a point
+revisited without qualification in
+Section~\ref{sec:oran-rq-answers} and Chapter~\ref{chap:oran-conclusion}.
+
+Third, \textbf{switching frequency separates the methods sharply}. DDPG's
+near-zero switching ($0.04$ events/step) follows directly from its purely
+continuous relaxation, which never flips a discrete RU/split decision at
+all in the usual sense. Of the three methods that do make discrete
+decisions, BMPP-DQN's independent per-branch exploration and two-timescale
+cadence (Section~\ref{sec:oran-bmpp-training}) yields the lowest switching
+frequency ($0.20$), well below DQN ($0.29$) and more than $5\times$ below
+MP-DQN ($1.04$) -- MP-DQN's best-in-class reward comes with the least
+stable discrete-action behavior of the three methods that actually activate
+and deactivate RUs. This switching-stability advantage, not a raw
+energy-savings win, is the pattern that motivates the multi-criteria
+analysis in the next section.
+
+\section{Multi-Criteria Composite Analysis}
+\label{sec:oran-mcda}
+
+Reward already aggregates energy efficiency, QoS shortfall, and switching
+cost into a single training objective
+(Eq.~\ref{eq:oran-reward}), which makes it unsuitable as an independent
+cross-check of whether that combination is actually well-balanced across
+methods. This section instead applies TOPSIS (Technique for Order
+Preference by Similarity to Ideal Solution)~\cite{hwang1981topsis} with
+equal criterion weights, directly to the five raw operational metrics
+(power, QoS Strict, QoS Per-UE, switching frequency, throughput) --
+deliberately excluding reward itself, per the module's own docstring.
+
+\input{../tables_oran/multicriteria_summary_oran.tex}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.48\textwidth]{../figures_oran/composite_score_oran.pdf}
+\hfill
+\includegraphics[width=0.48\textwidth]{../figures_oran/radar_comparison_oran.pdf}
+\caption{TOPSIS composite score (left) and normalized multi-criteria radar
+  comparison (right) across all 4 methods.}
+\label{fig:oran-mcda}
+\end{figure}
+
+Under this independent, equal-weighted cross-check, BMPP-DQN ranks
+\textbf{first} (TOPSIS score $0.833$), ahead of DDPG ($0.651$), DQN
+($0.640$), and MP-DQN ($0.356$ -- last, despite its best-in-class reward
+and power, driven down by its substantially worse switching frequency).
+This is the first piece of evidence that BMPP-DQN's contribution is better
+characterized as a balanced multi-criteria trade-off than as a raw
+energy-saving win on any single metric.
+
+\section{Robustness of the Multi-Criteria Ranking}
+\label{sec:oran-mcda-robustness}
+
+A single MCDA method and weighting scheme could make Section~\ref{sec:oran-mcda}'s
+ranking an artifact of that specific choice. To check this, the same five
+metrics are also ranked under entropy-weighted TOPSIS (objective,
+data-driven weights computed from the metrics' own dispersion, rather than
+equal weights)~\cite{zeleny1982mcdm} and under VIKOR, a different
+aggregation rule based on weighted-sum group utility $S$ and
+worst-single-criterion regret $R$ ($v=0.5$) rather than TOPSIS's
+distance-to-ideal-solution geometry~\cite{opricovic2004vikor}.
+
+\input{../tables_oran/mcda_robustness_oran.tex}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.7\textwidth]{../figures_oran/mcda_robustness_oran.pdf}
+\caption{MCDA ranking-robustness bump chart: each method's rank under
+  equal-weighted TOPSIS, entropy-weighted TOPSIS, and entropy-weighted
+  VIKOR.}
+\label{fig:oran-mcda-robustness-fig}
+\end{figure}
+
+At $n=3$, BMPP-DQN is the \emph{only} method ranked first under all three
+schemes simultaneously (Table~\ref{tab:oran-mcda-robustness}), with a VIKOR
+regret score of $Q=0.000$ (the best attainable). DDPG, DQN, and MP-DQN all
+change rank across at least one scheme. This agreement across three
+independently-reasoned aggregation rules is stronger evidence for a
+genuinely balanced trade-off than Section~\ref{sec:oran-mcda}'s
+single-scheme result alone -- though Section~\ref{sec:oran-n10} reports that
+this specific three-way agreement is not fully robust at $n=10$, an honest
+caveat on an otherwise favorable finding.
+
+\section{Power-Model Sensitivity Analysis}
+\label{sec:oran-sensitivity}
+
+Every RU/DU/CU/fronthaul power constant in the model
+(Section~\ref{sec:oran-power}) is a literature-informed but unvalidated
+placeholder (Chapter~\ref{chap:oran-system-model}'s own needs-validation
+disclosures). Concept Note Section 6.9 addresses whether the comparative
+findings above depend on these placeholders' exact values by independently
+scaling each of the four constant groups by $10\times$ and $0.1\times$ (8
+perturbed configurations total, all others held at their default values)
+and re-running the full 4-method/3-seed/500-episode protocol at each.
+
+\input{../tables_oran/sensitivity_summary_oran.tex}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.48\textwidth]{../figures_oran/sensitivity_topsis_oran.pdf}
+\hfill
+\includegraphics[width=0.48\textwidth]{../figures_oran/sensitivity_reward_power_oran.pdf}
+\caption{BMPP-DQN's TOPSIS score/rank (left) and reward/power for all 4
+  methods (right), across the default configuration and all 8 perturbed
+  power-model configurations.}
+\label{fig:oran-sensitivity}
+\end{figure}
+
+Table~\ref{tab:oran-sensitivity} shows that BMPP-DQN's TOPSIS rank is
+\textbf{1st of 4 in 8 of the 9 configurations tested} (default plus 7 of the
+8 perturbations), dropping to 2nd only when CU power is scaled down to
+$0.1\times$. Its reward rank is more volatile (2nd at default, 3rd in six
+perturbations, 4th when fronthaul power is scaled down to $0.1\times$),
+consistent with Section~\ref{sec:oran-performance-comparison}'s finding
+that BMPP-DQN's reward is not the best of the four methods. The qualitative
+pattern established in Sections~\ref{sec:oran-mcda}--\ref{sec:oran-mcda-robustness}
+-- MP-DQN best on reward, BMPP-DQN never best on reward but consistently
+strongest on the multi-criteria composite -- therefore does not depend on
+any single one of these placeholder constants' absolute value. This
+resolves Concept Note Section 6.3's own long-standing ``[if conducted]''
+sensitivity-analysis placeholder; it does not, and cannot, resolve the
+constants' own absolute values, which remain open exactly as described in
+Chapter~\ref{chap:oran-system-model}.
+
+\section{RQ3: Effect of the Two-Timescale Design}
+\label{sec:oran-rq3}
+
+Research Question 3 and Objective 5 (Section~\ref{sec:oran-objectives}) ask
+how explicitly separating slow (RU activation, split selection) and fast
+(power, PRB allocation) decisions across two timescales affects learning
+convergence and energy efficiency, relative to a single-timescale
+treatment of the same action space. {\sloppy To answer this directly,
+BMPP-DQN is retrained with \texttt{upper\_level\_period\_steps} collapsed
+from its default value of $10$ to $1$
+(\texttt{config/\allowbreak rq3\_single\_timescale.yaml}), degenerating the
+two-timescale separation to a no-op -- every other hyperparameter, and the
+full 3-seed/500-episode protocol, held fixed.\par}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.8\textwidth]{../figures_oran/rq3_ablation_oran.pdf}
+\caption{Reward and switching frequency: two-timescale (proposed, $N=10$)
+  vs.\ single-timescale ($N=1$) BMPP-DQN, mean across 3 seeds.}
+\label{fig:oran-rq3}
+\end{figure}
+
+Collapsing to a single timescale yields a mean reward of $-19742.17$
+(seeds $-21397.08$, $-19684.07$, $-18145.36$) -- marginally \emph{better}
+(less negative) than the two-timescale default's $-21373.18$ -- with mean
+power ($165.3\,\mathrm{W}$), strict QoS rate ($49.9\%$), and per-UE QoS
+rate ($90.6\%$) all within a few percent of the two-timescale default
+($162.5\,\mathrm{W}$, $49.5\%$, $90.4\%$). The two configurations'
+energy/QoS trade-offs are, in other words, essentially equivalent.
+
+Switching frequency is where the two designs diverge sharply: the
+single-timescale variant's mean switching frequency is $1.234$ events/step
+(seeds $1.222$, $0.714$, $1.766$) -- more than \emph{six times} the
+two-timescale default's $0.20$. Forcing every RU-activation and
+split-selection decision to be re-evaluated every single environment step,
+rather than held for $N=10$ steps at a time, produces substantially more
+frequent discrete-action flips for essentially no reward, power, or QoS
+benefit.
+
+This directly answers RQ3: \textbf{the two-timescale design's measurable
+benefit is decision stability, not raw energy or QoS performance.} The
+slow/fast separation does not cost BMPP-DQN reward or energy efficiency
+relative to a single-timescale treatment of the same action space, and it
+substantially reduces how often RUs are switched on/off or re-split --
+consistent with Non-RT RIC decisions being intended to operate on a
+$1$--$10\,\mathrm{s}$ cadence rather than being re-decided every
+$10$--$100\,\mathrm{ms}$ Near-RT RIC step
+(Section~\ref{sec:oran-background}).
+
+\section{Inference-Time Latency}
+\label{sec:oran-latency}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.6\textwidth]{../figures_oran/latency_benchmark_oran.pdf}
+\caption{Per-decision forward-pass latency (ms/decision) for all 4 methods
+  at this track's single default scenario ($R=4$), averaged over repeated
+  greedy action selections on the same evaluation hardware.}
+\label{fig:oran-latency}
+\end{figure}
+
+Consistent with this track's focused single-gNB scope
+(Section~\ref{sec:oran-scope}), this benchmark measures forward-pass
+latency at the one default scenario rather than across a range of network
+sizes (contrast the C-RAN track's $R=5$-to-$50$ scalability sweep). All
+four methods are small feedforward networks (hidden sizes $[128,64]$,
+Section~\ref{sec:oran-bmpp-architecture}) evaluated on the same hardware; BMPP-DQN's
+additional architectural components relative to the single-network
+baselines -- two separate encoders, a branching critic, and a continuous
+parameter network, evaluated together for one decision
+(Section~\ref{sec:oran-bmpp-architecture}) -- do not change this comparison's
+qualitative conclusion, since all four remain comfortably within a single
+forward-pass budget on commodity hardware, well inside the $10$--$100\,\mathrm{ms}$
+Near-RT RIC decision loop this design's lower level targets.
+
+\section{Supplementary Validation at \texorpdfstring{$n=10$}{n=10} Seeds}
+\label{sec:oran-n10}
+
+Sections~\ref{sec:oran-performance-comparison}--\ref{sec:oran-mcda-robustness}
+use the canonical $n=3$-seed protocol (Concept Note Section 5.3). Given
+this thesis's own Quality Gate 5 ($\geq10$ seeds with confidence intervals
+and Cohen's $d$), a supplementary check extends every method's seed set
+from 3 to 10 (seeds $42$, $123$, $456$ plus 7 additional seeds,
+\texttt{data/results\_oran\_10seed/}) and regenerates the same table/figure
+suite into a parallel location
+(\texttt{thesis/tables\_oran\_10seed/}), without overwriting the canonical
+$n=3$ artifacts referenced above.
+
+\input{../tables_oran_10seed/convergence_summary_oran.tex}
+
+\input{../tables_oran_10seed/multicriteria_summary_oran.tex}
+
+\input{../tables_oran_10seed/mcda_robustness_oran.tex}
+
+Two findings change between $n=3$ and $n=10$, and are reported honestly
+rather than suppressed in favor of the more favorable $n=3$ picture.
+
+First, \textbf{DDPG's reward comparison against BMPP-DQN reaches
+significance at $n=10$} ($p=0.0359$, $d=0.779$) where it did not at $n=3$
+($p=0.179$), even though DDPG's mean reward is actually less negative at
+$n=10$ ($-51207.12$) than at $n=3$ ($-68536.61$). The reason is variance,
+not a worsened mean: DDPG's $n=3$ confidence interval is extremely wide
+($[-152304.82, 15231.60]$), driven by one or more outlier seeds, while its
+$n=10$ interval is far tighter ($[-76819.81, -25594.43]$) and excludes
+zero. Adding seeds did not reveal DDPG performing worse on average; it
+revealed that DDPG consistently underperforms BMPP-DQN on reward, which 3
+seeds alone were too noisy to establish. MP-DQN's reward advantage over
+BMPP-DQN, by contrast, remains short of significance at $n=10$
+($p=0.0714$), though closer to the conventional threshold than at $n=3$
+($p=0.093$).
+
+Second, and more consequential for Section~\ref{sec:oran-mcda-robustness}'s
+headline claim: \textbf{BMPP-DQN is no longer ranked first under every MCDA
+scheme at $n=10$.} Under equal-weighted TOPSIS, DDPG overtakes BMPP-DQN for
+rank 1 ($0.798$ vs.\ $0.766$) -- driven by DDPG's still-near-zero switching
+frequency ($0.04$) outweighing its worse power and QoS once 10 seeds'
+worth of data narrow the other methods' advantage on those metrics. BMPP-DQN
+recovers rank 1 under entropy-weighted TOPSIS (which weights switching
+frequency lower, at $0.14$, than the equal-weight scheme's $0.20$) but
+falls to rank 2 under VIKOR. Only DQN is ranked identically (3rd) under all
+three schemes at $n=10$, where at $n=3$ it was BMPP-DQN that achieved full
+agreement. BMPP-DQN remains rank 1 or 2 under every scheme at both sample
+sizes -- it is never the worst performer by this measure -- but
+Section~\ref{sec:oran-mcda-robustness}'s strongest claim, full three-scheme
+agreement, is partly an $n=3$-specific artifact rather than a fully
+sample-size-robust finding. This nuance is carried forward, not
+smoothed over, into Chapter~\ref{chap:oran-conclusion}'s discussion of
+RQ2.
+
+\section{Discussion: Answering the Research Questions}
+\label{sec:oran-rq-answers}
+
+\textbf{RQ1} (architectural integration, Section~\ref{sec:oran-research-questions}):
+BMPP-DQN trains stably end-to-end as a single coupled network combining
+branching discrete decomposition with multi-pass continuous parameter
+processing (Chapter~\ref{chap:oran-system-model}), across all 3 (and,
+supplementarily, all 10) random seeds, with no divergence or
+training-instability failures observed. This is an architectural and
+training-stability claim, evidenced by the convergence behavior in
+Section~\ref{sec:oran-convergence} and the consistent final performance
+across seeds in Tables~\ref{tab:oran-convergence} and
+\ref{tab:oran-convergence-n10}.
+
+\textbf{RQ2} (energy-saving performance): the evidence does not support a
+single-metric energy-saving win. BMPP-DQN's mean power is essentially tied
+with MP-DQN's (the best of the four methods on this metric;
+Section~\ref{sec:oran-performance-comparison} reports no formal
+significance test on power specifically) and its reward is not the best of
+the four methods at either sample size. Objective 4's $\geq15\%$ energy-saving target against these
+baselines is, without qualification, \textbf{not met} by any result in
+this chapter. What the evidence does support is a genuine multi-criteria
+balance: BMPP-DQN is the strongest or joint-strongest method under every
+MCDA scheme tested, at both sample sizes
+(Sections~\ref{sec:oran-mcda}--\ref{sec:oran-n10}), and this balance is
+robust to every power-model placeholder constant's order-of-magnitude
+uncertainty (Section~\ref{sec:oran-sensitivity}). This reframing --
+multi-criteria balance across power, QoS, and switching stability, rather
+than a raw energy-saving margin -- is this thesis's actual, evidence-based
+answer to RQ2, as previewed in Section~\ref{sec:oran-objectives} and
+developed further in Chapter~\ref{chap:oran-conclusion}.
+
+\textbf{RQ3} (two-timescale design): directly answered in
+Section~\ref{sec:oran-rq3}. Collapsing the two-timescale separation to a
+single timescale does not measurably change reward, power, or QoS, but
+increases switching frequency more than sixfold. The two-timescale design's
+contribution is decision stability at the discrete-action level, matched to
+the Non-RT/Near-RT RIC timescale separation this problem is built on
+(Section~\ref{sec:oran-background}), not an energy-efficiency gain in its
+own right.
+
+Chapter~\ref{chap:oran-conclusion} returns to these three answers alongside
+this thesis's scope and limitations
+(Section~\ref{sec:oran-scope}) to state its overall contribution and
+directions for future work.
+
+% ---------------------------------------------------------------------------
+% This chapter's citations (hwang1981topsis, zeleny1982mcdm,
+% opricovic2004vikor, cohen1988statistical) resolve against the
+% consolidated thesis-wide bibliography in
+% thesis/chapters/references_oran.tex, not a local thebibliography here.
+% ---------------------------------------------------------------------------

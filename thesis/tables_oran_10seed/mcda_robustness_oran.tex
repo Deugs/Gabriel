@@ -1,6 +1,8 @@
 \begin{table}[h]
 \centering
-\caption{O-RAN Track: MCDA Ranking Robustness. Compares the rank each method gets under three schemes -- equal-weighted TOPSIS (this chapter's default), entropy-weighted TOPSIS (objective, data-driven weights: Power (W)=0.30, QoS Strict (%)=0.23, QoS Per-UE (%)=0.17, Switching Freq.=0.14, Throughput (Mbps)=0.16), and entropy-weighted VIKOR (a different aggregation rule -- weighted-sum group utility $S$ and worst-single-criterion regret $R$, $v=0.5$, rather than TOPSIS's distance-to-ideal). Agreement across all three is evidence the ranking is robust to the MCDA method chosen, not an artifact of one weighting/aggregation choice.}
+\caption{O-RAN Track: MCDA Ranking Robustness. Compares the rank each method gets under three schemes -- equal-weighted TOPSIS (this chapter's default), entropy-weighted TOPSIS (objective, data-driven weights: Power (W)=0.30, QoS Strict (\%)=0.23, QoS Per-UE (\%)=0.17, Switching Freq.=0.14, Throughput (Mbps)=0.16), and entropy-weighted VIKOR (a different aggregation rule -- weighted-sum group utility $S$ and worst-single-criterion regret $R$, $v=0.5$, rather than TOPSIS's distance-to-ideal). Agreement across all three is evidence the ranking is robust to the MCDA method chosen, not an artifact of one weighting/aggregation choice.}
+\label{tab:oran-mcda-robustness-n10}
+\resizebox{\textwidth}{!}{%
 \begin{tabular}{lccccc}
 \hline
 Algorithm & TOPSIS-Equal Rank & TOPSIS-Entropy Rank & VIKOR Rank & VIKOR $Q$ & Agreement \\
@@ -10,5 +12,6 @@ BMPP-DQN & 2 & 1 & 2 & 0.148 & No \\
 DQN & 3 & 3 & 3 & 0.980 & Yes \\
 MP-DQN & 4 & 4 & 1 & 0.079 & No \\
 \hline
-\end{tabular}
+\end{tabular}%
+}
 \end{table}

@@ -312,3 +312,68 @@ def test_channel_model_generates_complex_gains():
     assert gains.shape == (3, 2)
     assert np.iscomplexobj(gains)
     assert np.all(np.abs(gains) > 0.0)
+
+
+def test_capacity_splits_an_rus_prb_share_among_every_ue_it_serves(default_config):
+    """Regression guard: a single RU serving K UEs must split its PRB-share
+    bandwidth K ways, not give every co-served UE that RU's *full* share
+    independently -- the latter let a multi-UE RU's summed throughput scale
+    with its served-UE count rather than being bounded by its own allocated
+    bandwidth (the mechanism behind reported throughput exceeding the
+    single-UE-per-RU reference policy's own ceiling; see the critique this
+    fix responds to and Chapter 4/5's own discussion)."""
+    cfg = deepcopy(default_config)
+    cfg["network"]["n_ru"] = 1
+    cfg["network"]["n_ue"] = 2
+    env = ORANEnv(cfg)
+    env.reset(seed=42)
+
+    # Both UEs see the same (real-valued, for an exact hand-computable
+    # SINR) gain from the single RU, so both are served by it with
+    # identical per-UE SINR -- isolating the PRB-split arithmetic from any
+    # gain/SINR asymmetry between the two UEs. Uses env.p_max_w (not an
+    # arbitrary value) so step()'s own power clipping to p_max_w never
+    # silently changes the transmit power this test's hand computation
+    # assumes.
+    power_w = np.float32(env.p_max_w)
+    gain_sq = 4.0
+    sinr = (power_w * gain_sq) / env.noise_power_w  # single active RU: no interference
+    expected_capacity_per_ue_bps = (
+        0.5 * env.channel.bandwidth * np.log2(1.0 + sinr)
+    )  # prb_share=1.0 for the one active RU, split 2 ways
+
+    action = {
+        "ru_on": np.array([1], dtype=int),
+        "split": np.array([0], dtype=int),
+        "power": np.array([power_w], dtype=np.float32),
+        "prb": np.array([1.0], dtype=np.float32),
+    }
+    env.channel_gains = np.array([[2.0 + 0j, 2.0 + 0j]], dtype=np.complex64)
+    _, _, _, _, info = env.step(action)
+
+    expected_throughput_mbps = 2.0 * expected_capacity_per_ue_bps / 1e6
+    assert info["throughput_mbps"] == pytest.approx(expected_throughput_mbps, rel=1e-4)
+
+
+def test_hour_clock_advances_by_step_duration_not_a_full_hour(default_config):
+    """Regression guard: the diurnal hour clock must advance by
+    step_duration_s/3600 per step, matching the time unit the Poisson
+    arrival process (ORANTrafficModel, constructed with this same
+    step_duration_s) already uses -- not a full simulated hour per step,
+    which previously compressed an entire day into ~24 steps and broke any
+    correspondence between the two-timescale design's decision cadence and
+    the Non-RT/Near-RT RIC timescales it is motivated by."""
+    cfg = deepcopy(default_config)
+    env = ORANEnv(cfg)
+    obs, _ = env.reset(seed=42)
+    hour_before = env.hour
+
+    action = env.action_space.sample()
+    env.step(action)
+
+    expected_hour = (hour_before + env.step_duration_s / 3600.0) % 24.0
+    assert env.hour == pytest.approx(expected_hour, abs=1e-9)
+    # The old, buggy behavior advanced by a full hour; guard against that
+    # specific regression explicitly, not just against an unspecified
+    # "wrong" value.
+    assert env.hour != pytest.approx((hour_before + 1.0) % 24.0, abs=1e-6)

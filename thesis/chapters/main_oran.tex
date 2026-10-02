@@ -1,0 +1,47 @@
+% Compile harness for the O-RAN / BMPP-DQN thesis track (Chapters 1-5).
+%
+% This is NOT the final thesis-wide main.tex (none exists yet, per every
+% chapter file's own header comment); it exists only so the chapters in
+% this directory can be compiled and proofread as a single PDF while that
+% thesis-wide skeleton is still pending. Citations are consolidated into a
+% single References chapter (references_oran.tex) rather than each content
+% chapter keeping its own local thebibliography, and a lettered Appendix
+% (appendix_oran.tex) follows it.
+%
+% Compile from this directory (thesis/chapters/), since every chapter's
+% \input{}/\includegraphics{} path is written relative to it:
+%   pdflatex main_oran.tex && pdflatex main_oran.tex
+
+\documentclass[12pt]{report}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{hyperref}
+\usepackage{microtype}
+
+\title{Energy Optimization in Open Radio Access Networks via a\\
+  Branching Multi-Pass Parameterized Deep Q-Network\\
+  \large (O-RAN / BMPP-DQN Track -- Draft Compile)}
+\author{Gabriel Kwame Freeman}
+\date{July 2026}
+
+\begin{document}
+
+\maketitle
+\input{abstract_oran}
+\tableofcontents
+
+\input{chapter1_oran_introduction}
+\input{chapter2_oran_literature_review}
+\input{chapter3_oran_system_model}
+\input{chapter4_oran_results}
+\input{chapter5_oran_conclusion}
+\input{references_oran}
+\input{appendix_oran}
+
+\end{document}

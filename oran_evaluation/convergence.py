@@ -204,7 +204,16 @@ def analyze_convergence(
         "\\hline\n"
     )
 
-    for algo, m in analysis_report["algorithms"].items():
+    # Deferred import: oran_evaluation.results_plots imports PROPOSED_ALGO/
+    # load_algo_seed_metrics from *this* module, so importing it back at
+    # module level here would be circular -- safe as a function-local
+    # import since both modules are already fully loaded by the time this
+    # function is actually called.
+    from oran_evaluation.results_plots import label_for_algo, ordered_algos
+
+    for algo in ordered_algos(analysis_report["algorithms"]):
+        m = analysis_report["algorithms"][algo]
+        algo_label = label_for_algo(algo)
         if algo == PROPOSED_ALGO:
             p_val_str = "N/A (Proposed)"
             d_val_str = "N/A (Proposed)"
@@ -221,7 +230,7 @@ def analyze_convergence(
 
         reward_ci = f"[{m['ci_95_lower']:.2f}, {m['ci_95_upper']:.2f}]"
         latex_content += (
-            f"{algo} & {m['mean_reward']:.2f} {reward_ci} & "
+            f"{algo_label} & {m['mean_reward']:.2f} {reward_ci} & "
             f"{m['mean_power_w']:.1f} & {qos_pct:.1f}\\% & {qos_per_ue_pct:.1f}\\% & "
             f"{m['mean_switching_events']:.2f} & {p_val_str} & {d_val_str} \\\\\n"
         )

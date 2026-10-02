@@ -25,8 +25,61 @@ def set_seed(seed: int):
     np.random.seed(seed)
 
 
+def _apply_discrete_hold(
+    model: Any,
+    algo: str,
+    fresh_action: Dict[str, np.ndarray],
+    cache: Optional[Dict[str, Any]],
+    steps_since_decision: int,
+) -> Dict[str, np.ndarray]:
+    """Overwrite `fresh_action`'s discrete branches (ru_on, split) with the
+    cached decision from the last hold-period boundary, for the RQ3-style
+    fair-cadence control: running MP-DQN/DQN with the same N-step discrete
+    hold BMPP-DQN uses, so a switching-frequency comparison isolates the
+    architecture rather than conflating it with an unmatched decision
+    cadence (mirrors oran_agents/bmpp_dqn.py's own cache/replay pattern).
+
+    `cache` is refreshed in place at steps_since_decision == 0 and reused
+    by the caller for every held step in between. DQN's power/prb are a
+    deterministic function of ru_on (no independent continuous control,
+    Concept Note Section 2.2), so they must be recomputed from the *held*
+    ru_on, not left as whatever select_action() derived from the fresh
+    (pre-hold) one. MP-DQN's power/prb come from its own param_net
+    regardless of which discrete action_idx is used, so they are left as
+    select_action() returned them; only `model._last_action_idx` (what the
+    replay buffer records) is overridden to match the held ru_on/split, so
+    training learns from the same action it actually stepped the
+    environment with."""
+    assert cache is not None
+    if steps_since_decision == 0:
+        cache["ru_on"] = fresh_action["ru_on"].copy()
+        cache["split"] = fresh_action["split"].copy()
+        if algo == "mpdqn":
+            cache["action_idx"] = model._last_action_idx
+
+    held_action = dict(fresh_action)
+    held_action["ru_on"] = cache["ru_on"]
+    held_action["split"] = cache["split"]
+
+    if algo == "dqn":
+        ru_on = cache["ru_on"]
+        n_active = max(1, int(np.sum(ru_on)))
+        held_action["power"] = np.where(ru_on == 1, model.p_max_w, 0.0).astype(
+            np.float32
+        )
+        held_action["prb"] = (ru_on.astype(np.float32) / n_active).astype(np.float32)
+    elif algo == "mpdqn":
+        model._last_action_idx = cache["action_idx"]
+
+    return held_action
+
+
 def _evaluate_oran_baseline(
-    env: ORANEnv, model: Any, eval_episodes: int = 5
+    env: ORANEnv,
+    model: Any,
+    eval_episodes: int = 5,
+    algo: Optional[str] = None,
+    discrete_hold_steps: Optional[int] = None,
 ) -> Dict[str, float]:
     """Deterministic held-out evaluation, mirroring
     oran_training/train_bmpp_dqn.py's evaluate_agent(): dedicated eval
@@ -43,10 +96,20 @@ def _evaluate_oran_baseline(
         powers, qos_flags, qos_per_ue_flags, actives, switches, throughputs = (
             [], [], [], [], [], [],
         )
+        hold_cache: Optional[Dict[str, Any]] = {} if discrete_hold_steps else None
+        steps_since_decision = 0
 
         done = False
         while not done:
             action = model.select_action(obs, evaluate=True)
+            if discrete_hold_steps:
+                assert algo is not None, "algo required when discrete_hold_steps is set"
+                action = _apply_discrete_hold(
+                    model, algo, action, hold_cache, steps_since_decision
+                )
+                steps_since_decision = (
+                    steps_since_decision + 1
+                ) % discrete_hold_steps
             obs, reward, terminated, truncated, info = env.step(action)
 
             total_reward += reward
@@ -84,8 +147,19 @@ def run_oran_baseline_benchmarks(
     episodes: int = 50,
     algorithms: Optional[List[str]] = None,
     save_dir: str = "data/results_oran",
+    discrete_hold_steps: Optional[int] = None,
 ) -> Dict[str, Any]:
-    """Run O-RAN baseline benchmark algorithms over specified random seeds."""
+    """Run O-RAN baseline benchmark algorithms over specified random seeds.
+
+    discrete_hold_steps: when set, DQN/MP-DQN's discrete (ru_on, split)
+    decision is held fixed for this many steps at a time (re-selected only
+    at each boundary), matching BMPP-DQN's own two-timescale cadence --
+    the fair-cadence control run, isolating the switching-frequency
+    comparison from an unmatched decision cadence. DDPG has no discrete
+    decision to hold, so it is unaffected regardless of this argument.
+    None (the default) preserves the original every-step-decides behavior,
+    unchanged for the canonical comparison.
+    """
     with open(config_path, "r") as f:
         cfg = yaml.safe_load(f)
 
@@ -172,6 +246,10 @@ def run_oran_baseline_benchmarks(
                 powers, qos_flags, qos_per_ue_flags, actives, switches, throughputs = (
                     [], [], [], [], [], [],
                 )
+                hold_cache: Optional[Dict[str, Any]] = (
+                    {} if discrete_hold_steps else None
+                )
+                steps_since_decision = 0
 
                 done = False
                 while not done:
@@ -181,6 +259,13 @@ def run_oran_baseline_benchmarks(
                     # disabled (only ever exploiting the randomly
                     # initialized network's greedy output).
                     action = model.select_action(obs, evaluate=False)
+                    if discrete_hold_steps and algo in ("dqn", "mpdqn"):
+                        action = _apply_discrete_hold(
+                            model, algo, action, hold_cache, steps_since_decision
+                        )
+                        steps_since_decision = (
+                            steps_since_decision + 1
+                        ) % discrete_hold_steps
                     next_obs, reward, terminated, truncated, info = env.step(action)
 
                     if algo == "dqn":
@@ -240,7 +325,11 @@ def run_oran_baseline_benchmarks(
             # method -- the training-time ep_rewards/etc. above are not a
             # fair like-for-like comparison against final_eval_reward.
             eval_metrics = _evaluate_oran_baseline(
-                env, model, eval_episodes=n_eval_episodes
+                env,
+                model,
+                eval_episodes=n_eval_episodes,
+                algo=algo,
+                discrete_hold_steps=discrete_hold_steps,
             )
 
             seed_summary: Dict[str, Any] = {
@@ -293,6 +382,7 @@ def run_oran_baseline_benchmarks(
             "algorithm": algo,
             "seeds": seeds,
             "episodes": episodes,
+            "discrete_hold_steps": discrete_hold_steps,
         }
         with open(out_path / "config.yaml", "w") as f:
             yaml.dump(run_record, f)
@@ -314,10 +404,22 @@ if __name__ == "__main__":
     parser.add_argument(
         "--save-dir", type=str, default="data/results_oran", help="Save directory"
     )
+    parser.add_argument(
+        "--discrete-hold-steps",
+        type=int,
+        default=None,
+        help=(
+            "Hold DQN/MP-DQN's discrete (ru_on, split) decision fixed for "
+            "this many steps, matching BMPP-DQN's two-timescale cadence "
+            "(the fair-cadence control run). Omit for the canonical "
+            "every-step-decides behavior."
+        ),
+    )
     args = parser.parse_args()
 
     run_oran_baseline_benchmarks(
         config_path=args.config,
         episodes=args.episodes,
         save_dir=args.save_dir,
+        discrete_hold_steps=args.discrete_hold_steps,
     )
