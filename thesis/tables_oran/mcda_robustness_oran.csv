@@ -1,5 +1,5 @@
 algorithm,topsis_equal_rank,topsis_entropy_rank,vikor_rank,vikor_q,agreement
-BMPP-DQN,1,1,1,0.0,yes
-DDPG,2,3,4,1.0,no
-DQN,3,2,3,0.7856696386960227,no
-MP-DQN,4,4,2,0.37671534824336234,no
+DDPG,1,2,4,0.96332046332046,no
+BMPP-DQN,2,1,1,0.0,no
+MP-DQN,3,3,3,0.7782131021333573,yes
+DQN,4,4,2,0.6399514404105145,no

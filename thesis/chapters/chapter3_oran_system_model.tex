@@ -274,7 +274,9 @@ output power (total EIRP) for a Split-7.2x indoor small-cell
 O-RU~\cite{benetel2024ran550} -- the one constant in this power model
 independently confirmed by a real vendor datasheet rather than retained as
 an unvalidated placeholder. The active/sleep structural form itself
-follows the EARTH linear power model~\cite{auer2011earth}, though
+follows the EARTH linear power model~\cite{auer2011earth} -- the same
+static-plus-load-dependent family the adjacent C-RAN power-modeling
+literature also uses~\cite{alzubaedi2019cran} -- though
 $P_{\mathrm{proc}}(c)$, $P_{\mathrm{sleep}}$, and $\eta$ are otherwise
 literature-style placeholders chosen only to preserve a monotonic
 trade-off across split levels, not verified split-level RU wattage figures
@@ -453,7 +455,23 @@ vector is redrawn from the traffic envelope at the new hour
 \end{equation}
 i.e., the next channel and demand realizations are conditionally
 independent of the current state given the (implicit) hour-of-day clock,
-which itself advances deterministically, $\tau(t+1) = (\tau(t)+1) \bmod 24$.
+which itself advances deterministically by this step's real duration in
+hours, $\tau(t+1) = \big(\tau(t) + \Delta t_{\mathrm{step}}/3600\big) \bmod 24$,
+with $\Delta t_{\mathrm{step}} = 0.1\,\mathrm{s}$ (\texttt{step\_duration\_s},
+the same constant the Poisson arrival process in
+Eq.~\ref{eq:oran-demand} is scaled by). A 100-step episode therefore
+drifts the clock by only $\approx\!10\,\mathrm{s}$ in total: within one
+episode the diurnal regime is effectively fixed at whichever hour
+\texttt{reset()} drew, and the full diurnal range is seen across
+episodes/seeds via that random draw, not within a single short episode.
+An earlier implementation advanced the clock by a full simulated hour
+per step regardless of $\Delta t_{\mathrm{step}}$ -- compressing an
+entire day into $\approx\!24$ steps and decoupling the two-timescale
+design's decision cadence (Section~\ref{sec:oran-bmpp-training}) from any
+real correspondence to $\Delta t_{\mathrm{step}}$ or to the Non-RT/Near-RT
+RIC timescales motivating it (Section~\ref{sec:oran-background}); this was
+identified and fixed during the investigation reported in
+Chapter~\ref{chap:oran-results}.
 
 \subsection{Reward Function}
 
@@ -463,11 +481,21 @@ experiences co-channel interference from every other simultaneously-active
 RU:
 \begin{align}
   \mathrm{SINR}_u(t) &= \frac{p_{r^*(u)}(t)\,|h_{r^*(u),u}(t)|^2}{\Big(\sum_{r \in \mathcal{M}(t)} p_r(t)\,|h_{r,u}(t)|^2\Big) - p_{r^*(u)}(t)\,|h_{r^*(u),u}(t)|^2 + P_{\mathrm{noise}}^{\mathrm{W}}}, \label{eq:oran-sinr}\\
-  C_u(t) &= \beta_{r^*(u)}(t)\, B\, \log_2\!\big(1 + \mathrm{SINR}_u(t)\big), \label{eq:oran-capacity}
+  C_u(t) &= \frac{\beta_{r^*(u)}(t)}{K_{r^*(u)}(t)}\, B\, \log_2\!\big(1 + \mathrm{SINR}_u(t)\big), \label{eq:oran-capacity}
 \end{align}
 where $C_u(t)$ is UE $u$'s achievable Shannon capacity given the PRB share
-$\beta_{r^*(u)}(t)$ its serving RU has allocated it. Total throughput is
-$C_{\mathrm{total}}(t) = \sum_u C_u(t)$ (Mbps, after unit conversion), and
+$\beta_{r^*(u)}(t)$ its serving RU has allocated it, divided among the
+$K_{r^*(u)}(t) \geq 1$ UEs that RU is \emph{simultaneously} serving this
+step (an equal per-UE split of that RU's own allocated bandwidth). An
+earlier implementation omitted the $K_{r^*(u)}(t)$ divisor, so every UE a
+multi-UE RU served was scored as if it alone held that RU's entire
+allocated share -- summed capacity scaled with how many UEs an RU served
+rather than being bounded by the RU's own bandwidth allocation, inflating
+$C_{\mathrm{total}}(t)$ (and therefore $\mathrm{EE}(t)$ and the QoS terms
+below) whenever $K_r(t) > 1$, which happens routinely at this scenario's
+$U/R = 2$ average UE-per-RU ratio; this was identified and fixed during
+the investigation reported in Chapter~\ref{chap:oran-results}. Total
+throughput is $C_{\mathrm{total}}(t) = \sum_u C_u(t)$ (Mbps, after unit conversion), and
 energy efficiency is
 \begin{equation}
   \mathrm{EE}(t) = \frac{C_{\mathrm{total}}(t)}{P_{\mathrm{total}}(t) + \epsilon}\ \ \text{[Mbit/Joule]}, \qquad \epsilon = 10^{-6},

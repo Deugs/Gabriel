@@ -54,13 +54,21 @@ network:
   # burstiness) already approached mean achievable throughput (~77 Mbps)
   # even under that generous reference policy, leaving essentially no
   # headroom for any policy -- including the intended learned ones -- to
-  # satisfy QoS. 100 MHz raises mean achievable throughput to ~384 Mbps
+  # satisfy QoS. 100 MHz raises mean achievable throughput to ~244 Mbps
   # under the same reference policy (best-case per-UE satisfaction
-  # 74%->84%), giving real headroom while still being a standard,
+  # 74%->81%), giving real headroom while still being a standard,
   # precedented channel bandwidth for this model's own n78-band carrier
   # frequency (3.5 GHz) -- not an arbitrary tuning choice. See
   # docs/oran_thesis_guide.md's QoS-metric note for the accompanying
   # per-UE-vs-all-UE metric distinction this same investigation surfaced.
+  # 2026-10-01 re-check after fixing oran_env.py's PRB-sharing bug (each
+  # co-served UE was previously scored against its serving RU's *full*
+  # share, not divided among every UE that RU simultaneously served --
+  # see Chapter 4's bug-fix disclosure): the ~384 Mbps/84% figures above
+  # were computed under that inflated formula and are superseded by the
+  # ~244 Mbps/81% figures now stated; 100 MHz still clears this headroom
+  # check under the corrected formula (~2.4x margin), so the constant
+  # itself did not need to change, only this comment's own numbers.
   bandwidth_mhz: 100
   noise_power_dbm: -102
 
@@ -261,34 +269,41 @@ Section~\ref{sec:oran-experimental-setup}.
 \toprule
 Algorithm & Seed & Reward & Power (W) & QoS Rate (\%) & Per-UE QoS (\%) & Switching & Throughput (Mbps) \\
 \midrule
-BMPP-DQN & 42  & $-$20774.12 & 176.72 & 48.4 & 90.50 & 0.254 & 989.13 \\
-BMPP-DQN & 123 & $-$28089.06 & 158.59 & 43.6 & 88.08 & 0.182 & 1011.06 \\
-BMPP-DQN & 456 & $-$15256.37 & 152.33 & 56.4 & 92.68 & 0.168 & 1117.78 \\
+BMPP-DQN & 42  & $-$69424.60 & 151.49 & 22.8 & 78.43 & 0.236 & 230.37 \\
+BMPP-DQN & 123 & $-$67526.27 & 145.08 & 22.0 & 77.72 & 0.184 & 194.92 \\
+BMPP-DQN & 456 & $-$72152.45 & 131.35 & 22.2 & 77.53 & 0.124 & 178.55 \\
 \addlinespace
-DDPG & 42  & $-$71793.18 & 195.71 & 28.8 & 79.68 & 0.040 & 506.80 \\
-DDPG & 123 & $-$33305.23 & 188.65 & 35.8 & 88.73 & 0.040 & 971.50 \\
-DDPG & 456 & $-$100511.43 & 184.25 & 20.8 & 74.35 & 0.040 & 0.38 \\
+DDPG & 42  & $-$87914.28 & 207.14 & 21.8 & 76.78 & 0.040 & 247.24 \\
+DDPG & 123 & $-$100234.78 & 206.07 & 21.0 & 74.23 & 0.040 & 197.37 \\
+DDPG & 456 & $-$88119.47 & 204.20 & 20.4 & 76.70 & 0.040 & 249.02 \\
 \addlinespace
-DQN & 42  & $-$17072.97 & 196.89 & 48.4 & 90.40 & 0.036 & 799.77 \\
-DQN & 123 & $-$24303.76 & 194.50 & 40.4 & 87.40 & 0.534 & 696.71 \\
-DQN & 456 & $-$24516.78 & 248.71 & 39.6 & 87.30 & 0.292 & 587.05 \\
+DQN & 42  & $-$56464.21 & 234.47 & 23.6 & 79.00 & 0.654 & 260.76 \\
+DQN & 123 & $-$58656.24 & 196.20 & 22.4 & 79.00 & 1.128 & 251.89 \\
+DQN & 456 & $-$58649.02 & 203.00 & 22.4 & 79.00 & 0.856 & 246.02 \\
 \addlinespace
-MP-DQN & 42  & $-$13575.58 & 173.64 & 56.2 & 92.75 & 0.922 & 992.68 \\
-MP-DQN & 123 & $-$19631.59 & 159.70 & 50.4 & 90.35 & 1.080 & 903.93 \\
-MP-DQN & 456 & $-$13150.48 & 147.26 & 56.6 & 93.20 & 1.104 & 1617.20 \\
+MP-DQN & 42  & $-$101610.51 & 142.30 & 20.0 & 73.00 & 0.468 & 52.33 \\
+MP-DQN & 123 & $-$77158.25 & 158.76 & 22.2 & 75.33 & 0.354 & 122.69 \\
+MP-DQN & 456 & $-$67004.92 & 149.41 & 28.4 & 78.83 & 0.040 & 260.51 \\
 \bottomrule
 \end{tabular}%
 }
 \end{table}
 
 {\sloppy
-DDPG's identical $0.040$ switching frequency across all three seeds is the
-single-seed-collapse artifact flagged in
-Section~\ref{sec:oran-performance-comparison} and in Concept Note
-Section 6.10's own footnote, not evidence of unusually stable policy
-behavior; seed 456's near-zero throughput ($0.38\,\mathrm{Mbps}$) alongside
-its otherwise-typical power draw ($184.25\,\mathrm{W}$) is the clearest
-single-seed symptom of this.
+DDPG's identical $0.040$ switching frequency across all three seeds is
+a clean architectural fact, not an artifact of any one seed: unlike an
+earlier version of this run (made under an environment-physics bug since
+fixed, see Chapter~\ref{chap:oran-results}'s bug-fix disclosure), no seed
+here shows a collapsed, nonsensically-low throughput alongside DDPG's
+uniform switching count -- all three seeds' throughput (197-249 Mbps) and
+power (204-207 W) are mutually consistent. The $0.040$ figure is simply
+what Section~\ref{sec:oran-performance-comparison} already attributes it
+to: DDPG's purely continuous relaxation architecturally never flips a
+discrete decision in the sense \texttt{switching\_events} counts.
+MP-DQN's seed 456 shows the same $0.040$ value by coincidence of its own
+learned policy settling on a stable split/activation choice for that
+seed specifically, not for the same architectural reason -- MP-DQN can
+and does switch (seeds 42/123 show $0.468$/$0.354$).
 \par}
 
 \section{Per-Seed Raw Results: RQ3 Two-Timescale Ablation}
@@ -314,13 +329,13 @@ ablation (\texttt{upper\_level\_period\_steps=1},
 \toprule
 Configuration & Seed & Reward & Power (W) & QoS Rate (\%) & Per-UE QoS (\%) & Switching & Throughput (Mbps) \\
 \midrule
-Two-Timescale ($N{=}10$) & 42  & $-$20774.12 & 176.72 & 48.4 & 90.50 & 0.254 & 989.13 \\
-Two-Timescale ($N{=}10$) & 123 & $-$28089.06 & 158.59 & 43.6 & 88.08 & 0.182 & 1011.06 \\
-Two-Timescale ($N{=}10$) & 456 & $-$15256.37 & 152.33 & 56.4 & 92.68 & 0.168 & 1117.78 \\
+Two-Timescale ($N{=}10$) & 42  & $-$69424.60 & 151.49 & 22.8 & 78.43 & 0.236 & 230.37 \\
+Two-Timescale ($N{=}10$) & 123 & $-$67526.27 & 145.08 & 22.0 & 77.72 & 0.184 & 194.92 \\
+Two-Timescale ($N{=}10$) & 456 & $-$72152.45 & 131.35 & 22.2 & 77.53 & 0.124 & 178.55 \\
 \addlinespace
-Single-Timescale ($N{=}1$) & 42  & $-$21397.08 & 144.97 & 52.4 & 90.85 & 1.222 & 1268.81 \\
-Single-Timescale ($N{=}1$) & 123 & $-$19684.07 & 159.70 & 48.4 & 90.05 & 0.714 & 934.63 \\
-Single-Timescale ($N{=}1$) & 456 & $-$18145.36 & 191.28 & 48.8 & 90.78 & 1.766 & 838.09 \\
+Single-Timescale ($N{=}1$) & 42  & $-$64889.10 & 233.19 & 23.8 & 79.00 & 0.566 & 275.84 \\
+Single-Timescale ($N{=}1$) & 123 & $-$61302.61 & 239.14 & 23.2 & 77.68 & 0.846 & 233.94 \\
+Single-Timescale ($N{=}1$) & 456 & $-$59417.14 & 232.37 & 20.6 & 78.65 & 0.520 & 231.03 \\
 \bottomrule
 \end{tabular}%
 }
@@ -328,7 +343,56 @@ Single-Timescale ($N{=}1$) & 456 & $-$18145.36 & 191.28 & 48.8 & 90.78 & 1.766 &
 
 Every single-timescale seed's switching frequency exceeds every
 two-timescale seed's, with no overlap (minimum single-timescale value
-$0.714$ vs.\ maximum two-timescale value $0.254$) -- the clearest
+$0.520$ vs.\ maximum two-timescale value $0.236$) -- the clearest
 seed-level evidence for Section~\ref{sec:oran-rq3}'s conclusion that the
 two-timescale design's effect on switching stability is consistent across
-seeds individually, not only in the three-seed mean.
+seeds individually, not only in the three-seed mean. Unlike the earlier,
+pre-bug-fix version of this ablation, the two configurations here are
+\emph{not} reward/power/QoS-neutral: every single-timescale seed also
+shows higher power and (mostly) higher reward than every two-timescale
+seed, a genuine trade-off discussed in Section~\ref{sec:oran-rq3}, not a
+free reduction in switching.
+
+\section{Per-Seed Raw Results: Fair-Cadence Control}
+\label{sec:oran-appendix-perseed-cadence}
+
+Table~\ref{tab:oran-appendix-cadence} gives the per-seed figures
+underlying Section~\ref{sec:oran-cadence-control}'s fair-cadence control:
+DQN and MP-DQN retrained and re-evaluated with the same
+\texttt{upper\_level\_period\_steps=10} discrete-decision hold BMPP-DQN
+uses by default (\texttt{discrete\_hold\_steps=10}), rather than
+re-deciding \texttt{ru\_on}/\texttt{split} every step as in
+Table~\ref{tab:oran-appendix-canonical}'s canonical rows for these same
+two methods.
+
+\begin{table}[htbp]
+\centering
+\caption{Per-seed final evaluation metrics, fair-cadence control: DQN and
+  MP-DQN retrained with BMPP-DQN's own $N=10$ discrete hold.}
+\label{tab:oran-appendix-cadence}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{llrrrrrr}
+\toprule
+Algorithm ($N{=}10$) & Seed & Reward & Power (W) & QoS Rate (\%) & Per-UE QoS (\%) & Switching & Throughput (Mbps) \\
+\midrule
+DQN & 42  & $-$104047.70 & 104.30 & 19.4 & 72.90 & 0.096 & 39.50 \\
+DQN & 123 & $-$61684.90 & 148.00 & 23.6 & 77.80 & 0.084 & 224.40 \\
+DQN & 456 & $-$64477.30 & 123.60 & 23.2 & 78.30 & 0.054 & 212.50 \\
+\addlinespace
+MP-DQN & 42  & $-$64403.50 & 141.00 & 23.8 & 78.40 & 0.030 & 220.40 \\
+MP-DQN & 123 & $-$106382.30 & 132.40 & 18.6 & 72.70 & 0.086 & 2.30 \\
+MP-DQN & 456 & $-$63237.50 & 201.00 & 23.6 & 78.00 & 0.040 & 242.30 \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+Every DQN/MP-DQN seed's switching frequency at $N=10$ (range
+$0.030$-$0.096$) is lower than \emph{every} BMPP-DQN canonical seed's
+(range $0.124$-$0.236$, Table~\ref{tab:oran-appendix-canonical}) --
+not merely comparable, but consistently \emph{below} it. This is the
+seed-level evidence behind Section~\ref{sec:oran-cadence-control}'s
+central finding: BMPP-DQN's switching-frequency advantage over DQN/MP-DQN
+at their own default (every-step) cadence is substantially a cadence
+artifact, not an architectural one -- simple DQN/MP-DQN, once given
+BMPP-DQN's own decision cadence, switch even less than BMPP-DQN itself.

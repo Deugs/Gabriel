@@ -1,0 +1,19 @@
+\begin{table}[h]
+\centering
+\caption{O-RAN Track: Multi-Criteria Composite Ranking (TOPSIS), Extended with Heuristic/Oracle Calibration Baselines. Excludes reward (already a weighted combination of these same operational metrics at training time -- see this module's own docstring); an independent, equal-weighted cross-check, not a replacement for the reward-based comparison. Heuristic/oracle have no notion of switching cost (neither optimizes any reward function), so their poor rank here reflects that, not a multi-criteria failure comparable to the four trained methods' own.}
+\label{tab:oran-calibration-mcda}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lccccccc}
+\hline
+Algorithm & Power (W) & QoS Strict (\%) & QoS Per-UE (\%) & Switching Freq. & Throughput (Mbps) & TOPSIS Score & Rank \\
+\hline
+DDPG & 205.79 & 21.1 & 75.9 & 0.04 & 231.19 & 0.658 & 1 \\
+BMPP-DQN & 142.64 & 22.3 & 77.9 & 0.18 & 201.28 & 0.651 & 2 \\
+MP-DQN & 150.20 & 23.5 & 75.7 & 0.29 & 145.18 & 0.587 & 3 \\
+oracle & 147.65 & 40.6 & 85.4 & 1.32 & 331.10 & 0.439 & 4 \\
+DQN & 211.22 & 22.8 & 79.0 & 0.88 & 252.90 & 0.409 & 5 \\
+heuristic & 160.22 & 38.0 & 84.5 & 1.53 & 289.91 & 0.347 & 6 \\
+\hline
+\end{tabular}%
+}
+\end{table}

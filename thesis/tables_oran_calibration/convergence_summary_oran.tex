@@ -1,0 +1,19 @@
+\begin{table}[h]
+\centering
+\caption{O-RAN Track: Performance Comparison and Statistical Significance, Extended with Heuristic/Oracle Calibration Baselines. ``QoS Rate'' requires every UE satisfied simultaneously each step; ``Per-UE QoS'' is the average fraction of UEs satisfied per step -- see this chapter's QoS-metric note for why the two differ sharply. Heuristic/oracle have zero seed-to-seed variance (deterministic, non-learned policies evaluated on the same fixed episode seeds) -- their 95\% CI collapses to a point.}
+\label{tab:oran-calibration-convergence}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lccccccc}
+\hline
+Algorithm & Mean Reward (95\% CI) & Mean Power (W) & QoS Rate (\%) & Per-UE QoS (\%) & Switching Freq. & $p$-value (vs Proposed) & Cohen's $d$ \\
+\hline
+BMPP-DQN & -69701.12 [-75477.70, -63924.54] & 142.6 & 22.3\% & 77.9\% & 0.18 & N/A (Proposed) & N/A (Proposed) \\
+DDPG & -92089.55 [-109614.53, -74564.56] & 205.8 & 21.1\% & 75.9\% & 0.04 & 0.0501 & 2.480 \\
+DQN & -57923.14 [-61061.75, -54784.54] & 211.2 & 22.8\% & 79.0\% & 0.88 & 0.0151 & -4.650 \\
+heuristic & -39368.14 [-39368.14, -39368.14] & 160.2 & 38.0\% & 84.5\% & 1.53 & 0.0020 & -13.044 \\
+MP-DQN & -81924.56 [-126113.19, -37735.93] & 150.2 & 23.5\% & 75.7\% & 0.29 & 0.3771 & 0.650 \\
+oracle & -33423.58 [-33423.58, -33423.58] & 147.7 & 40.6\% & 85.4\% & 1.32 & 0.0014 & -15.601 \\
+\hline
+\end{tabular}%
+}
+\end{table}
