@@ -268,11 +268,31 @@ of scope for this revision.
 Section~\ref{sec:oran-calibration}'s calibration check is this thesis's
 most consequential open question: at this training budget (500 episodes,
 3 seeds), none of the four trained methods, BMPP-DQN included, beat an
-untrained fixed-rule heuristic's reward. Candidate explanations this
-thesis did not test include insufficient training episodes, the
-unvalidated reward-weight magnitudes (the limitation above), and
-hyperparameters tuned for the pre-fix (capacity-inflated) environment
-never being retuned for the corrected one.
+untrained fixed-rule heuristic's reward. Three candidate explanations
+have since been tested, all for DQN specifically. Two were ruled out:
+insufficient training (Section~\ref{sec:oran-training-budget-check}
+retrained at $4\times$ the episode budget; gap to the heuristic moved
+from $32.0\%$ to only $30.8\%$ of DQN's own reward magnitude) and
+un-normalized reward scale feeding the Bellman target
+(Section~\ref{sec:oran-reward-scale-check} scaled it by $0.01$; the gap
+moved to $30.7\%$, an equally marginal change). The third, DQN's
+exploration schedule, was not: slowing $\epsilon$-decay so $\approx
+4.5\times$ more residual exploration remained at episode 500
+(Section~\ref{sec:oran-exploration-schedule-check}) narrowed the gap to
+$27.3\%$, more than $3\times$ either other check's effect -- a real,
+if partial, contribution. Exploration is therefore the leading
+confirmed lever of the three, though over a quarter of the deficit
+remains even with substantially more exploration, so it is not the
+whole explanation either. The remaining candidate explanations this
+thesis did not test are compounding the exploration-schedule change
+further (an even slower decay, or exploration persisting past episode
+500), hyperparameters tuned for the pre-fix (capacity-inflated)
+environment never being retuned for the corrected one, and the
+unvalidated reward-weight \emph{magnitudes} themselves (the limitation
+above) -- distinct from the reward-\emph{scale} question already ruled
+out, since reweighting the energy/QoS/switching terms relative to each
+other changes what an optimal policy even is, where rescaling the whole
+reward uniformly (as tested) does not.
 
 \textbf{Validate the power model and reward weights against real
 measurements.} Section~\ref{sec:oran-power-validation}'s needs-validation

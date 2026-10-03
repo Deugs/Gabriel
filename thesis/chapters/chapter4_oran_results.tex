@@ -385,6 +385,196 @@ among the three).
 
 \input{../tables_oran_calibration/mcda_robustness_oran.tex}
 
+\subsection{Is the Calibration Gap a Training-Budget Artifact?}
+\label{sec:oran-training-budget-check}
+
+Section~\ref{sec:oran-calibration}'s finding -- every trained method, DQN
+included, loses to a zero-training heuristic -- admits an obvious
+innocent explanation: the 500-episode, 3-seed training budget used
+throughout this chapter might simply be too short for any of the four
+methods to converge. To test this directly rather than leave it as an
+open possibility, DQN (the strongest of the four trained methods on raw
+reward, Table~\ref{tab:oran-convergence}) was retrained from scratch at
+\textbf{four times the episode budget} (2{,}000 vs.\ 500 episodes), same
+3 seeds, same architecture, hyperparameters, and corrected environment,
+with the identical held-out evaluation protocol used everywhere else in
+this chapter.
+
+\begin{table}[htbp]
+\centering
+\caption{DQN at $4\times$ the training budget vs.\ the canonical
+  500-episode run, against the heuristic and oracle reference policies.}
+\label{tab:oran-training-budget-check}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lrrrrr}
+\toprule
+Configuration & Reward & Power (W) & QoS Strict / Per-UE & Switching & Throughput (Mbps) \\
+\midrule
+DQN (500 episodes, canonical) & $-57923.1$ & $211.2$ & $22.8\%/79.0\%$ & $0.879$ & $252.9$ \\
+DQN (2{,}000 episodes, $4\times$) & $-56849.1$ & $204.4$ & $23.4\%/78.8\%$ & $0.361$ & $244.6$ \\
+\addlinespace
+Heuristic (0 episodes, reference) & $-39368.1$ & $160.2$ & $38.0\%/84.5\%$ & $1.534$ & -- \\
+Oracle (0 episodes, reference) & $-33423.6$ & $147.7$ & $40.6\%/85.4\%$ & $1.320$ & -- \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+Quadrupling the training budget moves DQN's mean reward by only
+\textbf{1.9\%} ($-57923.1 \to -56849.1$), and not uniformly: seed 42
+actually gets \emph{worse} ($-56464.2 \to -57345.8$) while seeds 123 and
+456 improve modestly. The gap to the heuristic barely narrows -- from
+$32.0\%$ of DQN's own reward magnitude at 500 episodes to $30.8\%$ at
+2{,}000 -- despite four times the data. \textbf{This rules out
+insufficient training as the explanation for Section~\ref{sec:oran-calibration}'s
+finding}: DQN is not slowly converging toward the heuristic's
+performance and simply needing more episodes to get there; it is
+plateauing well short of it, and additional training largely redistributes
+performance across seeds rather than lifting the mean. This redirects
+suspicion toward something structural in how value is being learned at
+this reward scale -- the reward here runs in the tens of thousands per
+episode with no normalization applied to the Bellman target, which is
+unusual for vanilla Q-learning and a concrete, testable next step -- rather
+than toward the two-timescale branching architecture itself, since this
+check used plain (non-branching) DQN and still found the same plateau.
+
+This check is a single-method, single-budget-increment spot test (DQN
+only, $4\times$ only), run to adjudicate one specific explanation for an
+existing finding -- it is not a general hyperparameter or training-budget
+sweep across all four methods, which Future Work
+(Section~\ref{sec:oran-future-work}) still lists as outstanding.
+
+\subsection{Is the Calibration Gap a Reward-Scaling Artifact?}
+\label{sec:oran-reward-scale-check}
+
+The reward-scale explanation flagged above is equally testable: DQN was
+retrained at the \emph{canonical} 500-episode budget, same 3 seeds, same
+architecture and hyperparameters, with the reward its replay buffer (and
+therefore its Bellman target) sees multiplied by a fixed factor of
+$0.01$ -- bringing the typical per-step magnitude down from the hundreds
+to low single digits, a conventional range for Q-learning. Held-out
+evaluation is computed from the environment's raw, unscaled reward
+throughout (\texttt{oran\_training/train\_oran\_baselines.py}'s
+\texttt{reward\_scale} argument only reaches
+\texttt{model.memory.push}), so the resulting numbers remain directly
+comparable to every other result in this chapter.
+
+\begin{table}[htbp]
+\centering
+\caption{DQN with its Bellman-target reward scaled by $0.01$ vs.\ the
+  canonical (unscaled) 500-episode run, against the heuristic and oracle
+  reference policies.}
+\label{tab:oran-reward-scale-check}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lrrrrr}
+\toprule
+Configuration & Reward & Power (W) & QoS Strict / Per-UE & Switching & Throughput (Mbps) \\
+\midrule
+DQN (500 episodes, canonical) & $-57923.1$ & $211.2$ & $22.8\%/79.0\%$ & $0.879$ & $252.9$ \\
+DQN (500 episodes, reward $\times 0.01$) & $-56772.7$ & $169.1$ & $26.5\%/79.9\%$ & $0.307$ & $300.3$ \\
+\addlinespace
+Heuristic (0 episodes, reference) & $-39368.1$ & $160.2$ & $38.0\%/84.5\%$ & $1.534$ & -- \\
+Oracle (0 episodes, reference) & $-33423.6$ & $147.7$ & $40.6\%/85.4\%$ & $1.320$ & -- \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+Scaling the Bellman-target reward moves mean reward by only
+\textbf{2.0\%} ($-57923.1 \to -56772.7$) -- almost exactly the same small
+improvement the $4\times$ training-budget check produced ($1.9\%$,
+Section~\ref{sec:oran-training-budget-check}) -- and the gap to the
+heuristic narrows only marginally, from $32.0\%$ to $30.7\%$ of DQN's own
+reward magnitude. \textbf{Reward scaling at this factor also fails to
+close the gap.} Power and QoS both move toward the heuristic's numbers
+(power $211.2\,\mathrm{W} \to 169.1\,\mathrm{W}$, approaching the
+heuristic's $160.2\,\mathrm{W}$; QoS strict/per-UE $22.8\%/79.0\% \to
+26.5\%/79.9\%$, approaching $38.0\%/84.5\%$) and switching drops sharply
+($0.879 \to 0.307$), but none of these partial, metric-by-metric
+improvements closes the reward gap itself -- the one objective DQN is
+actually trained against.
+
+With both of the two most readily testable "it just needs fixing at the
+surface" explanations now tested and found insufficient (undertraining,
+Section~\ref{sec:oran-training-budget-check}; reward scale, this
+section), the remaining open candidates shift toward something more
+structural: the exploration schedule, hyperparameters never retuned for
+the corrected (post-Section~\ref{sec:oran-bugfixes}) environment, or DQN's
+replay-buffer dynamics converging to a stable but suboptimal policy
+regardless of either surface-level fix. As with
+Section~\ref{sec:oran-training-budget-check}, this is a single-factor
+($0.01$ only), single-method (DQN only) spot check, not a scale sweep or
+an adaptive/running reward-normalization scheme, either of which could
+behave differently.
+
+\subsection{Is the Calibration Gap an Exploration-Schedule Artifact?}
+\label{sec:oran-exploration-schedule-check}
+
+The third readily testable explanation is DQN's exploration schedule
+itself. Its $\epsilon$-greedy decay ($\epsilon_{\text{start}}=1.0$,
+$\epsilon_{\text{decay}}=0.995$ per episode, floor $\epsilon_{\text{end}}=0.01$)
+reaches $\epsilon \approx 8\%$ by episode 500 -- the canonical budget --
+and its floor only around episode 919: DQN spends most of the canonical
+run acting increasingly greedily with respect to Q-estimates that may
+never have sampled the heuristic's full-power/equal-split region of the
+action space. To test this, DQN was retrained at the \emph{same}
+500-episode budget and 3 seeds, with only $\epsilon_{\text{decay}}$
+slowed from $0.995$ to $0.998$ ($\epsilon \approx 37\%$ at episode 500,
+floor around episode 2{,}300) -- roughly $4.5\times$ more residual
+exploration at the point training stops, leaving every other
+hyperparameter, the architecture, and the held-out (greedy,
+$\epsilon$-independent) evaluation protocol unchanged.
+
+\begin{table}[htbp]
+\centering
+\caption{DQN with its exploration decay slowed ($\epsilon_{\text{decay}}:
+  0.995 \to 0.998$) vs.\ the canonical 500-episode run, against the
+  heuristic and oracle reference policies.}
+\label{tab:oran-exploration-schedule-check}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lrrrrr}
+\toprule
+Configuration & Reward & Power (W) & QoS Strict / Per-UE & Switching & Throughput (Mbps) \\
+\midrule
+DQN (500 episodes, canonical, $\epsilon_{\text{decay}}=0.995$) & $-57923.1$ & $211.2$ & $22.8\%/79.0\%$ & $0.879$ & $252.9$ \\
+DQN (500 episodes, slower decay, $\epsilon_{\text{decay}}=0.998$) & $-54175.6$ & $174.4$ & $27.5\%/80.1\%$ & $0.509$ & $295.2$ \\
+\addlinespace
+Heuristic (0 episodes, reference) & $-39368.1$ & $160.2$ & $38.0\%/84.5\%$ & $1.534$ & -- \\
+Oracle (0 episodes, reference) & $-33423.6$ & $147.7$ & $40.6\%/85.4\%$ & $1.320$ & -- \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+Slowing the exploration decay moves mean reward by \textbf{6.5\%}
+($-57923.1 \to -54175.6$) -- more than $3\times$ the effect either of the
+previous two checks produced (Sections~\ref{sec:oran-training-budget-check}
+and~\ref{sec:oran-reward-scale-check}, $1.9\%$ and $2.0\%$ respectively)
+-- and narrows the gap to the heuristic from $32.0\%$ to $27.3\%$ of
+DQN's own reward magnitude. QoS strict/per-UE also improves the most of
+any DQN variant tested ($22.8\%/79.0\% \to 27.5\%/80.1\%$) and power
+drops toward the heuristic's level ($211.2\,\mathrm{W} \to
+174.4\,\mathrm{W}$ vs.\ the heuristic's $160.2\,\mathrm{W}$). Switching
+is the one metric that moves the \emph{least} favorably of the three
+checks ($0.509$, worse than the reward-scale check's $0.307$ though
+still well below canonical's $0.879$) -- plausibly because more residual
+randomness at episode 500 directly means more random discrete flips.
+
+\textbf{This is the first of the three checks to produce a
+non-marginal effect}, which is itself evidence that the exploration
+schedule was part of the problem, though evidently not all of it: more
+than a quarter of DQN's reward deficit against the heuristic remains
+even with $4.5\times$ more residual exploration at the point training
+stops. This points toward exploration as a genuine, if partial,
+contributor, worth compounding with further schedule changes (an even
+slower decay, or exploration persisting past episode 500 entirely) in
+future work, rather than toward the reward scale or training budget,
+both of which Sections~\ref{sec:oran-training-budget-check}
+and~\ref{sec:oran-reward-scale-check} found to move the outcome by
+barely more than seed-to-seed noise. As with the other two checks, this
+is a single-factor ($\epsilon_{\text{decay}}=0.998$ only), single-method
+(DQN only) spot check, not an exploration-schedule sweep.
+
 \section{Fair-Cadence Control: Is BMPP-DQN's Switching Advantage Architectural?}
 \label{sec:oran-cadence-control}
 
