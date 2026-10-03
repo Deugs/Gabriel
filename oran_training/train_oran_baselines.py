@@ -148,6 +148,7 @@ def run_oran_baseline_benchmarks(
     algorithms: Optional[List[str]] = None,
     save_dir: str = "data/results_oran",
     discrete_hold_steps: Optional[int] = None,
+    reward_scale: float = 1.0,
 ) -> Dict[str, Any]:
     """Run O-RAN baseline benchmark algorithms over specified random seeds.
 
@@ -159,6 +160,17 @@ def run_oran_baseline_benchmarks(
     decision to hold, so it is unaffected regardless of this argument.
     None (the default) preserves the original every-step-decides behavior,
     unchanged for the canonical comparison.
+
+    reward_scale: multiplies the reward DQN's replay buffer sees (and
+    therefore its Bellman target) before it reaches model.memory.push --
+    Section~\\ref{sec:oran-training-budget-check}'s reward-scaling spot
+    check. Does not touch total_reward/ep_rewards or
+    _evaluate_oran_baseline's held-out metrics, both computed from the
+    raw env reward throughout, so reported numbers stay directly
+    comparable to every other result in this chapter regardless of this
+    argument. 1.0 (the default) is a no-op, unchanged for every other
+    run. Only applied to DQN (this is a single-method spot check, not a
+    change to DDPG/MP-DQN's training).
     """
     with open(config_path, "r") as f:
         cfg = yaml.safe_load(f)
@@ -273,7 +285,7 @@ def run_oran_baseline_benchmarks(
                             obs,
                             action["ru_on"],
                             action["split"],
-                            reward,
+                            reward * reward_scale,
                             next_obs,
                             terminated,
                         )

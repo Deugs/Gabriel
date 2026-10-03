@@ -247,3 +247,54 @@ def test_discrete_hold_steps_holds_ru_on_and_split_fixed_within_window(
             f"step {i} within the first hold window changed (ru_on, split) "
             f"without a decision boundary"
         )
+
+
+def test_reward_scale_scales_the_replay_buffer_not_the_reported_metrics(
+    make_config_path, tmp_path, monkeypatch
+):
+    """Reward-scaling spot check (Section~oran-training-budget-check):
+    reward_scale must multiply what DQN's replay buffer (and therefore its
+    Bellman target) sees, while total_reward/ep_rewards and
+    _evaluate_oran_baseline's held-out metrics stay computed from the raw
+    env reward -- otherwise a reward_scale != 1.0 run's reported numbers
+    would silently stop being comparable to every other result in this
+    chapter."""
+    config_path = make_config_path()
+    pushed_rewards = []
+
+    import oran_agents.dqn_agent as dqn_agent_module
+
+    original_push = dqn_agent_module.ReplayBuffer.push
+
+    def spy_push(self, state, ru_on, split, reward, next_state, done):
+        pushed_rewards.append(reward)
+        return original_push(self, state, ru_on, split, reward, next_state, done)
+
+    monkeypatch.setattr(dqn_agent_module.ReplayBuffer, "push", spy_push)
+
+    scale = 0.01
+    results = run_oran_baseline_benchmarks(
+        config_path=config_path,
+        seeds=[42],
+        episodes=2,
+        algorithms=["dqn"],
+        save_dir=str(tmp_path / "results"),
+        reward_scale=scale,
+    )
+
+    assert len(pushed_rewards) > 0, "no rewards were pushed to the replay buffer"
+    assert all(abs(r) < 50 for r in pushed_rewards), (
+        "pushed rewards look unscaled -- reward_scale did not reach "
+        "model.memory.push"
+    )
+
+    summary = results["dqn"][0]
+    assert abs(summary["train_mean_reward"]) > 50, (
+        "train_mean_reward looks scaled -- it must stay computed from the "
+        "raw env reward, not the scaled replay-buffer reward"
+    )
+    assert abs(summary["mean_reward"]) > 50, (
+        "mean_reward (held-out eval) looks scaled -- "
+        "_evaluate_oran_baseline must use the raw env reward regardless "
+        "of reward_scale"
+    )
