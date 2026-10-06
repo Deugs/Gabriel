@@ -19,10 +19,16 @@
 %
 % 2026-10-01 REVISION: updated throughout to match Chapter 4's rewrite
 % following the three environment/algorithm bug fixes disclosed there
-% (Section~\ref{sec:oran-bugfixes}). The power-model sensitivity sweep and
-% the n=10 validation this chapter still references predate those fixes
-% and are flagged as such wherever cited, not silently carried forward as
-% current evidence.
+% (Section~\ref{sec:oran-bugfixes}).
+%
+% 2026-10-06 REVISION: updated throughout to match Chapter 4's n=10
+% statistical-power revalidation and the corrected-environment power-model
+% sensitivity sweep -- both now rerun against the corrected code (neither
+% predates it any longer). The n=10 revalidation reverses this chapter's
+% own earlier multi-criteria-balance claim (BMPP-DQN no longer ranks
+% first-or-second under every MCDA scheme); every reference to that claim
+% below is updated to the narrower, scheme-dependent version Chapter 4 now
+% reports.
 
 \chapter{Conclusion and Future Work}
 \label{chap:oran-conclusion}
@@ -55,18 +61,21 @@ this design:
     decision timescales, with a fronthaul- and switching-aware reward
     function (Eq.~\ref{eq:oran-reward}) and a literature-informed power
     model (Section~\ref{sec:oran-power}).
-  \item \textbf{A four-method comparison under matched conditions}
-    (Chapter~\ref{chap:oran-results}) against DQN, DDPG, and MP-DQN,
-    cross-checked by three independent multi-criteria decision-analysis
-    schemes (equal-weighted TOPSIS, entropy-weighted TOPSIS, and VIKOR;
-    Sections~\ref{sec:oran-mcda}--\ref{sec:oran-mcda-robustness}) -- a more
-    extensive robustness-checking protocol than this thesis's own original
-    scope required, undertaken specifically to avoid over-claiming from a
-    single table of $n=3$ results. A power-model sensitivity sweep and a
-    supplementary $n=10$-seed validation were also run
-    (Sections~\ref{sec:oran-sensitivity}, \ref{sec:oran-n10}), though both
-    predate, and have not been repeated against, the bug fixes in the next
-    item.
+  \item \textbf{A four-method comparison under matched conditions, at
+    $n=10$ seeds} (Chapter~\ref{chap:oran-results}) against DQN, DDPG, and
+    MP-DQN, cross-checked by three independent multi-criteria
+    decision-analysis schemes (equal-weighted TOPSIS, entropy-weighted
+    TOPSIS, and VIKOR;
+    Sections~\ref{sec:oran-mcda}--\ref{sec:oran-mcda-robustness}) and by a
+    power-model sensitivity sweep
+    (Section~\ref{sec:oran-sensitivity}) -- a more extensive
+    robustness-checking protocol than this thesis's own original scope
+    required, undertaken specifically to avoid over-claiming from a single
+    table of results. This protocol did its job: the robustness check
+    itself found that the three MCDA schemes \emph{disagree} on BMPP-DQN's
+    rank at this sample size (Section~\ref{sec:oran-mcda-robustness}),
+    overturning an earlier, $n=3$-only version of this same comparison
+    that had reported full three-scheme agreement.
   \item \textbf{Three environment/algorithm bugs found and fixed via
     independent review} (Section~\ref{sec:oran-bugfixes}): a capacity-
     inflation error in the PRB-sharing formula, a diurnal clock advancing
@@ -108,38 +117,37 @@ baselines -- is stated here, as Section~\ref{sec:oran-objectives} already
 flagged it would be, without qualification: \textbf{this target is not met
 by the evidence gathered}, under the corrected environment
 (Section~\ref{sec:oran-bugfixes}) any more than it was before. BMPP-DQN's
-mean power ($142.6\,\mathrm{W}$) is now the \emph{lowest} of the four
-methods -- narrowly below MP-DQN's $150.2\,\mathrm{W}$, a margin well
-short of $15\%$ -- but its reward is significantly \emph{worse} than
-DQN's ($p=0.015$), and Section~\ref{sec:oran-calibration}'s calibration
-check adds a more consequential finding than either: a simple, untrained
-heuristic and a privileged, non-causal oracle both significantly
-outperform BMPP-DQN's reward, and every other trained method's. This
-objective is restated here exactly as it was originally planned and
-investigated, rather than retroactively reworded to match the evidence
-gathered after the fact, per this track's own stated discipline
-(Section~\ref{sec:oran-objectives}'s own forward-reference to this
-chapter).
+mean power ($154.4\,\mathrm{W}$) is essentially tied with MP-DQN's
+($153.0\,\mathrm{W}$, the nominal lowest of the four, by under
+$1\,\mathrm{W}$) -- a margin well short of $15\%$ either way -- and its
+reward is significantly \emph{worse} than DQN's ($p=0.0056$, $n=10$).
+Section~\ref{sec:oran-calibration}'s calibration check adds a more
+consequential finding than either: a simple, untrained heuristic and a
+privileged, non-causal oracle both significantly outperform BMPP-DQN's
+reward, and every other trained method's. This objective is restated
+here exactly as it was originally planned and investigated, rather than
+retroactively reworded to match the evidence gathered after the fact, per
+this track's own stated discipline (Section~\ref{sec:oran-objectives}'s
+own forward-reference to this chapter).
 
 What the evidence \emph{does} support, in place of a raw energy-savings
-margin, is detailed in Section~\ref{sec:oran-rq-answers}: among the four
-trained methods, BMPP-DQN ranks first or second (never worse) under every
-multi-criteria scheme tested
-(Sections~\ref{sec:oran-mcda}--\ref{sec:oran-mcda-robustness}), the only
-one of the four with that consistency -- a cleaner version of this
-finding than the pre-fix chapter reported, since the best-reward method
-(DQN) is simultaneously the \emph{least} consistent multi-criteria
-performer. Section~\ref{sec:oran-cadence-control}'s fair-cadence control
-qualifies this finding, however: BMPP-DQN's switching-frequency advantage
-over DQN/MP-DQN at their own default cadence, one of the five inputs to
-this multi-criteria check, is substantially a decision-cadence artifact
-rather than an architectural one -- at matched cadence, both baselines
-switch less than BMPP-DQN itself. The multi-criteria-balance finding is a
-genuine, evidenced contribution, but this chapter does not claim
-architectural credit for an advantage now shown to be substantially
-cadence-driven, and it is a different claim in kind from a demonstrated
-energy-savings percentage; the two are not conflated here or in
-Section~\ref{sec:oran-significance-revisited} below.
+margin, is detailed in Section~\ref{sec:oran-rq-answers} and is narrower
+than an earlier revision of this chapter claimed: at the $n=3$ sample size,
+BMPP-DQN ranked first-or-second under every MCDA scheme tested, the only
+one of the four methods with that consistency. The $n=10$ revalidation
+(Section~\ref{sec:oran-n10}) \textbf{does not reproduce this}: BMPP-DQN
+still ranks \#2 under both TOPSIS variants (which agree with each other
+exactly), but \#4 -- worst of four -- under VIKOR
+(Sections~\ref{sec:oran-mcda}--\ref{sec:oran-mcda-robustness}). No method
+agrees across all three schemes at $n=10$. The honest conclusion is that
+the earlier first-or-second claim was itself an $n=3$-sample artifact, not
+a property of the architecture that survives more seeds.
+Section~\ref{sec:oran-cadence-control}'s fair-cadence control further
+qualifies the switching-frequency input to this ranking: BMPP-DQN's
+switching-frequency advantage over DQN/MP-DQN at their own default
+cadence is substantially a decision-cadence artifact rather than an
+architectural one -- at matched cadence, both baselines switch less than
+BMPP-DQN itself, with no offsetting reward cost even at $n=10$.
 
 \section{Significance of the Research, Revisited}
 \label{sec:oran-significance-revisited}
@@ -168,20 +176,26 @@ Chapter~\ref{chap:oran-results}:
     this conclusion more decisive, not less: a trivial heuristic now beats
     every trained method's reward, BMPP-DQN included
     (Section~\ref{sec:oran-calibration}).
-  \item \textbf{Multi-criteria balance} (evidenced, among the four trained
-    methods): BMPP-DQN is the most consistently-ranked of the four methods
-    across power, strict QoS, per-UE QoS, switching stability, and
-    throughput simultaneously, first or second under all three independent
-    MCDA schemes tested at $n=3$ (Section~\ref{sec:oran-mcda-robustness}).
-    This is this thesis's actual, defensible empirical contribution
-    relative to RQ2, with two qualifications carried forward honestly
-    rather than smoothed over: part of its switching-frequency input is a
-    cadence artifact, not an architectural one
-    (Section~\ref{sec:oran-cadence-control}), and whether this ranking
-    holds at $n=10$ or under power-model perturbation is unknown under the
-    corrected environment -- both checks predate the bug fixes
-    (Sections~\ref{sec:oran-sensitivity}, \ref{sec:oran-n10}) and were not
-    rerun against them in this revision.
+  \item \textbf{Multi-criteria balance} (partial, scheme-dependent --
+    revised down from "evidenced" following the $n=10$ revalidation):
+    BMPP-DQN ranks \#2 of four under both TOPSIS variants (equal- and
+    entropy-weighted, which agree with each other exactly), but \#4 --
+    worst of four -- under VIKOR (Section~\ref{sec:oran-mcda-robustness}).
+    An earlier revision of this chapter, at $n=3$, reported BMPP-DQN as
+    first-or-second under every scheme and read that as this track's
+    cleanest defensible contribution; the $n=10$ revalidation shows that
+    finding did not survive more seeds, and no method agrees across all
+    three schemes at this sample size. The power-model sensitivity sweep
+    (Section~\ref{sec:oran-sensitivity}), now also rerun against the
+    corrected environment, confirms the \emph{same} \#2-of-four TOPSIS
+    rank holds in 8 of 9 power-model configurations -- so what remains
+    defensible is narrower and more specific than before:
+    \textbf{BMPP-DQN's TOPSIS-scheme rank is stable across power-model
+    perturbation, but the overall multi-criteria-balance claim is not
+    robust to which MCDA aggregation rule is used}, and part of its
+    switching-frequency input is a decision-cadence artifact rather than
+    an architectural one (Section~\ref{sec:oran-cadence-control}) even
+    under this narrower reading.
 \end{itemize}
 
 \section{Limitations}
@@ -223,22 +237,36 @@ actually found:
     ruled in or out; reward-weight sensitivity was not), this remains the
     most likely untested lever on the energy/QoS/switching trade-off
     reported in Chapter~\ref{chap:oran-results}.
-  \item \textbf{Thin statistical power at the canonical scale, and an
-    $n=10$ check that predates the bug fixes.} The supervisor-approved
-    protocol's $n=3$ seeds is a thin basis for the paired significance
-    tests reported throughout Chapter~\ref{chap:oran-results}. A
-    supplementary $n=10$ validation (Section~\ref{sec:oran-n10}) was run
-    before Section~\ref{sec:oran-bugfixes}'s fixes and changed which
-    comparisons reached significance under the pre-fix environment; it has
-    not been rerun against the corrected code, so whether the same
-    sample-size sensitivity holds now is open.
+  \item \textbf{Statistical power, now improved but still finite.} The
+    originally-scoped $n=3$ protocol was a thin basis for the paired
+    significance tests throughout Chapter~\ref{chap:oran-results};
+    Section~\ref{sec:oran-n10} documents expanding the canonical scale to
+    $n=10$ seeds against the corrected environment (with
+    $n_{\text{eval\_episodes}}$ also raised from $5$ to $20$), and shows
+    directly that this mattered -- one pairwise comparison (DDPG vs.\
+    BMPP-DQN) moved from borderline-significant at $n=3$ to solidly
+    non-significant at $n=10$, and the MCDA robustness verdict reversed
+    outright. $n=10$ is still a modest sample by broader ML-evaluation
+    standards, and whether further expansion would move any current
+    verdict again is itself unknown; the fair-cadence-control and RQ3
+    single-timescale sub-experiments (Sections~\ref{sec:oran-cadence-control},
+    \ref{sec:oran-rq3}) remain at $n=3$ by this revalidation's own
+    deliberately bounded scope, not expanded alongside the main
+    comparison.
   \item \textbf{Trained methods underperforming a simple heuristic.}
     Section~\ref{sec:oran-calibration} found that an untrained, fixed-rule
     heuristic beats every trained method's reward, BMPP-DQN included, at
-    this thesis's training budget (500 episodes, 3 seeds). This is a
-    limitation of what this thesis's experiments establish about training
-    effectiveness at this budget, not only of the environment or reward
-    design, and is not resolved by anything in this thesis.
+    this thesis's training budget (500 episodes, now confirmed at $n=10$
+    seeds). Three candidate
+    explanations were tested for DQN specifically
+    (Sections~\ref{sec:oran-training-budget-check}--\ref{sec:oran-exploration-schedule-check}):
+    training budget and reward scale were ruled out, and a slower
+    exploration schedule narrowed the gap from $32.0\%$ to $27.3\%$ of
+    DQN's own reward magnitude -- a real but partial effect. This remains
+    a limitation of what this thesis's experiments establish about
+    training effectiveness at this budget: more than a quarter of the
+    deficit is unexplained by anything tested here, and none of the three
+    checks were run for BMPP-DQN, DDPG, or MP-DQN.
   \item \textbf{Three baselines, not an exhaustive comparison.} BMPP-DQN is
     compared against DQN, DDPG, and MP-DQN
     (Section~\ref{sec:oran-scope}), plus the heuristic/oracle calibration
@@ -256,18 +284,20 @@ Five directions follow directly from the limitations above and from
 findings in Chapter~\ref{chap:oran-results} that this thesis's own scope
 could investigate but not resolve.
 
-\textbf{Rerun the sensitivity sweep and $n=10$ validation against the
-corrected environment.} Section~\ref{sec:oran-bugfixes}'s fixes change
-every method's absolute metrics substantially; whether the pre-fix
-power-model-insensitivity finding (Section~\ref{sec:oran-sensitivity}) and
-the pre-fix $n=10$ ranking-volatility finding
-(Section~\ref{sec:oran-n10}) still hold is unknown and was explicitly out
-of scope for this revision.
+\textbf{Extend the fair-cadence-control and RQ3 sub-experiments to
+$n=10$.} Section~\ref{sec:oran-n10}'s statistical-power expansion covers
+the main 4-method comparison and the heuristic/oracle calibration check,
+but the fair-cadence control (Section~\ref{sec:oran-cadence-control}) and
+the RQ3 single-timescale ablation (Section~\ref{sec:oran-rq3}) remain at
+$n=3$ by this revalidation's own deliberately bounded scope. Given that
+the main comparison's significance verdicts and MCDA robustness both
+moved between $n=3$ and $n=10$, whether either sub-experiment's own
+conclusions are similarly sample-size-sensitive is open.
 
 \textbf{Investigate why trained methods underperform a simple heuristic.}
 Section~\ref{sec:oran-calibration}'s calibration check is this thesis's
 most consequential open question: at this training budget (500 episodes,
-3 seeds), none of the four trained methods, BMPP-DQN included, beat an
+$n=10$ seeds), none of the four trained methods, BMPP-DQN included, beat an
 untrained fixed-rule heuristic's reward. Three candidate explanations
 have since been tested, all for DQN specifically. Two were ruled out:
 insufficient training (Section~\ref{sec:oran-training-budget-check}
@@ -298,15 +328,14 @@ reward uniformly (as tested) does not.
 measurements.} Section~\ref{sec:oran-power-validation}'s needs-validation
 constants (the absolute RU/DU/CU/fronthaul wattage figures) and
 Section~\ref{sec:oran-mdp}'s reward weights are the two remaining
-unvalidated numerical components of this thesis's model. The pre-fix
-power-model sensitivity sweep (Section~\ref{sec:oran-sensitivity})
-suggested the comparative ranking was insensitive to the former's order
-of magnitude, but this has not been re-established under the corrected
-environment (the future-work item above); whether the same holds for the
-reward weights, and whether either can be replaced with commercial O-RAN
-hardware measurements, is open regardless. A real-testbed study in the
-style of Bordin et al.'s ns-O-RAN-based evaluation~\cite{bordin2025design}
-would address both simultaneously.
+unvalidated numerical components of this thesis's model. The power-model
+sensitivity sweep, now rerun against the corrected environment
+(Section~\ref{sec:oran-sensitivity}), confirms BMPP-DQN's TOPSIS-scheme
+rank is insensitive to the former's order of magnitude; whether the same
+holds for the reward weights, and whether either can be replaced with
+commercial O-RAN hardware measurements, remains open. A real-testbed
+study in the style of Bordin et al.'s ns-O-RAN-based
+evaluation~\cite{bordin2025design} would address both simultaneously.
 
 \textbf{Extend beyond a single gNB.} This thesis's single-agent,
 single-gNB scope was a deliberate tractability bound
@@ -348,16 +377,24 @@ privileged per-step oracle both beat every trained method's reward
 outright (Section~\ref{sec:oran-calibration}). Stated plainly rather than
 reframed after the fact (Section~\ref{sec:oran-revisit-objectives}), this
 is a more consequential negative result than a missed percentage target.
-What the evidence gathered in its place supports -- a multi-criteria
-balance across power, QoS, and switching stability among the four trained
-methods specifically, with its switching-frequency component now shown to
-be partly cadence-driven rather than purely architectural
-(Section~\ref{sec:oran-cadence-control}) -- is a narrower and more
-qualified contribution than originally targeted, but one this thesis can
-defend with the evidence actually in hand, which is the standard
-Chapter~\ref{chap:oran-results} and this chapter have tried to hold
-themselves to throughout, including when that evidence turned out less
-favorably than earlier drafts of this same chapter had reported.
+What the evidence gathered in its place supports is narrower still than
+an earlier revision of this chapter claimed: a multi-criteria balance
+across power, QoS, and switching stability among the four trained methods
+held up at $n=3$ seeds under two independent TOPSIS schemes and VIKOR
+simultaneously, but the $n=10$ statistical-power revalidation
+(Section~\ref{sec:oran-n10}) shows that full three-scheme agreement did
+not survive more seeds -- BMPP-DQN remains \#2 of four under both TOPSIS
+variants, but ranks worst of four under VIKOR, with its
+switching-frequency component also now shown to be partly cadence-driven
+rather than purely architectural (Section~\ref{sec:oran-cadence-control}).
+What remains defensible is a scheme-dependent, not unconditional,
+multi-criteria standing -- a narrower and more qualified contribution
+than either the original target or an earlier revision of this same
+chapter claimed, but the one this thesis can actually defend with the
+evidence in hand, which is the standard Chapter~\ref{chap:oran-results}
+and this chapter have tried to hold themselves to throughout, including
+when that evidence turned out less favorably than earlier drafts of this
+same chapter had reported.
 
 % ---------------------------------------------------------------------------
 % This chapter's citations (qazzaz2026oreo, xiong2018pdqn, bester2019mpdqn,

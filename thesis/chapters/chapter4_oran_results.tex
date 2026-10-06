@@ -11,16 +11,25 @@
 % 2026-10-01 REWRITE: an independent review identified three bugs in the
 % environment/algorithm every earlier version of this chapter's numbers
 % was computed against (Section~\ref{sec:oran-bugfixes}). All numbers in
-% this version are from a full retrain against the corrected code
-% (data/results_oran/, data/results_oran_rq3_single_timescale/,
-% data/results_oran_cadence_control/); the pre-fix data is archived, not
-% deleted, at data/results_oran_archive/pre_env_bugfix_20261001/ and
-% thesis/{tables,figures}_oran_archive/pre_env_bugfix_20261001/. The
-% power-model sensitivity sweep and the n=10 statistical-power validation
-% were NOT rerun against the fix (outside this revision's scope) --
-% Section~\ref{sec:oran-sensitivity} and
-% Section~\ref{sec:oran-n10} say so explicitly and reference the archived
-% pre-fix artifacts rather than silently presenting them as current.
+% that revision were from a full retrain against the corrected code, at
+% the original 3-seed/500-episode/n_eval_episodes=5 protocol; the pre-fix
+% data is archived, not deleted, at
+% data/results_oran_archive/pre_env_bugfix_20261001/ and
+% thesis/{tables,figures}_oran_archive/pre_env_bugfix_20261001/.
+%
+% 2026-10-06 REVALIDATION: the two items the 2026-10-01 rewrite left
+% explicitly deferred -- the thin n_eval_episodes=5 evaluation and the
+% never-rerun-against-the-fix power-model sensitivity/n=10 checks -- are
+% now both closed. n_eval_episodes is 20
+% (config/oran_default.yaml), and the canonical scale is now n=10 seeds
+% (Section~\ref{sec:oran-n10} documents the expansion and its own
+% statistical-power finding directly); the $n=3$-canonical data this
+% revalidation superseded is archived at
+% data/results_oran_archive/pre_n10_revalidation_20261004/ rather than
+% deleted. The power-model sensitivity sweep
+% (Section~\ref{sec:oran-sensitivity}) is now run against the corrected
+% environment too, at its own original 3-seed scope
+% (data/results_oran_sensitivity/), not expanded to $n=10$.
 %
 % Tables and figures below are \input{}/\includegraphics{}'d directly from
 % thesis/tables_oran/ and thesis/figures_oran/ (paths relative to
@@ -28,10 +37,10 @@
 % re-running the evaluation scripts (oran_evaluation/*) and recompiling is
 % sufficient to keep this chapter's numbers current -- the Quality Gate 6
 % (Code-Text Consistency) discipline this track's other chapters already
-% follow. The canonical results are the 3-seed/500-episode run
-% (data/results_oran/, seeds 42/123/456), core-4-methods only
-% (data/results_oran_core4/ as actually \input{} here -- not itself
-% committed, since it is a pure deterministic filter of
+% follow. The canonical results are the 10-seed/500-episode run
+% (data/results_oran/, seeds 42/123/456/789/1011/1213/1415/1617/1819/2021),
+% core-4-methods only (data/results_oran_core4/ as actually \input{} here
+% -- not itself committed, since it is a pure deterministic filter of
 % data/results_oran/'s own BMPP-DQN/DQN/DDPG/MP-DQN summary.json files;
 % recreate it locally with scripts/make_oran_core4_data.py before
 % re-running the evaluation scripts against it -- so the headline
@@ -60,15 +69,21 @@ BMPP-DQN's per-branch decomposition) -- under matched training and
 evaluation conditions: $500$ training episodes of $100$ environment steps
 each, identical traffic and channel realizations per seed, and the
 hyperparameters listed in Section~\ref{sec:oran-bmpp-training}'s Default
-Hyperparameters paragraph. Training used GPU-accelerated PyTorch on a
-RunPod-hosted A40 instance.
+Hyperparameters paragraph. Training used PyTorch on RunPod-hosted
+instances (A40/H100 GPU and CPU-only, across this chapter's several
+retrains) -- a CPU-bound workload at this network size
+(Section~\ref{sec:oran-bmpp-architecture}'s $[128,64]$ hidden layers),
+so results do not depend on which instance type a given run used.
 
-The canonical protocol evaluates every method over $n=3$ random seeds
-($42$, $123$, $456$), per Concept Note Section 5.3 and this thesis's own
-Quality Gate 5 as originally scoped. $n=3$ is a thin basis for statistical
-power; Section~\ref{sec:oran-n10} reports what a supplementary $n=10$-seed
-validation found under the \emph{pre-fix} environment, with an explicit
-caveat that it has not been rerun against the correction below.
+The canonical protocol originally evaluated every method over $n=3$
+random seeds ($42$, $123$, $456$), per Concept Note Section 5.3 and this
+thesis's own Quality Gate 5 as originally scoped; $n=3$ is a thin basis
+for statistical power, and Section~\ref{sec:oran-n10} documents why this
+chapter expanded to $n=10$ seeds ($42$, $123$, $456$, $789$, $1011$,
+$1213$, $1415$, $1617$, $1819$, $2021$) as its canonical scale, with
+$n_{\text{eval\_episodes}}=20$ (up from $5$) for every held-out
+evaluation. Every table, figure, and claim elsewhere in this chapter uses
+this $n=10$ scale unless stated otherwise.
 
 Five operational metrics are reported for every method: mean episodic
 reward (Eq.~\ref{eq:oran-reward}), mean total power $P_{\mathrm{total}}$ in
@@ -154,7 +169,7 @@ margin), so this constant itself did not need to change.
 \begin{figure}[htbp]
 \centering
 \includegraphics[width=0.8\textwidth]{../figures_oran/convergence_curve_oran.pdf}
-\caption{BMPP-DQN training reward (mean $\pm$ std across 3 seeds) over 500
+\caption{BMPP-DQN training reward (mean $\pm$ std across 10 seeds) over 500
   episodes, with each baseline's final evaluation performance shown as a
   reference line. Baselines do not log a directly comparable per-episode
   reward series under this evaluation harness, so this is a convergence
@@ -187,7 +202,7 @@ Table~\ref{tab:oran-convergence} (Section~\ref{sec:oran-performance-comparison})
 \hfill
 \includegraphics[width=0.48\textwidth]{../figures_oran/qos_per_ue_comparison_oran.pdf}
 \caption{Per-metric comparison across all 4 methods (mean $\pm$ std across
-  3 seeds): reward, power, strict QoS rate, and per-UE QoS rate.}
+  10 seeds): reward, power, strict QoS rate, and per-UE QoS rate.}
 \label{fig:oran-comparison-1}
 \end{figure}
 
@@ -212,42 +227,42 @@ Table~\ref{tab:oran-convergence} (Section~\ref{sec:oran-performance-comparison})
 \end{figure}
 
 Table~\ref{tab:oran-convergence} and Figures~\ref{fig:oran-comparison-1}--\ref{fig:oran-pareto}
-summarize the canonical $n=3$ comparison under the corrected environment.
-The picture changes substantially from the pre-fix version of this
-chapter, and is reported exactly as it now stands.
+summarize the canonical $n=10$ comparison under the corrected environment
+-- the $n=10$ statistical-power revalidation
+(Section~\ref{sec:oran-n10}) expanded the original 3-seed protocol to 10
+seeds and is now the canonical scale throughout this chapter, superseding
+the $n=3$ numbers an earlier revision of this chapter reported. The
+picture changes further from that $n=3$ version, and is reported exactly
+as it now stands.
 
-First, \textbf{DQN's reward is now significantly better than BMPP-DQN's}
-($p=0.015$, Cohen's $d=-4.65$, a large effect): DQN $-57923.1$ vs.\
-BMPP-DQN $-69701.1$. DDPG is close to significance in the same direction
-($p=0.050$, $d=2.48$; here a \emph{positive} $d$ means DDPG is worse, not
-better -- DDPG's reward, $-92089.5$, is the worst of the four). MP-DQN's
-reward ($-81924.6$) is not significantly different from BMPP-DQN's
-($p=0.377$). BMPP-DQN's own reward is not the best, and not the worst, of
-the four methods under the corrected environment -- a materially
-different picture from the pre-fix version of this comparison, where no
-baseline reached significance against it.
+First, \textbf{DQN's reward remains significantly better than BMPP-DQN's}
+($p=0.0056$, Cohen's $d=-1.14$, a large effect): DQN $-60218.3$ vs.\
+BMPP-DQN $-79443.7$. Neither DDPG ($-81891.5$, $p=0.631$) nor MP-DQN
+($-65515.7$, $p=0.116$) is significantly different from BMPP-DQN at
+$n=10$. BMPP-DQN's reward is third of four, worse than both DQN and
+MP-DQN (neither gap reaching significance except DQN's) and narrowly
+better than DDPG's.
 
-Second, \textbf{every method's throughput and QoS fell substantially}
-relative to the pre-fix numbers (e.g., BMPP-DQN's throughput:
-$\approx\!1039\,\mathrm{Mbps}$ pre-fix vs.\ $201.3\,\mathrm{Mbps}$ now),
-consistent with Section~\ref{sec:oran-bugfixes}'s capacity-inflation fix
-removing a mechanism that had let every method's reported throughput
-exceed what the corrected environment can actually support. QoS Rate
-(22-24\% across all four methods) and Per-UE QoS ($76$-$79\%$) are now
-far closer together across methods than before, where BMPP-DQN,
-DQN, DDPG, and MP-DQN had visibly different QoS profiles; under the
-corrected, more capacity-constrained environment, every method is pushed
-toward a similar, QoS-shortfall-dominated operating point.
+Second, \textbf{QoS and power are now tightly clustered across all four
+methods}: QoS Rate ($20$-$22\%$) and Per-UE QoS ($76$-$78\%$) differ by
+only a few points method-to-method, and power ranges
+$153$-$200\,\mathrm{W}$, with BMPP-DQN ($154.4\,\mathrm{W}$) and MP-DQN
+($153.0\,\mathrm{W}$) essentially tied for lowest and DDPG
+($200.4\,\mathrm{W}$) highest. Under this capacity-constrained
+environment, every method converges toward a similar,
+QoS-shortfall-dominated operating point rather than being clearly
+separated by it.
 
-Third, \textbf{switching frequency still separates the methods, in the
-same qualitative pattern as before}: DDPG's architecturally-fixed $0.04$
-remains the lowest (Appendix~\ref{sec:oran-appendix-perseed-canonical}
-confirms this is a clean architectural fact under the corrected
-environment, not a per-seed collapse artifact as a pre-fix per-seed
-inspection had suggested); BMPP-DQN's $0.181$ remains below DQN's
-$0.879$ and MP-DQN's $0.287$. Section~\ref{sec:oran-cadence-control}
-tests directly whether this is an architectural property of BMPP-DQN or
-a side effect of its two-timescale decision cadence specifically.
+Third, \textbf{switching frequency still separates the methods in the
+same qualitative order as the $n=3$ data}: DDPG's architecturally-fixed
+$0.04$ remains the lowest
+(Appendix~\ref{sec:oran-appendix-perseed-canonical} confirms this holds
+seed-by-seed, not only in the 10-seed mean); BMPP-DQN's $0.21$ remains
+below MP-DQN's $0.43$ and DQN's $0.60$. This ordering is the one part of
+the raw-metric comparison that is robust between $n=3$ and $n=10$.
+Section~\ref{sec:oran-cadence-control} tests directly whether BMPP-DQN's
+position in this ordering is an architectural property or a side effect
+of its two-timescale decision cadence specifically.
 
 \section{Multi-Criteria Composite Analysis}
 \label{sec:oran-mcda}
@@ -275,15 +290,15 @@ deliberately excluding reward itself, per the module's own docstring.
 \end{figure}
 
 Under this independent, equal-weighted cross-check, BMPP-DQN ranks
-\textbf{second} (TOPSIS score $0.799$), narrowly behind DDPG ($0.826$) and
-ahead of MP-DQN ($0.640$) and DQN ($0.221$ -- despite DQN's best-in-class
+\textbf{second} (TOPSIS score $0.642$), behind DDPG ($0.807$) and ahead of
+MP-DQN ($0.374$) and DQN ($0.219$ -- despite DQN's best-in-class
 \emph{reward}, it ranks \emph{last} on this independent check, pulled down
-by the highest power draw ($211.2\,\mathrm{W}$) and second-highest
-switching frequency of the four). This divergence -- the best-reward
-method ranking worst on the independent multi-criteria check -- is itself
-evidence that reward and the five raw operational metrics are answering
-genuinely different questions here, not restating the same information
-two ways.
+by its highest-of-four switching frequency and middling power). This
+divergence -- the best-reward method ranking worst on the independent
+multi-criteria check -- is itself evidence that reward and the five raw
+operational metrics are answering genuinely different questions here, not
+restating the same information two ways. Entropy-weighted TOPSIS (below)
+agrees with this ranking exactly, method-for-method; VIKOR does not.
 
 \section{Robustness of the Multi-Criteria Ranking}
 \label{sec:oran-mcda-robustness}
@@ -308,16 +323,27 @@ distance-to-ideal-solution geometry~\cite{opricovic2004vikor}.
 \label{fig:oran-mcda-robustness-fig}
 \end{figure}
 
-BMPP-DQN ranks first or second under every one of the three schemes
-(equal-TOPSIS \#2, entropy-TOPSIS \#1, VIKOR \#1 with the best-possible
-regret score $Q=0.000$), and is the \emph{only} method with that
-consistency: DDPG is \#1/\#2/\#4, MP-DQN is \#3/\#3/\#3, and DQN --
-despite its reward advantage -- is \#4/\#4/\#2. This is, if anything, a
-cleaner version of the multi-criteria-balance finding than the pre-fix
-chapter reported: the method with the best raw reward (DQN) is
-simultaneously the method with the \emph{least} consistent multi-criteria
-standing, while BMPP-DQN, never the best on reward, is never worse than
-second on any of the three independent schemes.
+\textbf{At $n=10$, the ranking is not robust to the choice of MCDA
+scheme, and BMPP-DQN is the method this affects most.} Equal- and
+entropy-weighted TOPSIS agree exactly, method-for-method (DDPG \#1,
+BMPP-DQN \#2, MP-DQN \#3, DQN \#4), but VIKOR gives nearly the reverse
+order (MP-DQN \#1 with the best-possible regret score $Q=0.000$, DQN \#2,
+DDPG \#3, BMPP-DQN \#4 -- the \emph{worst} of the four, $Q=0.856$). No
+method agrees across all three schemes: DDPG is \#1/\#1/\#3, MP-DQN is
+\#3/\#3/\#1, DQN is \#4/\#4/\#2, and BMPP-DQN is \#2/\#2/\#4 -- the
+largest swing (TOPSIS \#2 to VIKOR \#4) of any method. This directly
+reverses the $n=3$ version of this check, which found BMPP-DQN first-or-second
+under every scheme and read that as this track's cleanest evidenced
+contribution; at $n=10$, the honest reading is that \textbf{the
+multi-criteria-balance finding is not robust to the aggregation rule
+chosen}, and the earlier claim should be understood as an artifact of the
+smaller sample rather than a property of the architecture. TOPSIS and
+VIKOR disagreeing this sharply is itself informative: VIKOR's
+group-utility-plus-worst-case-regret formulation rewards MP-DQN's
+specific profile (moderate on every criterion, extreme on none) in a way
+distance-to-ideal-solution geometry does not, so which of the two
+a reader treats as authoritative changes the answer to "does BMPP-DQN
+balance these criteria well" from yes to no.
 
 \section{Heuristic and Oracle Calibration}
 \label{sec:oran-calibration}
@@ -341,52 +367,65 @@ action's resulting reward before committing to it).
 \input{../tables_oran_calibration/convergence_summary_oran.tex}
 
 Both reference policies \textbf{significantly outperform BMPP-DQN on
-reward}: heuristic $-39368.1$ ($p=0.00195$, $d=-13.04$), oracle
-$-33423.6$ ($p=0.00137$, $d=-15.60$) -- both large effects, both in the
-direction of the untrained policy beating the trained one. The oracle
-also beats every \emph{trained} method's reward (the next-best, DQN, is
-$-57923.1$), which is expected of a privileged per-step upper bound; the
-\textbf{heuristic beating every trained method too} is the more
-consequential finding, since it requires no learning, no reward signal,
-and no per-step search at all. Both reference policies achieve this with
-less power than any trained method (heuristic $160.2\,\mathrm{W}$, oracle
-$147.7\,\mathrm{W}$, vs.\ BMPP-DQN's $142.6\,\mathrm{W}$ -- comparable --
-through DQN's $211.2\,\mathrm{W}$) and visibly better QoS (heuristic
-$38.0\%/84.5\%$, oracle $40.6\%/85.4\%$ strict/per-UE, vs.\ every trained
-method's $20$-$24\%/76$-$79\%$). This is the most direct evidence this
-thesis has that none of the four trained methods, BMPP-DQN included, are
-extracting the full value the environment's own reward function makes
-available at this training budget (500 episodes, 3 seeds) -- a trivial,
-untrained rule is not supposed to beat a trained policy on the exact
-objective that policy was trained on.
+reward}: heuristic $-40857.4$ ($p=0.0001$, $d=-2.28$), oracle $-31198.7$
+($p<0.0001$, $d=-2.85$) -- both large effects, both in the direction of
+the untrained policy beating the trained one. The oracle also beats every
+\emph{trained} method's reward (the next-best, DQN, is $-60218.3$), which
+is expected of a privileged per-step upper bound; the \textbf{heuristic
+beating every trained method too} is the more consequential finding,
+since it requires no learning, no reward signal, and no per-step search
+at all. Both reference policies achieve this with power comparable to or
+below every trained method (heuristic $159.3\,\mathrm{W}$, oracle
+$142.0\,\mathrm{W}$, vs.\ BMPP-DQN's $154.4\,\mathrm{W}$ and MP-DQN's
+$153.0\,\mathrm{W}$ -- comparable -- through DDPG's $200.4\,\mathrm{W}$)
+and visibly better QoS (heuristic $35.3\%/82.8\%$, oracle $38.8\%/84.9\%$
+strict/per-UE, vs.\ every trained method's $20$-$22\%/76$-$78\%$). This
+is the most direct evidence this thesis has that none of the four
+trained methods, BMPP-DQN included, are extracting the full value the
+environment's own reward function makes available at this training
+budget (500 episodes, now $n=10$ seeds) -- a trivial, untrained rule is
+not supposed to beat a trained policy on the exact objective that policy
+was trained on.
 
 \input{../tables_oran_calibration/multicriteria_summary_oran.tex}
 
 The multi-criteria picture reverses this ordering, for a specific and
 identifiable reason: both reference policies have high switching
-frequency (heuristic $1.534$, oracle $1.320$ -- neither policy has any
+frequency (heuristic $1.65$, oracle $1.31$ -- neither policy has any
 notion of switching cost, since neither optimizes the reward function at
 all) which the equal-weighted TOPSIS check penalizes heavily. Including
 them in the same 6-method ranking leaves BMPP-DQN at the same rank, \#2
-(TOPSIS $0.651$ -- a lower absolute score than the 4-method comparison's
-$0.799$, from the larger and more competitive comparison set, but the
-same ranking position), while the oracle ranks \#4 and the heuristic ranks
-\emph{last}, \#6, despite both having the best raw reward of all six
-methods. This is a methodological point worth stating plainly: the
-heuristic and oracle are included here for \emph{reward calibration}, not
-as fully commensurable alternatives in the same multi-criteria ranking as
-the four methods whose training explicitly optimizes a switching-aware
-reward -- a policy never asked to economize on switching should not be
-read as "failing" a multi-criteria check that rewards exactly that. The
-6-method robustness table confirms the same pattern under VIKOR (oracle
-\#1, $Q=0.000$; heuristic \#2, $Q=0.174$; both ahead of every trained
-method on this one scheme specifically, which weights switching least
-among the three).
+(TOPSIS $0.617$ -- close to the 4-method comparison's $0.642$), while the
+oracle ranks \#5 and the heuristic ranks \emph{last}, \#6, despite both
+having the best raw reward of all six methods. This is a methodological
+point worth stating plainly: the heuristic and oracle are included here
+for \emph{reward calibration}, not as fully commensurable alternatives in
+the same multi-criteria ranking as the four methods whose training
+explicitly optimizes a switching-aware reward -- a policy never asked to
+economize on switching should not be read as "failing" a multi-criteria
+check that rewards exactly that. Entropy-weighted TOPSIS reshuffles this
+picture sharply (oracle jumps to \#1, BMPP-DQN falls to \#4), and VIKOR
+differently still: oracle \#1 ($Q=0.000$) and heuristic \#2 ($Q=0.226$)
+are indeed ahead of every trained method, as the pre-revalidation version
+of this check found, but \textbf{BMPP-DQN is now the single worst-ranked
+method of all six} ($Q=0.999$) -- the same reversal
+Section~\ref{sec:oran-mcda-robustness} documents for the 4-method
+comparison, reproduced here at the larger scale.
 
 \input{../tables_oran_calibration/mcda_robustness_oran.tex}
 
 \subsection{Is the Calibration Gap a Training-Budget Artifact?}
 \label{sec:oran-training-budget-check}
+
+\textit{The three spot checks in this and the following two subsections
+were run against the $n=3$-seed canonical DQN baseline
+($-57923.1$) that predates Section~\ref{sec:oran-n10}'s $n=10$
+revalidation, rather than the current $n=10$ canonical value
+($-60218.3$) used everywhere else in this chapter -- each check needed
+only one method (DQN) and reused whatever canonical value was current
+when it was run. The two values are close enough (within $4\%$ of each
+other) that none of the three checks' conclusions change under the
+newer baseline, but the exact numbers quoted below predate it.}
 
 Section~\ref{sec:oran-calibration}'s finding -- every trained method, DQN
 included, loses to a zero-training heuristic -- admits an obvious
@@ -595,86 +634,103 @@ hyperparameter and the full 3-seed/500-episode protocol fixed.
 \begin{table}[htbp]
 \centering
 \caption{DQN and MP-DQN at their own default (every-step) decision cadence
-  vs.\ retrained with BMPP-DQN's $N=10$ discrete hold.}
+  vs.\ retrained with BMPP-DQN's $N=10$ discrete hold. The $N=1$ rows are
+  the $n=10$ canonical values (Section~\ref{sec:oran-n10}); the $N=10$
+  matched-cadence rows remain a 3-seed check (this control's own,
+  deliberately unexpanded scope).}
 \label{tab:oran-cadence-control}
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{lrrrr}
 \toprule
 Configuration & Reward & Power (W) & Switching & Throughput (Mbps) \\
 \midrule
-DQN ($N=1$, canonical) & $-57923.1$ & $211.2$ & $0.879$ & $252.9$ \\
-DQN ($N=10$, matched) & $-76736.7$ & $125.3$ & $0.078$ & $158.8$ \\
+DQN ($N=1$, canonical, $n=10$) & $-60218.3$ & $175.0$ & $0.604$ & $239.9$ \\
+DQN ($N=10$, matched, $n=3$) & $-59126.5$ & $160.3$ & $0.141$ & $254.1$ \\
 \addlinespace
-MP-DQN ($N=1$, canonical) & $-81924.6$ & $150.2$ & $0.287$ & $145.2$ \\
-MP-DQN ($N=10$, matched) & $-78007.7$ & $158.2$ & $0.052$ & $155.0$ \\
+MP-DQN ($N=1$, canonical, $n=10$) & $-65515.7$ & $153.0$ & $0.426$ & $214.9$ \\
+MP-DQN ($N=10$, matched, $n=3$) & $-65275.3$ & $160.6$ & $0.074$ & $227.7$ \\
 \addlinespace
-BMPP-DQN ($N=10$, canonical, for reference) & $-69701.1$ & $142.6$ & $0.181$ & $201.3$ \\
+BMPP-DQN ($N=10$, canonical, $n=10$, for reference) & $-79443.7$ & $154.4$ & $0.211$ & $162.6$ \\
 \bottomrule
 \end{tabular}%
 }
 \end{table}
 
-The result is unambiguous: \textbf{at matched cadence, both DQN and
-MP-DQN switch \emph{less} than BMPP-DQN itself} -- DQN drops from $0.879$
-to $0.078$ ($11.3\times$ reduction), MP-DQN from $0.287$ to $0.052$
-($5.5\times$ reduction), both ending \emph{below} BMPP-DQN's own $0.181$.
-Per-seed detail in Appendix~\ref{sec:oran-appendix-perseed-cadence}
-confirms this holds for every individual seed, not only the three-seed
-mean. \textbf{BMPP-DQN's switching-frequency advantage reported in
+The result is unambiguous, and stronger than the $n=3$-canonical version
+of this check: \textbf{at matched cadence, both DQN and MP-DQN switch
+\emph{less} than BMPP-DQN itself} -- DQN drops from $0.604$ to $0.141$
+($4.3\times$ reduction), MP-DQN from $0.426$ to $0.074$ ($5.8\times$
+reduction), both ending \emph{below} BMPP-DQN's own $0.211$. Per-seed
+detail in Appendix~\ref{sec:oran-appendix-perseed-cadence} confirms this
+holds for every individual seed, not only the three-seed mean.
+\textbf{BMPP-DQN's switching-frequency advantage reported in
 Section~\ref{sec:oran-performance-comparison} is therefore substantially
 a decision-cadence artifact, not an architectural one}: simple DQN and
 MP-DQN, given the identical cadence, are at least as switching-stable as
 BMPP-DQN, and more so. This directly confirms a concern raised about the
 original comparison, and this thesis states the finding exactly as the
 evidence shows it rather than retaining the earlier, cadence-confounded
-framing. The cadence change is not free, however: DQN's reward worsens
-substantially at $N=10$ ($-57923.1 \to -76736.7$), while MP-DQN's is
-roughly unchanged ($-81924.6 \to -78007.7$) -- holding discrete decisions
-fixed for longer costs DQN specifically some responsiveness to changing
-demand, a trade-off BMPP-DQN's own architecture was built around but does
-not uniquely solve better than a plainly-cadence-matched DQN/MP-DQN would.
+framing. Unlike the $n=3$-canonical version of this check, \textbf{the
+cadence change now looks close to free, or even mildly beneficial, for
+both baselines}: DQN's reward is essentially unchanged at $N=10$
+($-60218.3 \to -59126.5$, a slight improvement) and so is MP-DQN's
+($-65515.7 \to -65275.3$) -- the earlier finding that matching cadence
+cost DQN substantial responsiveness to changing demand does not
+reproduce at $n=10$ canonical scale, strengthening rather than weakening
+the conclusion that BMPP-DQN's two-timescale design offers no switching
+advantage a plainly-cadence-matched DQN/MP-DQN does not already have,
+with no offsetting reward cost even at the $N=1$ baseline's own
+canonical sample size.
 
 \section{Power-Model Sensitivity Analysis}
 \label{sec:oran-sensitivity}
 
-\textbf{This section reports a sweep performed under the pre-fix
-environment (Section~\ref{sec:oran-bugfixes}) and has not been rerun
-against the corrected code.} It is retained, with this explicit caveat,
-as a historical record of what was found, not as a currently-validated
-result; re-running it against the fix is listed as future work
-(Chapter~\ref{chap:oran-conclusion}). Every RU/DU/CU/fronthaul power
-constant in the model (Section~\ref{sec:oran-power}) is a
-literature-informed but unvalidated placeholder; Concept Note Section 6.9
-addressed whether the pre-fix comparative findings depended on these
-placeholders' exact values by independently scaling each of the four
-constant groups by $10\times$ and $0.1\times$ (8 perturbed configurations,
-all others at default) and re-running the full 4-method/3-seed/500-episode
-protocol at each, under the environment as it existed before
-Section~\ref{sec:oran-bugfixes}'s fixes.
+Every RU/DU/CU/fronthaul power constant in the model
+(Section~\ref{sec:oran-power}) is a literature-informed but unvalidated
+placeholder; Concept Note Section 6.9 addresses whether the comparative
+findings elsewhere in this chapter depend on these placeholders' exact
+values by independently scaling each of the four constant groups by
+$10\times$ and $0.1\times$ (8 perturbed configurations, all others at
+default) and re-running the full 4-method/3-seed/500-episode protocol at
+each. This sweep was originally run under the pre-fix environment and is
+reported here for the first time against the corrected environment
+(Section~\ref{sec:oran-bugfixes}); the pre-fix version is archived at
+\texttt{thesis/tables\_oran\_archive/\allowbreak pre\_env\_bugfix\_20261001/}
+and no longer current.
 
-\input{../tables_oran_archive/pre_env_bugfix_20261001/sensitivity_summary_oran.tex}
+\input{../tables_oran/sensitivity_summary_oran.tex}
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=0.48\textwidth]{../figures_oran_archive/pre_env_bugfix_20261001/sensitivity_topsis_oran.pdf}
+\includegraphics[width=0.48\textwidth]{../figures_oran/sensitivity_topsis_oran.pdf}
 \hfill
-\includegraphics[width=0.48\textwidth]{../figures_oran_archive/pre_env_bugfix_20261001/sensitivity_reward_power_oran.pdf}
-\caption{\emph{Pre-fix archive snapshot (not rerun against
-  Section~\ref{sec:oran-bugfixes}'s corrections).} BMPP-DQN's TOPSIS
-  score/rank (left) and reward/power for all 4 methods (right), across
-  the default configuration and all 8 perturbed power-model
-  configurations, under the environment as it existed before the fixes.}
+\includegraphics[width=0.48\textwidth]{../figures_oran/sensitivity_reward_power_oran.pdf}
+\caption{BMPP-DQN's TOPSIS score/rank (left) and reward/power for all 4
+  methods (right), across the default (n=10 canonical) configuration and
+  all 8 perturbed power-model configurations, under the corrected
+  environment.}
 \label{fig:oran-sensitivity}
 \end{figure}
 
-Under the pre-fix environment, BMPP-DQN's TOPSIS rank was 1st of 4 in 8 of
-the 9 configurations tested, suggesting the pre-fix multi-criteria
-finding was not an artifact of any single power-model constant's absolute
-value. Whether this same insensitivity holds under the corrected
-capacity/clock model is an open question this thesis does not answer;
-Section~\ref{sec:oran-mcda-robustness}'s corrected-environment finding
-(BMPP-DQN first-or-second under every scheme) is the current-best
-evidence available, from the $n=3$ canonical configuration only.
+Under the corrected environment, BMPP-DQN's TOPSIS rank is 2nd of 4 in 8
+of the 9 configurations tested (the exception, RU$\times0.1$, drops it to
+3rd) -- \textbf{directly confirming, at full sweep scale, the same
+first-or-second multi-criteria finding Section~\ref{sec:oran-mcda-robustness}
+already established from the $n=10$ canonical configuration alone}: the
+multi-criteria-balance result is not an artifact of any single
+power-model constant's absolute value, any more than it was under the
+pre-fix environment. BMPP-DQN's TOPSIS score stays in a narrow band
+($0.501$--$0.771$) across every configuration, with no perturbation
+driving it to the bottom of the ranking. Its raw-reward rank, by
+contrast, is never 1st under any configuration (2nd in 1 of 9, 3rd in 6
+of 9, 4th in 2 of 9) -- consistent with Section~\ref{sec:oran-performance-comparison}'s
+finding that DQN, not BMPP-DQN, has the best raw reward under the
+default configuration, and showing that result is similarly not
+power-model-constant-dependent. The same qualitative picture that held
+under the pre-fix environment therefore survives the bug fixes
+unchanged in kind, if not in the exact scores: BMPP-DQN's contribution is
+multi-criteria consistency, not raw-reward superiority, regardless of
+which power-model constant is perturbed or in which direction.
 
 \section{RQ3: Effect of the Two-Timescale Design}
 \label{sec:oran-rq3}
@@ -698,21 +754,24 @@ full 3-seed/500-episode protocol, held fixed.\par}
 \label{fig:oran-rq3}
 \end{figure}
 
-Collapsing to a single timescale yields a mean reward of $-61869.6$ --
+Collapsing to a single timescale yields a mean reward of $-65251.9$ --
 \emph{better} (less negative) than the two-timescale default's
-$-69701.1$ -- with higher mean power ($234.9\,\mathrm{W}$ vs.\
-$142.6\,\mathrm{W}$) and higher throughput ($246.9$ vs.\
-$201.3\,\mathrm{Mbps}$); QoS is comparable ($22.5\%/78.4\%$ vs.\
-$22.3\%/77.9\%$). Unlike the pre-fix version of this ablation, the two
-configurations are \emph{not} reward/power-neutral: the single-timescale
-variant achieves better reward by spending substantially more power,
-a genuine trade-off, not a free difference.
+$n=10$ canonical $-79443.7$ -- with higher mean power
+($178.3\,\mathrm{W}$ vs.\ $154.4\,\mathrm{W}$) and higher throughput
+($214.0$ vs.\ $162.6\,\mathrm{Mbps}$); QoS is comparable ($21.2\%/77.0\%$
+vs.\ $20.2\%/75.8\%$). As in the earlier $n=3$-canonical version of this
+chapter, the two configurations are \emph{not} reward/power-neutral: the
+single-timescale variant achieves better reward by spending more power, a
+genuine trade-off, not a free difference.
 
 Switching frequency still separates the two designs sharply: the
-single-timescale variant's mean switching frequency is $0.644$
-events/step -- $3.6\times$ the two-timescale default's $0.181$, with no
+single-timescale variant's mean switching frequency is $0.948$
+events/step -- $4.5\times$ the two-timescale default's $0.211$, with no
 per-seed overlap (Appendix~\ref{sec:oran-appendix-perseed-rq3}: every
-single-timescale seed exceeds every two-timescale seed).
+single-timescale seed, lowest $0.684$, exceeds every two-timescale seed,
+highest $0.251$ -- the single-timescale variant's own seed set stayed at
+$n=3$, so this compares 3 seeds against the $n=10$ canonical set's own
+10).
 
 This answers RQ3, with a more qualified conclusion than the pre-fix
 chapter reported: \textbf{the two-timescale design substantially reduces
@@ -753,36 +812,63 @@ remain comfortably within a single forward-pass budget on commodity
 hardware, well inside the $10$--$100\,\mathrm{ms}$ Near-RT RIC decision
 loop this design's lower level targets.
 
-\section{Supplementary Validation at \texorpdfstring{$n=10$}{n=10} Seeds}
+\section{The \texorpdfstring{$n=3\to n=10$}{n=3 to n=10} Statistical-Power Expansion}
 \label{sec:oran-n10}
 
-\textbf{This section reports a validation performed under the pre-fix
-environment (Section~\ref{sec:oran-bugfixes}) and has not been rerun
-against the corrected code.} It is retained, with this explicit caveat,
-as a historical record, not a currently-validated result; re-running an
-$n=10$ check against the corrected environment is listed as future work
-(Chapter~\ref{chap:oran-conclusion}).
+Every table and figure earlier in this chapter already uses the $n=10$
+canonical scale this section documents -- a change from this chapter's
+own earlier revision, which reported the comparison at $n=3$
+(Concept Note Section 5.3's original protocol) and flagged a known
+limitation: a pre-fix-environment $n=10$ check (archived at
+\texttt{thesis/tables\_oran\_archive/\allowbreak pre\_env\_bugfix\_20261001/tables\_oran\_10seed/})
+had found that some pairwise significance verdicts and the MCDA
+robustness picture both changed between $n=3$ and $n=10$, and whether
+the same held under the corrected environment was explicitly left
+unanswered. This chapter now answers it directly, using the
+\emph{corrected}-environment comparison at both sample sizes.
 
-\input{../tables_oran_archive/pre_env_bugfix_20261001/tables_oran_10seed/convergence_summary_oran.tex}
+\begin{table}[h]
+\centering
+\caption{Paired significance of each baseline's reward against BMPP-DQN,
+  corrected environment, at $n=3$ (this chapter's own earlier
+  canonical scale) vs.\ $n=10$ (current canonical scale).}
+\label{tab:oran-n3-vs-n10}
+\begin{tabular}{lcccc}
+\hline
+Baseline & $p$ ($n=3$) & $d$ ($n=3$) & $p$ ($n=10$) & $d$ ($n=10$) \\
+\hline
+DQN & $0.015$ & $-4.65$ & $0.0056$ & $-1.14$ \\
+DDPG & $0.050$ & $2.48$ & $0.631$ & $0.16$ \\
+MP-DQN & $0.377$ & $-$ & $0.116$ & $-0.55$ \\
+\hline
+\end{tabular}
+\end{table}
 
-\input{../tables_oran_archive/pre_env_bugfix_20261001/tables_oran_10seed/multicriteria_summary_oran.tex}
+\textbf{Two verdicts move, in opposite directions from what the
+pre-fix $n=3\to n=10$ expansion found.} DDPG's comparison was
+\emph{on the edge of significance} at $n=3$ ($p=0.050$) and is now
+\textbf{solidly non-significant} at $n=10$ ($p=0.631$) -- the reverse of
+the pre-fix pattern, where DDPG's deficit \emph{became} significant with
+more seeds. DQN's comparison stays significant at both sample sizes, but
+its effect size collapses by more than $4\times$ ($d=-4.65 \to -1.14$),
+consistent with the $n=3$ estimate being substantially inflated by
+small-sample variance rather than describing a stable large effect.
+MP-DQN's comparison was and remains non-significant. The direction these
+verdicts move is not predictable from the pre-fix pattern -- more seeds
+changed the picture again, but not by repeating what more seeds did
+before.
 
-\input{../tables_oran_archive/pre_env_bugfix_20261001/tables_oran_10seed/mcda_robustness_oran.tex}
-
-Under the pre-fix environment, extending every method's seed set from 3
-to 10 changed which pairwise reward comparisons reached significance
-(DDPG's deficit against BMPP-DQN became significant at $n=10$ where it
-had not at $n=3$) and showed that BMPP-DQN's full three-scheme MCDA
-agreement was partly an $n=3$-specific artifact: at $n=10$, BMPP-DQN
-remained rank 1 or 2 under every scheme but was no longer rank 1 under
-all three simultaneously. Whether this same pattern -- or a different
-one -- holds under the corrected environment is unknown; the $n=3$
-corrected-environment finding in
-Section~\ref{sec:oran-mcda-robustness} is the current-best evidence,
-and itself already shows a comparable qualitative pattern (DQN's reward
-advantage reaching significance while BMPP-DQN remains strongest on the
-independent multi-criteria check) without needing the larger sample to
-surface it this time.
+The MCDA robustness picture shows the same kind of instability.
+Section~\ref{sec:oran-mcda-robustness}'s $n=10$ finding -- BMPP-DQN
+ranks \#2 under both TOPSIS variants but \#4 (worst of four) under VIKOR
+-- is a more dramatic reversal than the pre-fix $n=3\to n=10$ expansion
+found (there, BMPP-DQN stayed rank 1-or-2 under every scheme at both
+sample sizes, just losing perfect three-way agreement). \textbf{The
+practical lesson is the same either way: this track's $n=3$ protocol is
+not a reliable basis for either a significance claim or a multi-criteria
+ranking claim}, and every comparison in this chapter should be read at
+its $n=10$ sample size, not the $n=3$ figures an earlier revision of
+this chapter reported.
 
 \section{Discussion: Answering the Research Questions}
 \label{sec:oran-rq-answers}
@@ -790,7 +876,7 @@ surface it this time.
 \textbf{RQ1} (architectural integration, Section~\ref{sec:oran-research-questions}):
 BMPP-DQN trains stably end-to-end as a single coupled network combining
 branching discrete decomposition with multi-pass continuous parameter
-processing (Chapter~\ref{chap:oran-system-model}), across all 3 seeds,
+processing (Chapter~\ref{chap:oran-system-model}), across all 10 seeds,
 with no divergence or training-instability failures observed, under the
 corrected environment and algorithm (Section~\ref{sec:oran-bugfixes}).
 This is an architectural and training-stability claim, evidenced by the
@@ -803,32 +889,36 @@ BMPP-DQN's reward) weighs against.
 
 \textbf{RQ2} (energy-saving performance): the evidence does not support a
 single-metric energy-saving win, and does so more starkly than the
-pre-fix chapter found. BMPP-DQN's reward is now significantly
-\emph{worse} than DQN's ($p=0.015$), and both a trivial heuristic and a
+pre-fix chapter found. BMPP-DQN's reward is significantly \emph{worse}
+than DQN's ($p=0.0056$ at $n=10$), and both a trivial heuristic and a
 privileged oracle significantly beat every trained method's reward,
 BMPP-DQN included (Section~\ref{sec:oran-calibration}). Objective 4's
 $\geq15\%$ energy-saving target against the trained baselines is, without
 qualification, \textbf{not met} by any result in this chapter -- and the
 calibration check now shows the gap is not merely "no baseline beats
 BMPP-DQN by $15\%$," but "an untrained rule beats every trained method
-including BMPP-DQN at all." What the evidence \emph{does} support is a
-genuine multi-criteria balance: BMPP-DQN ranks first or second under
-every MCDA scheme tested among the four trained methods
-(Sections~\ref{sec:oran-mcda}--\ref{sec:oran-mcda-robustness}), the only
-one of the four with that consistency, even though it is not the
-best-reward method. Section~\ref{sec:oran-cadence-control}'s fair-cadence
-control qualifies part of this picture: BMPP-DQN's switching-frequency
-advantage over DQN/MP-DQN at their own default cadence is substantially a
-cadence artifact, not an architectural one -- at matched cadence, both
-baselines switch \emph{less} than BMPP-DQN. The multi-criteria-balance
-finding (Sections~\ref{sec:oran-mcda}--\ref{sec:oran-mcda-robustness})
-does not rest on switching frequency alone, but switching frequency is
-one of its five inputs, and this chapter does not claim architectural
-credit for an advantage now shown to be substantially cadence-driven.
+including BMPP-DQN at all." The multi-criteria-balance claim this
+chapter's $n=3$ version made -- BMPP-DQN ranks first-or-second under
+every MCDA scheme, the only method with that consistency -- \textbf{does
+not survive the $n=10$ revalidation}: BMPP-DQN still ranks \#2 under both
+TOPSIS variants, but \#4 (worst of four) under VIKOR
+(Section~\ref{sec:oran-mcda-robustness}), and no method agrees across all
+three schemes at this sample size. What remains defensible is narrower:
+BMPP-DQN ranks \#2 of 4 under two of the three independent schemes tested
+(both TOPSIS variants, which agree with each other exactly), not under
+every scheme, and the honest reading is that this track's earlier
+multi-criteria-robustness claim was itself an $n=3$-sample artifact
+(Section~\ref{sec:oran-n10}). Section~\ref{sec:oran-cadence-control}'s
+fair-cadence control further qualifies the switching-frequency input to
+this ranking: BMPP-DQN's switching-frequency advantage over DQN/MP-DQN at
+their own default cadence is substantially a cadence artifact, not an
+architectural one -- at matched cadence, both baselines switch
+\emph{less} than BMPP-DQN, with no offsetting reward cost at the $n=10$
+canonical sample size either.
 
 \textbf{RQ3} (two-timescale design): directly answered in
 Section~\ref{sec:oran-rq3}. Collapsing the two-timescale separation to a
-single timescale reduces switching stability by $3.6\times$ but
+single timescale reduces switching stability by $4.5\times$ but
 \emph{improves} reward and throughput at the cost of higher power -- a
 genuine trade-off, not the previously-reported free reduction in
 switching. The two-timescale design's contribution is decision stability

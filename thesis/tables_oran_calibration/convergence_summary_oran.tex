@@ -1,18 +1,17 @@
 \begin{table}[h]
 \centering
-\caption{O-RAN Track: Performance Comparison and Statistical Significance, Extended with Heuristic/Oracle Calibration Baselines. ``QoS Rate'' requires every UE satisfied simultaneously each step; ``Per-UE QoS'' is the average fraction of UEs satisfied per step -- see this chapter's QoS-metric note for why the two differ sharply. Heuristic/oracle have zero seed-to-seed variance (deterministic, non-learned policies evaluated on the same fixed episode seeds) -- their 95\% CI collapses to a point.}
-\label{tab:oran-calibration-convergence}
+\caption{O-RAN Track: Performance Comparison and Statistical Significance. ``QoS Rate'' requires every UE satisfied simultaneously each step; ``Per-UE QoS'' is the average fraction of UEs satisfied per step -- see this chapter's QoS-metric note for why the two differ sharply.}
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{lccccccc}
 \hline
 Algorithm & Mean Reward (95\% CI) & Mean Power (W) & QoS Rate (\%) & Per-UE QoS (\%) & Switching Freq. & $p$-value (vs Proposed) & Cohen's $d$ \\
 \hline
-BMPP-DQN & -69701.12 [-75477.70, -63924.54] & 142.6 & 22.3\% & 77.9\% & 0.18 & N/A (Proposed) & N/A (Proposed) \\
-DDPG & -92089.55 [-109614.53, -74564.56] & 205.8 & 21.1\% & 75.9\% & 0.04 & 0.0501 & 2.480 \\
-DQN & -57923.14 [-61061.75, -54784.54] & 211.2 & 22.8\% & 79.0\% & 0.88 & 0.0151 & -4.650 \\
-heuristic & -39368.14 [-39368.14, -39368.14] & 160.2 & 38.0\% & 84.5\% & 1.53 & 0.0020 & -13.044 \\
-MP-DQN & -81924.56 [-126113.19, -37735.93] & 150.2 & 23.5\% & 75.7\% & 0.29 & 0.3771 & 0.650 \\
-oracle & -33423.58 [-33423.58, -33423.58] & 147.7 & 40.6\% & 85.4\% & 1.32 & 0.0014 & -15.601 \\
+BMPP-DQN & -79443.68 [-91555.14, -67332.22] & 154.4 & 20.2\% & 75.8\% & 0.21 & N/A (Proposed) & N/A (Proposed) \\
+DDPG & -81891.48 [-91290.14, -72492.81] & 200.4 & 21.0\% & 76.6\% & 0.04 & 0.6311 & 0.157 \\
+DQN & -60218.33 [-62282.66, -58154.00] & 175.0 & 22.0\% & 77.6\% & 0.60 & 0.0056 & -1.144 \\
+heuristic & -40857.38 [-40857.38, -40857.38] & 159.3 & 35.3\% & 82.8\% & 1.65 & 0.0001 & -2.279 \\
+MP-DQN & -65515.72 [-75544.94, -55486.49] & 153.0 & 21.9\% & 77.4\% & 0.43 & 0.1162 & -0.550 \\
+oracle & -31198.70 [-31198.70, -31198.70] & 142.0 & 38.8\% & 84.9\% & 1.31 & 0.0000 & -2.850 \\
 \hline
 \end{tabular}%
 }

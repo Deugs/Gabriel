@@ -27,30 +27,38 @@ four action branches -- RU activation, split selection, transmit power, and
 PRB share -- and evaluated in a focused, single-gNB O-RAN simulation
 environment against three baselines representing the discrete-only,
 continuous-only, and existing-parameterized-action alternatives (DQN,
-DDPG, and MP-DQN respectively), under a matched 3-seed, 500-episode
+DDPG, and MP-DQN respectively), under a matched 10-seed, 500-episode
 training and evaluation protocol. The comparison is cross-checked with
 three independent multi-criteria decision-analysis schemes
-(equal-weighted and entropy-weighted TOPSIS, and VIKOR), an
+(equal-weighted and entropy-weighted TOPSIS, and VIKOR) and an
 order-of-magnitude sensitivity sweep across the power model's unvalidated
-constants, and a supplementary 10-seed statistical-power validation.
+constants; a zero-training heuristic and a privileged non-causal oracle
+are added as calibration references.
 
 The results do not support this thesis's original target of a
 $\geq15\%$ energy saving relative to the strongest baseline: BMPP-DQN's
-mean power consumption is numerically close to, not below, the
-best-performing baseline's (no formal significance test was run on power
-specifically). What the evidence does support is a
-multi-criteria balance across power, QoS satisfaction, and switching
-stability that BMPP-DQN achieves more consistently than any single
-baseline, a finding that holds across every power-model perturbation
-tested and, substantially though not completely, across the larger
-10-seed sample. A direct ablation further shows that this thesis's
-two-timescale design -- holding discrete RU/split decisions fixed across
-multiple environment steps rather than re-deciding them every step --
-reduces switching frequency more than sixfold without a measurable cost to
-reward, power, or QoS, isolating decision stability, not raw energy
-efficiency, as the two-timescale design's actual contribution. These
-findings are reported alongside the original energy-saving target rather
-than in place of it, and the thesis's remaining limitations -- an
-unvalidated power model and reward weighting, a single-gNB scope, and a
-three-baseline comparison -- are stated explicitly as directions for
-future work.
+reward is significantly worse than the strongest baseline's (DQN,
+$p=0.0056$), and both the heuristic and the oracle significantly
+outperform every trained method's reward, BMPP-DQN included -- evidence
+that none of the four trained methods is extracting the full value the
+reward function makes available at this training budget. What the
+evidence does support is narrower than an unvalidated multi-criteria
+claim would suggest: BMPP-DQN ranks second-of-four under both TOPSIS
+variants, consistently across every power-model perturbation tested, but
+\emph{last}-of-four under VIKOR -- a 10-seed statistical-power expansion
+(up from the originally-scoped 3 seeds) that reverses an
+otherwise-apparent full three-scheme agreement, showing that claim was
+itself a small-sample artifact. A direct ablation further shows that this
+thesis's two-timescale design -- holding discrete RU/split decisions
+fixed across multiple environment steps rather than re-deciding them
+every step -- reduces switching frequency by roughly $4.5\times$ but at a
+measurable cost in reward and power, not for free; a separate fair-cadence
+control shows that giving the discrete-only and flat parameterized
+baselines this same decision cadence lets them match or beat BMPP-DQN's
+own switching stability, with no such cost, isolating decision stability
+as a cadence property available to simpler architectures too, not a
+unique architectural advantage. These findings are reported alongside the
+original energy-saving target rather than in place of it, and the
+thesis's remaining limitations -- an unvalidated power model and reward
+weighting, a single-gNB scope, and a three-baseline comparison -- are
+stated explicitly as directions for future work.
