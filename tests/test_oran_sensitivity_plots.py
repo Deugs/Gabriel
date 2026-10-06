@@ -73,3 +73,46 @@ def test_plot_sensitivity_reward_power_writes_pdf_and_png(tmp_path):
 
     assert save_path.exists()
     assert save_path.with_suffix(".png").exists()
+
+
+def _add_calibration_baselines(base_dir: Path) -> None:
+    """Add heuristic/oracle summary.json files alongside the 4 trained
+    methods, reproducing data/results_oran's real shape once
+    oran_training/oran_heuristic_oracle.py's calibration baselines were
+    added there (Section~sec:oran-calibration) -- a config dir no
+    perturbation scenario has, since those were never rerun per-scenario."""
+    for policy in ("heuristic", "oracle"):
+        policy_dir = base_dir / f"oran_benchmark_{policy}"
+        policy_dir.mkdir(parents=True, exist_ok=True)
+        with open(policy_dir / "summary.json", "w") as f:
+            json.dump(
+                [{
+                    "algorithm": policy, "seed": 42,
+                    "mean_reward": -18000.0, "mean_power_w": 150.0,
+                    "qos_satisfaction_rate": 0.4,
+                    "mean_throughput_mbps": 900.0,
+                }],
+                f,
+            )
+
+
+def test_plot_sensitivity_topsis_handles_default_with_extra_algos(tmp_path):
+    """Regression guard: data/results_oran ("Default") also holds the
+    heuristic/oracle calibration baselines, which no perturbation config
+    has -- both plotting functions must restrict to the 4 trained methods
+    rather than silently running a 6-method TOPSIS for one row only
+    (inconsistent with the other 8) or KeyError-ing when a perturbation
+    config's metrics dict is looked up for an algo only "Default" has."""
+    default_dir = tmp_path / "default"
+    _write_fake_results(default_dir, -21000.0, 160.0)
+    _add_calibration_baselines(default_dir)
+    perturbed_dir = _write_fake_results(tmp_path / "perturbed", -30000.0, 300.0)
+    configs = [("Default", str(default_dir)), ("Perturbed x10", perturbed_dir)]
+
+    topsis_path = tmp_path / "sensitivity_topsis.pdf"
+    plot_sensitivity_topsis(configs, save_path=str(topsis_path))
+    assert topsis_path.exists()
+
+    reward_power_path = tmp_path / "sensitivity_reward_power.pdf"
+    plot_sensitivity_reward_power(configs, save_path=str(reward_power_path))
+    assert reward_power_path.exists()

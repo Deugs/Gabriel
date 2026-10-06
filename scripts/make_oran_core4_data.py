@@ -23,17 +23,23 @@ from pathlib import Path
 SRC = Path("data/results_oran")
 DST = Path("data/results_oran_core4")
 
-BMPP_DQN_SEED_DIRS = ["bmpp_dqn_seed42", "bmpp_dqn_seed123", "bmpp_dqn_seed456"]
-
 
 def main() -> None:
     DST.mkdir(parents=True, exist_ok=True)
-    for name in BMPP_DQN_SEED_DIRS:
-        shutil.copytree(SRC / name, DST / name, dirs_exist_ok=True)
+    # Discover every bmpp_dqn_seed* dir rather than a hardcoded 3-seed
+    # list -- data/results_oran now holds 10 canonical seeds (the n=10
+    # statistical-power revalidation, Section~sec:oran-n10), and a
+    # hardcoded list silently dropped the 7 new ones here before this fix.
+    bmpp_dqn_dirs = sorted(SRC.glob("bmpp_dqn_seed*"))
+    for seed_dir in bmpp_dqn_dirs:
+        shutil.copytree(seed_dir, DST / seed_dir.name, dirs_exist_ok=True)
     shutil.copytree(
         SRC / "per_seed_baselines", DST / "per_seed_baselines", dirs_exist_ok=True
     )
-    print(f"Copied {SRC} (BMPP-DQN + per_seed_baselines only) -> {DST}")
+    print(
+        f"Copied {SRC} ({len(bmpp_dqn_dirs)} BMPP-DQN seeds + "
+        f"per_seed_baselines only) -> {DST}"
+    )
 
 
 if __name__ == "__main__":

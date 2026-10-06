@@ -66,6 +66,12 @@ def plot_sensitivity_topsis(
     ranks: List[int] = []
     for name, path in configs:
         m = load_algo_seed_metrics(path)
+        # "Default" (data/results_oran) also holds the heuristic/oracle
+        # calibration baselines (Section~sec:oran-calibration) -- restrict
+        # to the 4 trained methods every config actually has, or this one
+        # row silently runs TOPSIS over 6 methods instead of 4, making its
+        # score/rank incomparable to the other 8 (perturbation-only) rows.
+        m = {a: v for a, v in m.items() if a in {"BMPP_DQN", "dqn", "ddpg", "mpdqn"}}
         topsis = compute_topsis(m)
         names.append(name)
         scores.append(topsis["BMPP_DQN"]["topsis_score"])
@@ -132,6 +138,16 @@ def plot_sensitivity_reward_power(
 
     configs = configs or SENSITIVITY_CONFIGS
     default_metrics = load_algo_seed_metrics(configs[0][1])
+    # configs[0] ("Default") is data/results_oran, which also holds the
+    # heuristic/oracle calibration baselines (Section~sec:oran-calibration)
+    # -- restrict to the 4 trained methods every perturbation config
+    # actually has, or looking one up below (`m[a]`) KeyErrors on the
+    # first config that lacks heuristic/oracle.
+    default_metrics = {
+        a: m
+        for a, m in default_metrics.items()
+        if a in {"BMPP_DQN", "dqn", "ddpg", "mpdqn"}
+    }
     algos = ordered_algos(default_metrics)
     colors = ["#2ca02c", "#1f77b4", "#ff7f0e", "#d62728", "#9467bd"]
 

@@ -2,20 +2,20 @@
   {
     "algorithm": "ddpg",
     "seed": 123,
-    "mean_reward": -100234.8175243852,
-    "std_reward": 59126.13597099658,
-    "mean_power_w": 206.05526335525514,
-    "qos_satisfaction_rate": 0.21000000000000002,
-    "qos_per_ue_rate": 0.7415,
+    "mean_reward": -75467.00684197572,
+    "std_reward": 42161.809305188275,
+    "mean_power_w": 199.1798968515396,
+    "qos_satisfaction_rate": 0.20600000000000002,
+    "qos_per_ue_rate": 0.7740625000000001,
     "mean_active_rus": 4.0,
-    "mean_switching_events": 0.04,
-    "mean_throughput_mbps": 197.3557618998436,
-    "train_mean_reward": -78757.82805580471,
-    "train_mean_power_w": 203.4929792670803,
-    "train_qos_satisfaction_rate": 0.23357999999999998,
-    "train_qos_per_ue_rate": 0.780065,
+    "mean_switching_events": 0.04000000000000001,
+    "mean_throughput_mbps": 233.24269421707976,
+    "train_mean_reward": -75499.5778110101,
+    "train_mean_power_w": 199.86457518529707,
+    "train_qos_satisfaction_rate": 0.24027999999999997,
+    "train_qos_per_ue_rate": 0.7846075000000001,
     "train_mean_active_rus": 4.0,
     "train_mean_switching_events": 0.04,
-    "train_mean_throughput_mbps": 204.27382971917834
+    "train_mean_throughput_mbps": 224.2256947482783
   }
 ]

@@ -200,12 +200,19 @@ reward:
   gamma_switch: 0.5
 
 # ============================================================
-# Evaluation (Concept Note Section 5.3: 3 seeds, per RQ2)
+# Evaluation (Concept Note Section 5.3: 3 seeds, per RQ2 -- expanded to 10
+# for the canonical comparison per the n=10 statistical-power revalidation,
+# Chapter 4's sec:oran-n10; n_eval_episodes raised from 5 to 20 per the
+# same revalidation's response to the "thin evaluation" critique point --
+# see Chapter 4's header comment for both reruns' scope and date)
 # ============================================================
 evaluation:
   eval_freq: 50
-  n_eval_episodes: 5
-  n_random_seeds: 3   # [42, 123, 456] -- Concept Note Section 5.3 "3 random seeds"
+  n_eval_episodes: 20
+  n_random_seeds: 10   # [42, 123, 456, 789, 1011, 1213, 1415, 1617, 1819,
+                        # 2021] -- the original 3 (Concept Note Section 5.3)
+                        # plus 7 more, matching data/results_oran_archive's
+                        # earlier pre-bugfix n=10 check's own seed list
   save_checkpoints: true
   checkpoint_freq: 250
 
